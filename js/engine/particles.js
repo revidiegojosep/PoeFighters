@@ -151,6 +151,10 @@ class ParticleManager {
       ? ['#ffff00', '#00e5ff', '#ffffff', '#ffd700']
       : type === 'grass'
       ? ['#48d0b0', '#76ff03', '#ffffff', '#2e7d32']
+      : type === 'poison'
+      ? ['#a855f7', '#c084fc', '#e879f9', '#7e22ce']
+      : type === 'shadow'
+      ? ['#9333ea', '#6b21a8', '#38bdf8', '#0f172a']
       : ['#ff4444', '#ffbb00', '#ffffff', '#ff9900'];
 
     for (let i = 0; i < count; i++) {

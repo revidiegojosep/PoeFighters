@@ -66,6 +66,27 @@ class GameHUD {
         this.playerPercentEl.classList.remove('shake');
       }
 
+      // Poison Status Badge for Player
+      const isP1Poison = player.statuses && player.statuses.poison && player.statuses.poison.active;
+      let pPoisonBadge = document.getElementById('player-poison-badge');
+      if (isP1Poison) {
+        if (!pPoisonBadge && this.playerCardEl) {
+          pPoisonBadge = document.createElement('div');
+          pPoisonBadge.id = 'player-poison-badge';
+          pPoisonBadge.className = 'status-hud-badge poison-hud-badge';
+          this.playerCardEl.appendChild(pPoisonBadge);
+        }
+        if (pPoisonBadge) {
+          pPoisonBadge.innerText = `☠️ VENENO (${player.statuses.poison.timer.toFixed(1)}s)`;
+          pPoisonBadge.style.display = 'block';
+        }
+        this.playerPercentEl.style.color = '#c084fc';
+        this.playerPercentEl.classList.add('poisoned-text');
+      } else {
+        if (pPoisonBadge) pPoisonBadge.style.display = 'none';
+        this.playerPercentEl.classList.remove('poisoned-text');
+      }
+
       // Refuerzo badge
       let pBadge = document.getElementById('player-refuerzo-badge');
       if (player.refuerzoTimer > 0 && !player.minunDead) {
@@ -99,6 +120,27 @@ class GameHUD {
         this.dummyPercentEl.classList.add('shake');
       } else {
         this.dummyPercentEl.classList.remove('shake');
+      }
+
+      // Poison Status Badge for Dummy
+      const isDummyPoison = dummy.statuses && dummy.statuses.poison && dummy.statuses.poison.active;
+      let dPoisonBadge = document.getElementById('dummy-poison-badge');
+      if (isDummyPoison) {
+        if (!dPoisonBadge && this.dummyCardEl) {
+          dPoisonBadge = document.createElement('div');
+          dPoisonBadge.id = 'dummy-poison-badge';
+          dPoisonBadge.className = 'status-hud-badge poison-hud-badge';
+          this.dummyCardEl.appendChild(dPoisonBadge);
+        }
+        if (dPoisonBadge) {
+          dPoisonBadge.innerText = `☠️ VENENO (${dummy.statuses.poison.timer.toFixed(1)}s)`;
+          dPoisonBadge.style.display = 'block';
+        }
+        this.dummyPercentEl.style.color = '#c084fc';
+        this.dummyPercentEl.classList.add('poisoned-text');
+      } else {
+        if (dPoisonBadge) dPoisonBadge.style.display = 'none';
+        this.dummyPercentEl.classList.remove('poisoned-text');
       }
 
       // Refuerzo badge for Dummy
@@ -253,6 +295,26 @@ class GameHUD {
       } else if (partnerBadge) {
         partnerBadge.style.display = 'none';
       }
+
+      // Player Item Badge
+      let pItemBadge = document.getElementById('player-item-badge');
+      if (player.heldItem && player.heldItem !== 'none' && window.POKEMON_ITEMS) {
+        const itemDef = window.POKEMON_ITEMS[player.heldItem];
+        if (itemDef) {
+          if (!pItemBadge && this.playerCardEl) {
+            pItemBadge = document.createElement('div');
+            pItemBadge.id = 'player-item-badge';
+            pItemBadge.className = 'item-hud-badge';
+            this.playerCardEl.appendChild(pItemBadge);
+          }
+          if (pItemBadge) {
+            pItemBadge.innerHTML = `<img src="${itemDef.icon}" alt="${itemDef.name}"><span>${itemDef.name}</span>`;
+            pItemBadge.style.display = 'inline-flex';
+          }
+        }
+      } else if (pItemBadge) {
+        pItemBadge.style.display = 'none';
+      }
     }
     if (this.dummyNameEl && dummy) {
       const modeSuffix = dummy.stocks <= 3 ? ' (CPU)' : ' (DUMMY)';
@@ -271,6 +333,26 @@ class GameHUD {
         dummyPartnerBadge.style.display = 'block';
       } else if (dummyPartnerBadge) {
         dummyPartnerBadge.style.display = 'none';
+      }
+
+      // Dummy Item Badge
+      let dItemBadge = document.getElementById('dummy-item-badge');
+      if (dummy.heldItem && dummy.heldItem !== 'none' && window.POKEMON_ITEMS) {
+        const itemDef = window.POKEMON_ITEMS[dummy.heldItem];
+        if (itemDef) {
+          if (!dItemBadge && this.dummyCardEl) {
+            dItemBadge = document.createElement('div');
+            dItemBadge.id = 'dummy-item-badge';
+            dItemBadge.className = 'item-hud-badge';
+            this.dummyCardEl.appendChild(dItemBadge);
+          }
+          if (dItemBadge) {
+            dItemBadge.innerHTML = `<img src="${itemDef.icon}" alt="${itemDef.name}"><span>${itemDef.name}</span>`;
+            dItemBadge.style.display = 'inline-flex';
+          }
+        }
+      } else if (dItemBadge) {
+        dItemBadge.style.display = 'none';
       }
     }
   }

@@ -26,10 +26,40 @@ class PokeSmashGame {
     this.matchStarted = false; // Menu displays by default BEFORE playing!
     this.isMatchOver = false;
 
+    // Stage Selection & Held Items
+    this.stageId = 'BATTLEFIELD'; // 'BATTLEFIELD' or 'FINAL_DESTINATION'
+    this.p1Item = 'none';
+    this.dummyItem = 'none';
+
+    // Graphics Preset ('ultra', 'high', 'low')
+    this.graphicsQuality = localStorage.getItem('pokefighters_graphics') || 'ultra';
+
+    // Customizable Keybinds
+    this.defaultKeybinds = {
+      left: 'ArrowLeft',
+      right: 'ArrowRight',
+      up: 'ArrowUp',
+      down: 'ArrowDown',
+      jump: 'Space',
+      attack: 'KeyZ',
+      special: 'KeyX',
+      shield: 'KeyC'
+    };
+    this.keybinds = Object.assign({}, this.defaultKeybinds);
+    try {
+      const savedKeybinds = JSON.parse(localStorage.getItem('pokefighters_keybinds'));
+      if (savedKeybinds && typeof savedKeybinds === 'object') {
+        Object.assign(this.keybinds, savedKeybinds);
+      }
+    } catch (e) {}
+
     // Entities
     this.stage = new window.Stage(this.width, this.height);
-    this.player = this.createFighter(this.playerDex, true, false, 3);
-    this.dummy = this.createFighter(this.dummyDex, false, true, 3);
+    this.stage.setGraphicsQuality(this.graphicsQuality);
+    this.stage.setStage(this.stageId);
+
+    this.player = this.createFighter(this.playerDex, true, false, 3, this.p1Item);
+    this.dummy = this.createFighter(this.dummyDex, false, true, 3, this.dummyItem);
 
     this.dummyController = new window.TrainingDummyController(this.dummy);
     this.dummyController.setMode('CPU_BATTLE');
@@ -46,21 +76,25 @@ class PokeSmashGame {
     this._bindControls();
     this._bindTrainingButtons();
     this._bindMatchSetupModal();
+    this._bindSettingsModal();
   }
 
-  createFighter(dex, isPlayer, isDummy, stocks = 3) {
+  createFighter(dex, isPlayer, isDummy, stocks = 3, heldItem = 'none') {
     const config = {
       x: isPlayer ? 360 : 664,
       y: 430,
       facing: isPlayer ? 1 : -1,
       isPlayer: isPlayer,
       isDummy: isDummy,
-      stocks: stocks
+      stocks: stocks,
+      heldItem: heldItem
     };
 
     switch (parseInt(dex, 10)) {
       case 1:
         return new window.Bulbasaur(config);
+      case 94:
+        return new window.Gengar(config);
       case 312:
         return new window.MinunPlusle(config);
       case 25:
@@ -107,13 +141,19 @@ class PokeSmashGame {
     this.dummyDex = options.dummyDex || this.dummyDex || 1;
     this.p1Type = options.p1Type || this.p1Type || 'HUMAN';
     this.p1CpuLevel = options.p1CpuLevel || this.p1CpuLevel || 2;
+    this.stageId = options.stageId || this.stageId || 'BATTLEFIELD';
+    this.p1Item = options.p1Item !== undefined ? options.p1Item : (this.p1Item || 'none');
+    this.dummyItem = options.dummyItem !== undefined ? options.dummyItem : (this.dummyItem || 'none');
     this.isMatchOver = false;
     this.matchStarted = true;
 
+    // Set stage in engine
+    this.stage.setStage(this.stageId);
+
     const initialStocks = this.gameMode === 'BATTLE' ? 3 : 99;
 
-    this.player = this.createFighter(this.playerDex, true, false, 3);
-    this.dummy = this.createFighter(this.dummyDex, false, true, initialStocks);
+    this.player = this.createFighter(this.playerDex, true, false, 3, this.p1Item);
+    this.dummy = this.createFighter(this.dummyDex, false, true, initialStocks, this.dummyItem);
 
     if (this.p1Type === 'CPU') {
       this.p1Controller = new window.TrainingDummyController(this.player);
@@ -157,7 +197,7 @@ class PokeSmashGame {
     const oldFacing = this.player.facing;
     const oldStocks = this.player.stocks;
 
-    this.player = this.createFighter(this.playerDex, true, false, oldStocks);
+    this.player = this.createFighter(this.playerDex, true, false, oldStocks, this.p1Item);
     this.player.x = oldX;
     this.player.y = oldY;
     this.player.facing = oldFacing;
@@ -180,7 +220,7 @@ class PokeSmashGame {
     const oldFacing = this.dummy.facing;
     const oldStocks = this.dummy.stocks;
 
-    this.dummy = this.createFighter(this.dummyDex, false, true, oldStocks);
+    this.dummy = this.createFighter(this.dummyDex, false, true, oldStocks, this.dummyItem);
     this.dummy.x = oldX;
     this.dummy.y = oldY;
     this.dummy.facing = oldFacing;
@@ -239,6 +279,20 @@ class PokeSmashGame {
       deckP1Btn.innerText = this.p1Type === 'CPU' ? `🤖 P1: CPU (Nv. ${this.p1CpuLevel})` : '🎮 P1: Humano';
       deckP1Btn.classList.toggle('active', this.p1Type === 'CPU');
     }
+
+    // Update stage selection cards
+    document.querySelectorAll('[data-stage]').forEach(card => {
+      card.classList.toggle('active', card.getAttribute('data-stage') === this.stageId);
+    });
+
+    // Update item selection cards
+    document.querySelectorAll('[data-p1-item]').forEach(card => {
+      card.classList.toggle('active', card.getAttribute('data-p1-item') === this.p1Item);
+    });
+
+    document.querySelectorAll('[data-cpu-item]').forEach(card => {
+      card.classList.toggle('active', card.getAttribute('data-cpu-item') === this.dummyItem);
+    });
   }
 
   _bindControls() {
@@ -249,7 +303,9 @@ class PokeSmashGame {
       const code = e.code;
 
       if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(code)) {
-        e.preventDefault();
+        if (!['input', 'textarea'].includes((e.target && e.target.tagName || '').toLowerCase())) {
+          e.preventDefault();
+        }
       }
 
       if (code === 'KeyR' || key === 'r') {
@@ -261,9 +317,15 @@ class PokeSmashGame {
         const playing = window.soundEngine.toggleMusic();
         const musicBtn = document.getElementById('btn-music');
         if (musicBtn) {
-          musicBtn.innerText = playing ? '🎵 Música: ON' : '🎵 Música: OFF';
+          musicBtn.innerText = playing ? '🎵 Música: ON' : '🔇 Música: OFF';
           musicBtn.classList.toggle('active', playing);
         }
+        return;
+      }
+
+      if (code === 'KeyF' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        this.toggleFullscreen();
         return;
       }
 
@@ -273,34 +335,40 @@ class PokeSmashGame {
       if (this.keysDown[code]) return;
       this.keysDown[code] = true;
 
-      if (code === 'ArrowLeft' || key === 'a') this.player.input.left = true;
-      if (code === 'ArrowRight' || key === 'd') this.player.input.right = true;
-      if (code === 'ArrowUp' || key === 'w') this.player.input.up = true;
-      if (code === 'ArrowDown' || key === 's') {
+      const kb = this.keybinds;
+      if (code === kb.left || (kb.left === 'ArrowLeft' && (key === 'a' || code === 'KeyA'))) {
+        this.player.input.left = true;
+      }
+      if (code === kb.right || (kb.right === 'ArrowRight' && (key === 'd' || code === 'KeyD'))) {
+        this.player.input.right = true;
+      }
+      if (code === kb.up || (kb.up === 'ArrowUp' && (key === 'w' || code === 'KeyW'))) {
+        this.player.input.up = true;
+      }
+      if (code === kb.down || (kb.down === 'ArrowDown' && (key === 's' || code === 'KeyS'))) {
         this.player.input.down = true;
         this.player.input.downPressed = true;
       }
 
-      if (code === 'Space') {
+      if (code === kb.jump) {
         this.player.input.jump = true;
         this.player.input.jumpPressed = true;
       }
 
-      if (code === 'KeyZ' || key === 'z') {
+      if (code === kb.attack || (kb.attack === 'KeyZ' && key === 'z')) {
         this.player.input.attack = true;
         this.player.input.attackPressed = true;
       }
 
-      if (code === 'KeyX' || key === 'x') {
+      if (code === kb.special || (kb.special === 'KeyX' && key === 'x')) {
         this.player.input.special = true;
         this.player.input.specialPressed = true;
       }
 
-      if (code === 'KeyC' || key === 'c') {
+      if (code === kb.shield || (kb.shield === 'KeyC' && key === 'c')) {
         this.player.input.shield = true;
         this.player.input.shieldPressed = true;
       }
-
     });
 
     window.addEventListener('keyup', (e) => {
@@ -308,14 +376,31 @@ class PokeSmashGame {
       const code = e.code;
       this.keysDown[code] = false;
 
-      if (code === 'ArrowLeft' || key === 'a') this.player.input.left = false;
-      if (code === 'ArrowRight' || key === 'd') this.player.input.right = false;
-      if (code === 'ArrowUp' || key === 'w') this.player.input.up = false;
-      if (code === 'ArrowDown' || key === 's') this.player.input.down = false;
-      if (code === 'Space') this.player.input.jump = false;
-      if (code === 'KeyZ' || key === 'z') this.player.input.attack = false;
-      if (code === 'KeyX' || key === 'x') this.player.input.special = false;
-      if (code === 'KeyC' || key === 'c') this.player.input.shield = false;
+      const kb = this.keybinds;
+      if (code === kb.left || (kb.left === 'ArrowLeft' && (key === 'a' || code === 'KeyA'))) {
+        this.player.input.left = false;
+      }
+      if (code === kb.right || (kb.right === 'ArrowRight' && (key === 'd' || code === 'KeyD'))) {
+        this.player.input.right = false;
+      }
+      if (code === kb.up || (kb.up === 'ArrowUp' && (key === 'w' || code === 'KeyW'))) {
+        this.player.input.up = false;
+      }
+      if (code === kb.down || (kb.down === 'ArrowDown' && (key === 's' || code === 'KeyS'))) {
+        this.player.input.down = false;
+      }
+      if (code === kb.jump) {
+        this.player.input.jump = false;
+      }
+      if (code === kb.attack || (kb.attack === 'KeyZ' && key === 'z')) {
+        this.player.input.attack = false;
+      }
+      if (code === kb.special || (kb.special === 'KeyX' && key === 'x')) {
+        this.player.input.special = false;
+      }
+      if (code === kb.shield || (kb.shield === 'KeyC' && key === 'c')) {
+        this.player.input.shield = false;
+      }
     });
   }
 
@@ -417,6 +502,42 @@ class PokeSmashGame {
     let selectedLevel = this.cpuLevel;
     let selectedP1Type = this.p1Type;
     let selectedP1CpuLevel = this.p1CpuLevel;
+    let selectedStage = this.stageId;
+    let selectedP1Item = this.p1Item;
+    let selectedCPUItem = this.dummyItem;
+
+    // Stage Selection Cards
+    const stageCards = document.querySelectorAll('[data-stage]');
+    stageCards.forEach(card => {
+      card.addEventListener('click', () => {
+        stageCards.forEach(c => c.classList.remove('active'));
+        card.classList.add('active');
+        selectedStage = card.getAttribute('data-stage');
+        window.soundEngine.playSfx('select');
+      });
+    });
+
+    // Held Item Selector Cards for P1
+    const p1ItemCards = document.querySelectorAll('[data-p1-item]');
+    p1ItemCards.forEach(card => {
+      card.addEventListener('click', () => {
+        p1ItemCards.forEach(c => c.classList.remove('active'));
+        card.classList.add('active');
+        selectedP1Item = card.getAttribute('data-p1-item');
+        window.soundEngine.playSfx('select');
+      });
+    });
+
+    // Held Item Selector Cards for CPU
+    const cpuItemCards = document.querySelectorAll('[data-cpu-item]');
+    cpuItemCards.forEach(card => {
+      card.addEventListener('click', () => {
+        cpuItemCards.forEach(c => c.classList.remove('active'));
+        card.classList.add('active');
+        selectedCPUItem = card.getAttribute('data-cpu-item');
+        window.soundEngine.playSfx('select');
+      });
+    });
 
     // Modal P1 Control Toggle (Humano vs CPU)
     const p1ControlBtns = document.querySelectorAll('[data-p1-control]');
@@ -517,7 +638,10 @@ class PokeSmashGame {
           dummyDex: selectedCPU,
           cpuLevel: selectedLevel,
           p1Type: selectedP1Type,
-          p1CpuLevel: selectedP1CpuLevel
+          p1CpuLevel: selectedP1CpuLevel,
+          stageId: selectedStage,
+          p1Item: selectedP1Item,
+          dummyItem: selectedCPUItem
         });
       });
     }
@@ -532,7 +656,10 @@ class PokeSmashGame {
           dummyDex: this.dummyDex,
           cpuLevel: this.cpuLevel,
           p1Type: this.p1Type,
-          p1CpuLevel: this.p1CpuLevel
+          p1CpuLevel: this.p1CpuLevel,
+          stageId: this.stageId,
+          p1Item: this.p1Item,
+          dummyItem: this.dummyItem
         });
       });
     }
@@ -546,6 +673,252 @@ class PokeSmashGame {
         this._updateRosterButtonsUI();
         setupModal.classList.add('open');
       });
+    }
+  }
+
+  _bindSettingsModal() {
+    const settingsModal = document.getElementById('settings-modal');
+    const openSettingsBtn = document.getElementById('btn-open-settings');
+    const closeSettingsBtn = document.getElementById('btn-close-settings-modal');
+
+    if (openSettingsBtn && settingsModal) {
+      openSettingsBtn.addEventListener('click', () => {
+        this._updateSettingsUI();
+        settingsModal.classList.add('open');
+        window.soundEngine.playSfx('select');
+      });
+    }
+
+    if (closeSettingsBtn && settingsModal) {
+      closeSettingsBtn.addEventListener('click', () => {
+        settingsModal.classList.remove('open');
+      });
+    }
+
+    // Volume Sliders
+    const masterSlider = document.getElementById('setting-master-vol');
+    const musicSlider = document.getElementById('setting-music-vol');
+    const sfxSlider = document.getElementById('setting-sfx-vol');
+    const muteToggle = document.getElementById('setting-mute-toggle');
+
+    if (masterSlider) {
+      masterSlider.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        window.soundEngine.setMasterVolume(val);
+        const l = document.getElementById('val-master-vol');
+        if (l) l.innerText = `${Math.round(val * 100)}%`;
+      });
+    }
+
+    if (musicSlider) {
+      musicSlider.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        window.soundEngine.setMusicVolume(val);
+        const l = document.getElementById('val-music-vol');
+        if (l) l.innerText = `${Math.round(val * 100)}%`;
+      });
+    }
+
+    if (sfxSlider) {
+      sfxSlider.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        window.soundEngine.setSfxVolume(val);
+        const l = document.getElementById('val-sfx-vol');
+        if (l) l.innerText = `${Math.round(val * 100)}%`;
+      });
+    }
+
+    if (muteToggle) {
+      muteToggle.addEventListener('change', (e) => {
+        window.soundEngine.setMute(e.target.checked);
+      });
+    }
+
+    // Graphics Preset buttons
+    document.querySelectorAll('[data-graphics-preset]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const preset = btn.getAttribute('data-graphics-preset');
+        this.graphicsQuality = preset;
+        try { localStorage.setItem('pokefighters_graphics', preset); } catch(e) {}
+        this.stage.setGraphicsQuality(preset);
+        document.querySelectorAll('[data-graphics-preset]').forEach(b => b.classList.toggle('active', b === btn));
+        window.soundEngine.playSfx('select');
+      });
+    });
+
+    // Keybinds Remapper
+    this._bindKeybindRemapper();
+
+    // Fullscreen buttons
+    const fsBtns = [
+      document.getElementById('btn-fullscreen-toggle'),
+      document.getElementById('btn-header-fullscreen'),
+      document.getElementById('btn-arena-fullscreen')
+    ];
+    fsBtns.forEach(btn => {
+      if (btn) {
+        btn.addEventListener('click', () => {
+          this.toggleFullscreen();
+          window.soundEngine.playSfx('select');
+        });
+      }
+    });
+
+    const updateFsState = () => {
+      const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+      const container = document.getElementById('canvas-container');
+      if (container) container.classList.toggle('is-fullscreen', isFs);
+      fsBtns.forEach(b => {
+        if (b) {
+          b.innerText = isFs ? '🗗 Salir Pantalla Completa' : '⛶ Pantalla Completa';
+        }
+      });
+    };
+
+    document.addEventListener('fullscreenchange', updateFsState);
+    document.addEventListener('webkitfullscreenchange', updateFsState);
+  }
+
+  _bindKeybindRemapper() {
+    let listeningAction = null;
+    const keyRows = document.querySelectorAll('[data-rebind-action]');
+
+    const getKeyName = (code) => {
+      const names = {
+        ArrowLeft: '← Flecha Izq',
+        ArrowRight: '→ Flecha Der',
+        ArrowUp: '↑ Flecha Arriba',
+        ArrowDown: '↓ Flecha Abajo',
+        Space: 'Espacio',
+        KeyZ: 'Z',
+        KeyX: 'X',
+        KeyC: 'C',
+        KeyA: 'A',
+        KeyD: 'D',
+        KeyW: 'W',
+        KeyS: 'S',
+        KeyJ: 'J',
+        KeyK: 'K',
+        KeyL: 'L'
+      };
+      if (names[code]) return names[code];
+      if (code && code.startsWith('Key')) return code.replace('Key', '');
+      return code || 'No asignada';
+    };
+
+    const updateTable = () => {
+      keyRows.forEach(row => {
+        const action = row.getAttribute('data-rebind-action');
+        const btn = row.querySelector('.keybind-code-btn');
+        if (btn) {
+          if (listeningAction === action) {
+            btn.innerText = '⚡ Pulsa tecla...';
+            btn.classList.add('listening');
+          } else {
+            btn.innerText = getKeyName(this.keybinds[action]);
+            btn.classList.remove('listening');
+          }
+        }
+      });
+    };
+
+    keyRows.forEach(row => {
+      const action = row.getAttribute('data-rebind-action');
+      const btn = row.querySelector('.keybind-code-btn');
+      if (btn) {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          listeningAction = action;
+          updateTable();
+          window.soundEngine.playSfx('select');
+        });
+      }
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (!listeningAction) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (e.code === 'Escape') {
+        listeningAction = null;
+        updateTable();
+        return;
+      }
+
+      this.keybinds[listeningAction] = e.code;
+      try {
+        localStorage.setItem('pokefighters_keybinds', JSON.stringify(this.keybinds));
+      } catch (err) {}
+
+      window.soundEngine.playSfx('select');
+      listeningAction = null;
+      updateTable();
+    }, true);
+
+    const resetKeysBtn = document.getElementById('btn-reset-keybinds');
+    if (resetKeysBtn) {
+      resetKeysBtn.addEventListener('click', () => {
+        this.keybinds = Object.assign({}, this.defaultKeybinds);
+        try {
+          localStorage.removeItem('pokefighters_keybinds');
+        } catch (err) {}
+        listeningAction = null;
+        updateTable();
+        window.soundEngine.playSfx('select');
+      });
+    }
+
+    updateTable();
+  }
+
+  _updateSettingsUI() {
+    const s = window.soundEngine;
+    const masterSlider = document.getElementById('setting-master-vol');
+    const musicSlider = document.getElementById('setting-music-vol');
+    const sfxSlider = document.getElementById('setting-sfx-vol');
+    const muteToggle = document.getElementById('setting-mute-toggle');
+
+    if (masterSlider) {
+      masterSlider.value = s.masterVolume;
+      const l = document.getElementById('val-master-vol');
+      if (l) l.innerText = `${Math.round(s.masterVolume * 100)}%`;
+    }
+    if (musicSlider) {
+      musicSlider.value = s.musicVolume;
+      const l = document.getElementById('val-music-vol');
+      if (l) l.innerText = `${Math.round(s.musicVolume * 100)}%`;
+    }
+    if (sfxSlider) {
+      sfxSlider.value = s.sfxVolume;
+      const l = document.getElementById('val-sfx-vol');
+      if (l) l.innerText = `${Math.round(s.sfxVolume * 100)}%`;
+    }
+    if (muteToggle) {
+      muteToggle.checked = s.isMuted;
+    }
+
+    document.querySelectorAll('[data-graphics-preset]').forEach(b => {
+      b.classList.toggle('active', b.getAttribute('data-graphics-preset') === this.graphicsQuality);
+    });
+  }
+
+  toggleFullscreen() {
+    const container = document.getElementById('canvas-container');
+    if (!container) return;
+
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+      if (container.requestFullscreen) {
+        container.requestFullscreen();
+      } else if (container.webkitRequestFullscreen) {
+        container.webkitRequestFullscreen();
+      }
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+      }
     }
   }
 

@@ -17,6 +17,17 @@ class SoundEngine {
       music: 0.35
     };
     this.lastSfxTimes = {};
+
+    try {
+      const saved = localStorage.getItem('pokefighters_volume');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.master !== undefined) this.volume.master = parsed.master;
+        if (parsed.sfx !== undefined) this.volume.sfx = parsed.sfx;
+        if (parsed.music !== undefined) this.volume.music = parsed.music;
+        if (parsed.muted !== undefined) this.isMuted = parsed.muted;
+      }
+    } catch (e) {}
   }
 
   init() {
@@ -300,6 +311,67 @@ class SoundEngine {
         });
         break;
       }
+
+      case 'poison': {
+        // Toxic poison bubble tick
+        const osc = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(420 * pitch, t);
+        osc.frequency.exponentialRampToValueAtTime(140 * pitch, t + 0.12);
+        g.gain.setValueAtTime(0.3, t);
+        g.gain.exponentialRampToValueAtTime(0.01, t + 0.12);
+        osc.connect(g).connect(this.sfxGain);
+        osc.start(t);
+        osc.stop(t + 0.12);
+        break;
+      }
+
+      case 'shadow': {
+        // Shadow Ball dark energy projectile
+        const osc = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(260 * pitch, t);
+        osc.frequency.exponentialRampToValueAtTime(90 * pitch, t + 0.22);
+        g.gain.setValueAtTime(0.35, t);
+        g.gain.exponentialRampToValueAtTime(0.01, t + 0.22);
+        osc.connect(g).connect(this.sfxGain);
+        osc.start(t);
+        osc.stop(t + 0.22);
+        this._noise(t, 0.16, 0.22);
+        break;
+      }
+
+      case 'lick': {
+        // Ghostly tongue whip slap
+        const osc = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(380 * pitch, t);
+        osc.frequency.exponentialRampToValueAtTime(120, t + 0.14);
+        g.gain.setValueAtTime(0.4, t);
+        g.gain.exponentialRampToValueAtTime(0.01, t + 0.14);
+        osc.connect(g).connect(this.sfxGain);
+        osc.start(t);
+        osc.stop(t + 0.14);
+        break;
+      }
+
+      case 'teleport': {
+        // Shadow Teleport ethereal warp
+        const osc = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(200 * pitch, t);
+        osc.frequency.exponentialRampToValueAtTime(680 * pitch, t + 0.18);
+        g.gain.setValueAtTime(0.28, t);
+        g.gain.exponentialRampToValueAtTime(0.01, t + 0.18);
+        osc.connect(g).connect(this.sfxGain);
+        osc.start(t);
+        osc.stop(t + 0.18);
+        break;
+      }
     }
   }
 
@@ -448,6 +520,42 @@ class SoundEngine {
     if (this.masterGain && this.ctx) {
       this.masterGain.gain.setValueAtTime(mute ? 0 : this.volume.master, this.ctx.currentTime);
     }
+    this._save();
+  }
+
+  setMasterVolume(val) {
+    this.volume.master = Math.max(0, Math.min(1, val));
+    if (this.masterGain && this.ctx && !this.isMuted) {
+      this.masterGain.gain.setValueAtTime(this.volume.master, this.ctx.currentTime);
+    }
+    this._save();
+  }
+
+  setMusicVolume(val) {
+    this.volume.music = Math.max(0, Math.min(1, val));
+    if (this.musicGain && this.ctx) {
+      this.musicGain.gain.setValueAtTime(this.volume.music, this.ctx.currentTime);
+    }
+    this._save();
+  }
+
+  setSfxVolume(val) {
+    this.volume.sfx = Math.max(0, Math.min(1, val));
+    if (this.sfxGain && this.ctx) {
+      this.sfxGain.gain.setValueAtTime(this.volume.sfx, this.ctx.currentTime);
+    }
+    this._save();
+  }
+
+  _save() {
+    try {
+      localStorage.setItem('pokefighters_volume', JSON.stringify({
+        master: this.volume.master,
+        sfx: this.volume.sfx,
+        music: this.volume.music,
+        muted: this.isMuted
+      }));
+    } catch (e) {}
   }
 }
 

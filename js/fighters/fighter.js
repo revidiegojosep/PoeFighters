@@ -87,6 +87,26 @@ class Fighter {
     this.isJumping = false;
     this.lastDownTapTime = 0;
 
+    // Held Item
+    this.heldItem = config.heldItem || 'none';
+    this.itemTimer = 0;
+    this.focusSashActive = true;
+
+    // Choice Scarf speed multiplier
+    if (this.heldItem === 'choice-scarf') {
+      this.walkSpeed = (this.walkSpeed || 3.8) * 1.25;
+      this.dashSpeed = (this.dashSpeed || 6.0) * 1.25;
+    }
+
+    // Status System (Veneno / Poison is the primary status)
+    this.statuses = {
+      poison: {
+        active: false,
+        timer: 0,
+        tickTimer: 0
+      }
+    };
+
     // Tracking
     this.lastAttacker = null;
     this.comboHitsReceived = 0;
@@ -186,11 +206,66 @@ class Fighter {
         this.vy = 0;
         this.hitstop = 0;
         this.actionLockTimer = 0;
+        this.focusSashActive = true;
+        if (this.statuses && this.statuses.poison) this.statuses.poison.active = false;
         this.anim.setAim('center');
         this.anim.loop('Idle', 1.0);
       }
       this.anim.update(dt);
       return;
+    }
+
+    // Passive Held Item Updates (e.g. Leftovers)
+    if (this.heldItem === 'leftovers' && this.state !== 'RESPAWN' && this.percent > 0) {
+      this.itemTimer += dt;
+      if (this.itemTimer >= 2.0) {
+        this.itemTimer = 0;
+        const healAmt = 1.5;
+        this.percent = Math.max(0, parseFloat((this.percent - healAmt).toFixed(1)));
+        if (window.particleManager) {
+          window.particleManager.spawnFloatingText(this.x, this.y - this.height - 8, '-1.5% [Restos]', '#10b981', 13);
+          window.particleManager.spawnHitSparks(this.x, this.y - this.height * 0.5, 2, 'grass');
+        }
+      }
+    }
+
+    // Status System: Veneno (Poison)
+    // "Veneno aumenta el % ACTUAL que tenga el enemigo un 2%. Veneno hace daño cada 1.7 segundos de su duracion."
+    if (this.statuses && this.statuses.poison && this.statuses.poison.active) {
+      const p = this.statuses.poison;
+      p.timer -= dt;
+      p.tickTimer -= dt;
+
+      // Poison bubble particles rising from victim
+      if (Math.random() < 0.28 && window.particleManager) {
+        window.particleManager.spawnHitSparks(
+          this.x + (Math.random() - 0.5) * 20,
+          this.y - Math.random() * this.height,
+          1,
+          'poison'
+        );
+      }
+
+      if (p.tickTimer <= 0) {
+        p.tickTimer = 1.7; // Ticks every 1.7 seconds
+        const poisonDmg = Math.max(1, Math.round(this.percent * 0.02));
+        this.percent = Math.min(999, this.percent + poisonDmg);
+        window.soundEngine.playSfx('poison');
+        if (window.particleManager) {
+          window.particleManager.spawnFloatingText(
+            this.x,
+            this.y - this.height - 14,
+            `+${poisonDmg}% [Veneno]`,
+            '#a855f7',
+            16
+          );
+          window.particleManager.spawnHitSparks(this.x, this.y - this.height * 0.5, 4, 'poison');
+        }
+      }
+
+      if (p.timer <= 0) {
+        p.active = false;
+      }
     }
 
     // A hit used to leave the fighter permanently in HURT after landing.
@@ -397,6 +472,16 @@ class Fighter {
 
   performBasicAttack() {
     if (this.attackCooldown > 0 || this.actionLockTimer > 0) return;
+
+    // Choice Specs restriction: Only X moves allowed!
+    if (this.heldItem === 'choice-specs') {
+      window.soundEngine.playSfx('select');
+      if (window.particleManager) {
+        window.particleManager.spawnFloatingText(this.x, this.y - this.height - 10, '¡Gafas Elección: Solo Ataques X!', '#8b5cf6', 15);
+      }
+      return;
+    }
+
     let dir = 'neutral';
     if (this.input.up) dir = 'up';
     else if (this.input.down) dir = 'down';
@@ -440,6 +525,16 @@ class Fighter {
 
   performSpecialMove() {
     if (this.specialCooldown > 0 || this.actionLockTimer > 0) return;
+
+    // Choice Band restriction: Only Z attacks allowed!
+    if (this.heldItem === 'choice-band') {
+      window.soundEngine.playSfx('select');
+      if (window.particleManager) {
+        window.particleManager.spawnFloatingText(this.x, this.y - this.height - 10, '¡Cinta Elección: Solo Ataques Z!', '#3b82f6', 15);
+      }
+      return;
+    }
+
     // 4 distinct moves for X: Up, Down, Side (Left/Right), and Neutral (NO direction)
     let dir = 'neutral';
     if (this.input.up) dir = 'up';
@@ -511,9 +606,30 @@ class Fighter {
 
         for (const hurtbox of hurtboxes) {
           if (window.physicsEngine.checkHitboxCollision(hitbox, hurtbox)) {
-            opponent.takeHit(hitbox, this, hurtbox.target);
+            // Apply attacker item modifiers
+            let finalHitbox = { ...hitbox };
+            if (this.heldItem === 'choice-band') {
+              finalHitbox.damage = Math.round(finalHitbox.damage * 1.35);
+              finalHitbox.baseKnockback = Math.round(finalHitbox.baseKnockback * 1.20);
+            } else if (this.heldItem === 'choice-specs') {
+              finalHitbox.damage = Math.round(finalHitbox.damage * 1.35);
+              finalHitbox.baseKnockback = Math.round(finalHitbox.baseKnockback * 1.20);
+            } else if (this.heldItem === 'life-orb') {
+              finalHitbox.damage = Math.round(finalHitbox.damage * 1.25);
+              this.percent = Math.min(999, this.percent + 1.5);
+              if (window.particleManager) {
+                window.particleManager.spawnFloatingText(this.x, this.y - this.height - 10, '+1.5% [Vida Esfera]', '#ef4444', 12);
+              }
+            } else if (this.heldItem === 'shell-bell') {
+              this.percent = Math.max(0, this.percent - 1.5);
+              if (window.particleManager) {
+                window.particleManager.spawnFloatingText(this.x, this.y - this.height - 10, '-1.5% [Cascabel Concha]', '#0284c7', 12);
+              }
+            }
+
+            opponent.takeHit(finalHitbox, this, hurtbox.target);
             this.hasHitOpponent = true;
-            this.hitstop = hitbox.hitlag; // Attacker hitfreeze
+            this.hitstop = finalHitbox.hitlag; // Attacker hitfreeze
             if (atk.onHit) atk.onHit(this, opponent);
             break;
           }
@@ -538,8 +654,37 @@ class Fighter {
       return;
     }
 
-    // Apply damage %
-    const dmg = hitbox.damage || 5;
+    // Apply defensive item modifiers
+    let dmg = hitbox.damage || 5;
+
+    // Assault Vest: reduces special damage by 25%
+    if (this.heldItem === 'assault-vest' && (hitbox.isSpecial || hitbox.type !== 'normal')) {
+      dmg = Math.max(1, Math.round(dmg * 0.75));
+    }
+
+    // Focus Band: 20% chance to endure hit and reduce 75% damage & knockback
+    let focusBandTriggered = false;
+    if (this.heldItem === 'focus-band' && Math.random() < 0.20) {
+      focusBandTriggered = true;
+      dmg = Math.max(1, Math.round(dmg * 0.25));
+      if (window.particleManager) {
+        window.particleManager.spawnFloatingText(this.x, this.y - this.height - 18, '¡Cinta Focus aguantó!', '#d97706', 16);
+      }
+    }
+
+    // Rocky Helmet: reflect 4% damage back to close-range melee attacker
+    if (this.heldItem === 'rocky-helmet' && attacker && !hitbox.isProjectile) {
+      const distToAttacker = Math.hypot(attacker.x - this.x, attacker.y - this.y);
+      if (distToAttacker < 75) {
+        attacker.percent = Math.min(999, attacker.percent + 4);
+        window.soundEngine.playSfx('hit_light');
+        if (window.particleManager) {
+          window.particleManager.spawnFloatingText(attacker.x, attacker.y - attacker.height - 10, '+4% [Casco Dentado]', '#ea580c', 15);
+          window.particleManager.spawnHitSparks(attacker.x, attacker.y - attacker.height * 0.5, 4, 'normal');
+        }
+      }
+    }
+
     this.percent = Math.min(this.percent + dmg, 999);
     this.lastAttacker = attacker;
 
@@ -547,6 +692,8 @@ class Fighter {
     const sfxName = dmg > 10 ? 'hit_heavy' : dmg > 6 ? 'hit_medium' : 'hit_light';
     window.soundEngine.playSfx(sfxName);
     if (hitbox.type === 'electric') window.soundEngine.playSfx('shock');
+    if (hitbox.type === 'poison') window.soundEngine.playSfx('poison');
+    if (hitbox.type === 'shadow') window.soundEngine.playSfx('shadow');
 
     if (window.particleManager) {
       window.particleManager.spawnHitSparks(this.x, this.y - this.height * 0.5, dmg, hitbox.type);
@@ -558,13 +705,27 @@ class Fighter {
     this.state = 'HURT';
 
     // Calculate launch knockback
-    const kbSpeed = window.physicsEngine.calculateKnockback(
+    let kbSpeed = window.physicsEngine.calculateKnockback(
       this.percent,
       dmg,
       this.weight,
       hitbox.knockbackScaling,
       hitbox.baseKnockback
     );
+
+    if (focusBandTriggered) {
+      kbSpeed *= 0.25;
+    }
+
+    // Focus Sash: Survives fatal launch once per life
+    if (this.heldItem === 'focus-sash' && this.focusSashActive && kbSpeed > 28) {
+      this.focusSashActive = false;
+      kbSpeed = 12;
+      if (window.particleManager) {
+        window.particleManager.spawnFloatingText(this.x, this.y - this.height - 20, '¡Banda Focus salvó!', '#f59e0b', 18);
+        window.particleManager.spawnHitSparks(this.x, this.y - this.height * 0.5, 10, 'normal');
+      }
+    }
 
     // Apply launch velocity with DI
     const diX = this.input.left ? -1 : this.input.right ? 1 : 0;
