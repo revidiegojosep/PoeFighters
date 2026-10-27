@@ -367,6 +367,9 @@ $pokemon_items = [
       <button id="btn-start-menu-return" class="btn-header" title="Volver al Menú de Inicio">
         🏠 Inicio
       </button>
+      <button id="btn-open-online" class="btn-header highlight" title="Multijugador en Línea 1v1 con Código">
+        🌐 En Línea
+      </button>
       <button id="btn-open-match-menu" class="btn-header highlight" title="Configurar modo de combate y elegir personajes">
         ⚔️ Partida
       </button>
@@ -734,6 +737,14 @@ $pokemon_items = [
           </div>
         </button>
 
+        <button id="btn-start-online" class="start-menu-btn start-btn-online">
+          <span class="btn-icon">🌐</span>
+          <div class="btn-text-group">
+            <span class="btn-main-title retro-font">MULTIJUGADOR EN LÍNEA</span>
+            <span class="btn-sub-desc">Salas 1v1 con código de 4 dígitos · Con/Sin objetos</span>
+          </div>
+        </button>
+
         <button id="btn-start-changelog" class="start-menu-btn start-btn-changelog">
           <span class="btn-icon">📜</span>
           <div class="btn-text-group">
@@ -761,6 +772,261 @@ $pokemon_items = [
 
       <div class="start-screen-footer">
         <span>© PokéFighters 2026 · Super Smash Bros Pokémon Edition · v1.1.0 Update 1</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       🌐 GIGA UPDATE: MODAL MULTIJUGADOR EN LÍNEA (ONLINE 1v1)
+       ========================================================================= -->
+  <div id="online-modal" class="modal-overlay">
+    <div class="modal-content online-modal-content">
+      <div class="modal-header">
+        <h2 class="retro-font" style="font-size: 15px; color: #38bdf8; display: flex; align-items: center; gap: 8px;">
+          🌐 MULTIJUGADOR EN LÍNEA · SALAS 1v1
+        </h2>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <button id="btn-online-back-menu" class="btn-compact-retro" title="Volver al Menú Principal">
+            🏠 Inicio
+          </button>
+          <button class="modal-close" id="btn-close-online-modal">✕</button>
+        </div>
+      </div>
+
+      <!-- Paso 1: Selección Previa Obligatoria de Personaje -->
+      <div style="margin-bottom: 18px;">
+        <div class="fighter-preselect-title">
+          <span><strong>1. Elige tu Pokémon Luchador</strong> (Requerido antes de crear o unirte):</span>
+          <span id="online-selected-fighter-badge" style="color: #facc15; font-weight: 800;">⚡ Pikachu</span>
+        </div>
+        <div class="fighter-preselect-grid" id="online-roster-grid">
+          <div class="fighter-preselect-card active" data-online-dex="25" data-name="Pikachu">
+            <img src="assets/pokemon/25/Idle.png" alt="Pikachu">
+            <span class="fighter-preselect-name">Pikachu</span>
+            <span class="fighter-preselect-tag" style="color: #facc15;">Eléctrico · 6.0kg</span>
+          </div>
+          <div class="fighter-preselect-card" data-online-dex="1" data-name="Bulbasaur">
+            <img src="assets/pokemon/1/Idle.png" alt="Bulbasaur">
+            <span class="fighter-preselect-name">Bulbasaur</span>
+            <span class="fighter-preselect-tag" style="color: #10b981;">Planta · 6.9kg</span>
+          </div>
+          <div class="fighter-preselect-card" data-online-dex="312" data-name="Minun y Plusle">
+            <img src="assets/pokemon/312/Idle.png" alt="Minun y Plusle">
+            <span class="fighter-preselect-name">Minun & Plusle</span>
+            <span class="fighter-preselect-tag" style="color: #38bdf8;">Eléctrico · 4.2kg</span>
+          </div>
+          <div class="fighter-preselect-card" data-online-dex="94" data-name="Gengar">
+            <img src="assets/pokemon/94/Idle.png" alt="Gengar">
+            <span class="fighter-preselect-name">Gengar</span>
+            <span class="fighter-preselect-tag" style="color: #a855f7;">Fantasma · 40.5kg</span>
+          </div>
+          <div class="fighter-preselect-card" data-online-dex="39" data-name="Jigglypuff">
+            <img src="assets/pokemon/39/Idle.png" alt="Jigglypuff">
+            <span class="fighter-preselect-name">Jigglypuff</span>
+            <span class="fighter-preselect-tag" style="color: #f472b6;">Normal/Hada · 5.5kg</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Paso 2: Elección de Modo (Crear Sala o Unirse) -->
+      <div class="online-mode-selector-row">
+        <button type="button" class="btn-online-mode-choice active" id="btn-tab-create-room">
+          <span class="online-choice-icon">🏠</span>
+          <div style="text-align: left;">
+            <div class="online-choice-title">CREAR SALA (ANFITRIÓN)</div>
+            <div class="online-choice-sub">Genera un código de 4 dígitos y configura las reglas</div>
+          </div>
+        </button>
+
+        <button type="button" class="btn-online-mode-choice" id="btn-tab-join-room">
+          <span class="online-choice-icon">🔑</span>
+          <div style="text-align: left;">
+            <div class="online-choice-title">UNIRSE A SALA</div>
+            <div class="online-choice-sub">Introduce el código de 4 dígitos de tu amigo</div>
+          </div>
+        </button>
+      </div>
+
+      <!-- VISTA 1: CREAR SALA (LOBBY ANFITRIÓN) -->
+      <div id="online-view-create">
+        <!-- Código de Sala Generado -->
+        <div class="online-code-banner">
+          <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px;">
+            Código de Sala para Compartir:
+          </div>
+          <span class="online-code-digits" id="online-host-code-display">----</span>
+          <div style="display: flex; gap: 8px; justify-content: center; align-items: center;">
+            <button type="button" class="btn-copy-code" id="btn-copy-room-code">
+              📋 Copiar Código
+            </button>
+            <span id="copy-status-text" style="font-size: 10px; color: #10b981; display: none;">¡Copiado!</span>
+          </div>
+        </div>
+
+        <!-- Slots de Jugadores en Sala -->
+        <div class="online-lobby-slots-grid">
+          <div class="online-player-slot filled" id="host-slot-p1">
+            <img src="assets/pokemon/25/Idle.png" id="host-slot-p1-img" alt="P1">
+            <div class="online-player-meta">
+              <span class="online-player-role-badge role-host">👑 Anfitrión (P1)</span>
+              <div class="online-player-name" id="host-slot-p1-name">Pikachu</div>
+              <div style="font-size: 10px; color: #10b981;">✓ Conectado</div>
+            </div>
+          </div>
+
+          <div class="online-player-slot waiting" id="host-slot-p2">
+            <div id="host-slot-p2-waiting-text">
+              ⏳ Esperando a que el rival introduzca el código...
+            </div>
+            <div id="host-slot-p2-connected-content" style="display: none; width: 100%; align-items: center; gap: 12px;">
+              <img src="assets/pokemon/1/Idle.png" id="host-slot-p2-img" alt="P2" style="width: 44px; height: 44px; object-fit: contain;">
+              <div class="online-player-meta">
+                <span class="online-player-role-badge role-guest">⚔️ Rival (P2)</span>
+                <div class="online-player-name" id="host-slot-p2-name">Bulbasaur</div>
+                <div style="font-size: 10px; color: #10b981;">✓ Conectado y Listo</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Ajustes de la Partida (Configurados por el Anfitrión) -->
+        <div style="background: rgba(15, 23, 42, 0.7); border-radius: 10px; padding: 14px; margin-bottom: 18px; border: 1px solid rgba(255, 255, 255, 0.08);">
+          <div style="font-size: 12px; color: #facc15; font-weight: 800; margin-bottom: 10px;">
+            ⚙️ Ajustes de Batalla (Solo Anfitrión)
+          </div>
+
+          <!-- Reglas Oficiales Fijas -->
+          <div class="online-rules-summary">
+            <span>⚔️ <strong>Reglas Oficiales:</strong> 3 Vidas · Límite de Tiempo: 5 Minutos (300s)</span>
+            <span class="online-rules-badge">🛡️ Anti-Cheat Activo</span>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+            <!-- Toggle Con / Sin Objetos -->
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 12px; color: #cbd5e1;">🎒 Objetos Equipables:</span>
+              <button type="button" class="online-toggle-btn active" id="btn-online-items-toggle">
+                ✅ Con Objetos (Draft 20s)
+              </button>
+            </div>
+
+            <!-- Selector de Escenario -->
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 12px; color: #cbd5e1;">🏟️ Escenario:</span>
+              <select id="online-stage-select" style="background: #0f172a; border: 1px solid #38bdf8; color: #fff; padding: 6px 10px; border-radius: 6px; font-size: 12px; outline: none;">
+                <option value="BATTLEFIELD">🏡 Pueblo Paleta (Dinámico)</option>
+                <option value="CINNABAR_ISLAND">🌋 Isla Canela (Volcán Activo)</option>
+                <option value="POWER_PLANT">⚡ Central Eléctrica (Bobinas Faraday)</option>
+                <option value="FINAL_DESTINATION">🌌 Destino Final (Competitivo)</option>
+                <option value="LAVENDER_TOWER">👻 Torre Pueblo Lavanda</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Botón de Lanzamiento -->
+        <button type="button" class="btn-launch-online" id="btn-online-host-start" disabled>
+          ⚔️ INICIAR BATALLA EN LÍNEA
+        </button>
+        <div id="host-start-hint" style="text-align: center; font-size: 11px; color: #94a3b8; margin-top: 8px;">
+          (El anfitrión podrá comenzar la partida en cuanto el rival se conecte)
+        </div>
+      </div>
+
+      <!-- VISTA 2: UNIRSE A SALA (GUEST) -->
+      <div id="online-view-join" style="display: none;">
+        <div class="join-code-input-wrap">
+          <div style="font-size: 12px; color: #94a3b8; margin-bottom: 8px;">
+            Introduce el código de 4 dígitos proporcionado por el anfitrión:
+          </div>
+          <input type="text" id="join-room-code-input" class="join-code-input" maxlength="4" placeholder="----" autocomplete="off" spellcheck="false">
+          <div style="margin-top: 14px;">
+            <button type="button" class="btn-launch-online" id="btn-submit-join-room" style="max-width: 260px; margin: 0 auto;">
+              🔑 UNIRSE A LA SALA
+            </button>
+          </div>
+          <div id="join-error-msg" style="color: #f87171; font-size: 11px; margin-top: 10px; display: none;"></div>
+        </div>
+
+        <!-- Estado tras unirse -->
+        <div id="join-connected-card" style="display: none; background: rgba(15, 23, 42, 0.7); border-radius: 10px; padding: 16px; border: 1px solid rgba(56, 189, 248, 0.3); text-align: center;">
+          <div style="color: #10b981; font-weight: 800; font-size: 14px; margin-bottom: 8px;">
+            ✓ ¡Conectado con éxito a la sala!
+          </div>
+          <div style="color: #cbd5e1; font-size: 12px; margin-bottom: 12px;">
+            Esperando a que el anfitrión inicie la partida...
+          </div>
+          <div class="online-rules-summary">
+            <span>⚔️ <strong>Reglas Oficiales:</strong> 3 Vidas · 5 Minutos (300s)</span>
+            <span class="online-rules-badge" id="join-items-rule-badge">🎒 Con Objetos</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       🎒 MODAL: DRAFT DE OBJETOS (VENTANA DE 20 SEGUNDOS)
+       ========================================================================= -->
+  <div id="item-draft-modal" class="modal-overlay">
+    <div class="modal-content draft-modal-content">
+      <div class="modal-header">
+        <h2 class="retro-font" style="font-size: 15px; color: #facc15; display: flex; align-items: center; gap: 8px;">
+          🎒 DRAFT DE OBJETOS EQUIPABLES
+        </h2>
+        <div class="online-rules-badge" style="background: rgba(250, 204, 21, 0.2); color: #facc15; border-color: #facc15;">
+          ⏱️ 20 SEGUNDOS
+        </div>
+      </div>
+
+      <div class="draft-timer-wrap">
+        <span class="draft-countdown-num" id="draft-countdown-timer">20</span>
+        <div class="draft-progress-bar-bg">
+          <div class="draft-progress-bar-fill" id="draft-progress-fill"></div>
+        </div>
+        <div style="font-size: 11px; color: #94a3b8; margin-top: 6px;">
+          Selecciona tu objeto estratégico antes de que el contador llegue a cero:
+        </div>
+      </div>
+
+      <div class="draft-items-grid" id="draft-items-container">
+        <div class="draft-item-card selected" data-item-id="restos">
+          <span class="draft-item-icon">🥪</span>
+          <span class="draft-item-name">Restos (Leftovers)</span>
+          <span class="draft-item-desc">Regeneración pasiva continua de vida cada 2.0 segundos.</span>
+        </div>
+        <div class="draft-item-card" data-item-id="banda_focus">
+          <span class="draft-item-icon">🎗️</span>
+          <span class="draft-item-name">Banda Focus</span>
+          <span class="draft-item-desc">Resiste un golpe letal de KO directo dejándote al borde si estabas a 0%.</span>
+        </div>
+        <div class="draft-item-card" data-item-id="cinta_elegida">
+          <span class="draft-item-icon">🥊</span>
+          <span class="draft-item-name">Cinta Elegida</span>
+          <span class="draft-item-desc">Aumenta un +15% todo el daño físico cuerpo a cuerpo de los ataques Z.</span>
+        </div>
+        <div class="draft-item-card" data-item-id="gafas_especiales">
+          <span class="draft-item-icon">👓</span>
+          <span class="draft-item-name">Gafas Especiales</span>
+          <span class="draft-item-desc">Aumenta un +15% el daño y alcance de todos los proyectiles especiales X.</span>
+        </div>
+        <div class="draft-item-card" data-item-id="baya_zidra">
+          <span class="draft-item-icon">🍇</span>
+          <span class="draft-item-name">Baya Zidra</span>
+          <span class="draft-item-desc">Cura automática instantánea de un 25% de daño al alcanzar o superar el 100%.</span>
+        </div>
+        <div class="draft-item-card" data-item-id="perla_grande">
+          <span class="draft-item-icon">💎</span>
+          <span class="draft-item-name">Perla Grande</span>
+          <span class="draft-item-desc">Refuerzo colosal de escudo: +50% de resistencia y regeneración acelerada.</span>
+        </div>
+      </div>
+
+      <div style="text-align: center;">
+        <button type="button" class="btn-launch-online" id="btn-confirm-draft-item" style="max-width: 320px; margin: 0 auto;">
+          ✓ CONFIRMAR OBJETO (<span id="draft-confirm-item-name">Restos</span>)
+        </button>
       </div>
     </div>
   </div>
@@ -1734,6 +2000,7 @@ $pokemon_items = [
   <script src="js/fighters/gengar.js?v=<?= $v ?>"></script>
   <script src="js/fighters/jigglypuff.js?v=<?= $v ?>"></script>
   <script src="js/ui/hud.js?v=<?= $v ?>"></script>
+  <script src="js/engine/online.js?v=<?= $v ?>"></script>
   <script src="js/game.js?v=<?= $v ?>"></script>
 
 </body>

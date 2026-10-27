@@ -112,12 +112,19 @@ class PokeSmashGame {
     this.gamepadConnected = false;
     this._initGamepadListeners();
 
+    // Online Multiplayer & Anti-Cheat
+    this.isOnlineMatch = false;
+    this.onlineRole = null;
+    this.onlineRoomCode = null;
+    this.onlineManager = new window.OnlineManager(this);
+
     this._bindControls();
     this._bindTrainingButtons();
     this._bindMatchSetupModal();
     this._bindSettingsModal();
     this._bindStartScreen();
     this._bindChangelogModal();
+    this._bindOnlineMultiplayer();
   }
 
   goToSetupStep(step) {
@@ -223,6 +230,15 @@ class PokeSmashGame {
     this.matchTimeRemaining = this.matchTimeLimit;
     this.itemsEnabled = options.itemsEnabled !== undefined ? options.itemsEnabled : (this.itemsEnabled !== false);
 
+    // Reglas fijas oficiales de Multijugador en Línea
+    if (this.gameMode === 'ONLINE') {
+      this.p1Type = 'HUMAN';
+      this.p2Type = 'ONLINE_RIVAL';
+      this.matchStocks = 3;        // 3 Vidas Obligatorias
+      this.matchTimeLimit = 300;   // 5 Minutos (300s)
+      this.matchTimeRemaining = 300;
+    }
+
     if (!this.itemsEnabled) {
       this.p1Item = 'none';
       this.dummyItem = 'none';
@@ -237,7 +253,7 @@ class PokeSmashGame {
     // Set stage in engine
     this.stage.setStage(this.stageId);
 
-    const initialStocks = this.gameMode === 'BATTLE' ? this.matchStocks : 99;
+    const initialStocks = (this.gameMode === 'BATTLE' || this.gameMode === 'ONLINE') ? this.matchStocks : 99;
 
     this.player = this.createFighter(this.playerDex, true, false, initialStocks, this.p1Item);
     this.dummy = this.createFighter(this.dummyDex, false, true, initialStocks, this.dummyItem);
@@ -251,7 +267,7 @@ class PokeSmashGame {
     }
 
     this.dummyController.setDummyFighter(this.dummy);
-    if (this.p2Type === 'HUMAN') {
+    if (this.p2Type === 'HUMAN' || this.p2Type === 'ONLINE_RIVAL') {
       this.dummyController.setMode('STAND');
     } else if (this.gameMode === 'BATTLE') {
       this.dummyController.setMode('CPU_BATTLE');
@@ -1651,7 +1667,7 @@ class PokeSmashGame {
       this.player.handleInputs(this.stage, dt);
     }
 
-    if (this.p2Type === 'HUMAN') {
+    if (this.p2Type === 'HUMAN' || this.p2Type === 'ONLINE_RIVAL') {
       this.dummy.handleInputs(this.stage, dt);
     } else {
       this.dummyController.update(dt, this.player, this.stage);
@@ -2021,6 +2037,337 @@ class PokeSmashGame {
       const p2Codes = (this.p2Keybinds && this.p2Keybinds[action]) || [];
       return p2Codes.some(c => !!this.keys[c]);
     }
+  }
+
+  // =========================================================================
+  // 🌐 MULTIJUGADOR EN LÍNEA: SALAS 1v1, DRAFT 20s Y ANTI-CHEAT
+  // =========================================================================
+  _bindOnlineMultiplayer() {
+    const onlineModal = document.getElementById('online-modal');
+    const draftModal = document.getElementById('item-draft-modal');
+    const startScreen = document.getElementById('start-screen');
+    const btnOpenOnline = document.getElementById('btn-open-online');
+    const btnStartOnline = document.getElementById('btn-start-online');
+    const btnCloseOnline = document.getElementById('btn-close-online-modal');
+    const btnBackOnline = document.getElementById('btn-online-back-menu');
+
+    const openOnline = () => {
+      if (startScreen) startScreen.classList.add('hidden');
+      if (onlineModal) onlineModal.classList.add('open');
+      if (window.soundEngine) window.soundEngine.playSfx('select');
+      // Selección por defecto: Pikachu
+      if (!this.onlineManager.selectedDex) {
+        this.onlineManager.setSelectedFighter(25);
+      }
+      this._updateOnlineRosterUI();
+      // Inicializar sala de anfitrión por defecto si la pestaña de crear está activa
+      const btnTabCreate = document.getElementById('btn-tab-create-room');
+      if (btnTabCreate && btnTabCreate.classList.contains('active')) {
+        if (!this.onlineManager.roomCode || this.onlineManager.role !== 'host') {
+          this._initHostRoom();
+        }
+      }
+    };
+
+    if (btnOpenOnline) btnOpenOnline.addEventListener('click', openOnline);
+    if (btnStartOnline) btnStartOnline.addEventListener('click', openOnline);
+
+    const closeOnline = () => {
+      if (onlineModal) onlineModal.classList.remove('open');
+      if (draftModal) draftModal.classList.remove('open');
+      if (startScreen) startScreen.classList.remove('hidden');
+      this.onlineManager.leaveRoom();
+    };
+
+    if (btnCloseOnline) btnCloseOnline.addEventListener('click', closeOnline);
+    if (btnBackOnline) btnBackOnline.addEventListener('click', closeOnline);
+
+    // 1. Selector Previo de Personaje (Paso 1 Obligatorio)
+    const rosterCards = document.querySelectorAll('#online-roster-grid .fighter-preselect-card');
+    rosterCards.forEach(card => {
+      card.addEventListener('click', () => {
+        const dex = parseInt(card.getAttribute('data-online-dex'), 10) || 25;
+        this.onlineManager.setSelectedFighter(dex);
+        this._updateOnlineRosterUI();
+        if (window.soundEngine) window.soundEngine.playSfx('select');
+      });
+    });
+
+    // 2. Modos de Sala: Crear Sala vs Unirse a Sala
+    const btnTabCreate = document.getElementById('btn-tab-create-room');
+    const btnTabJoin = document.getElementById('btn-tab-join-room');
+    const viewCreate = document.getElementById('online-view-create');
+    const viewJoin = document.getElementById('online-view-join');
+
+    if (btnTabCreate && btnTabJoin) {
+      btnTabCreate.addEventListener('click', () => {
+        btnTabCreate.classList.add('active');
+        btnTabJoin.classList.remove('active');
+        if (viewCreate) viewCreate.style.display = 'block';
+        if (viewJoin) viewJoin.style.display = 'none';
+        if (window.soundEngine) window.soundEngine.playSfx('select');
+        if (!this.onlineManager.roomCode || this.onlineManager.role !== 'host') {
+          this._initHostRoom();
+        }
+      });
+
+      btnTabJoin.addEventListener('click', () => {
+        btnTabJoin.classList.add('active');
+        btnTabCreate.classList.remove('active');
+        if (viewCreate) viewCreate.style.display = 'none';
+        if (viewJoin) viewJoin.style.display = 'block';
+        if (window.soundEngine) window.soundEngine.playSfx('select');
+      });
+    }
+
+    // Botón Copiar Código de Sala
+    const btnCopyCode = document.getElementById('btn-copy-room-code');
+    const copyStatus = document.getElementById('copy-status-text');
+    if (btnCopyCode) {
+      btnCopyCode.addEventListener('click', () => {
+        const code = this.onlineManager.roomCode;
+        if (code && navigator.clipboard) {
+          navigator.clipboard.writeText(code);
+          if (copyStatus) {
+            copyStatus.style.display = 'inline';
+            setTimeout(() => { if (copyStatus) copyStatus.style.display = 'none'; }, 2000);
+          }
+          if (window.soundEngine) window.soundEngine.playSfx('select');
+        }
+      });
+    }
+
+    // Toggle de Objetos (Solo Anfitrión)
+    const itemsToggleBtn = document.getElementById('btn-online-items-toggle');
+    let onlineItemsEnabled = true;
+    if (itemsToggleBtn) {
+      itemsToggleBtn.addEventListener('click', () => {
+        if (this.onlineManager.role !== 'host') return;
+        onlineItemsEnabled = !onlineItemsEnabled;
+        itemsToggleBtn.classList.toggle('active', onlineItemsEnabled);
+        itemsToggleBtn.innerText = onlineItemsEnabled ? '✅ Con Objetos (Draft 20s)' : '❌ Sin Objetos';
+        const stageSel = document.getElementById('online-stage-select');
+        this.onlineManager.updateSettings(onlineItemsEnabled, stageSel ? stageSel.value : 'BATTLEFIELD');
+        if (window.soundEngine) window.soundEngine.playSfx('select');
+      });
+    }
+
+    // Selector de Escenario (Solo Anfitrión)
+    const stageSelect = document.getElementById('online-stage-select');
+    if (stageSelect) {
+      stageSelect.addEventListener('change', () => {
+        if (this.onlineManager.role !== 'host') return;
+        this.onlineManager.updateSettings(onlineItemsEnabled, stageSelect.value);
+        if (window.soundEngine) window.soundEngine.playSfx('select');
+      });
+    }
+
+    // Iniciar Partida (Solo Anfitrión)
+    const btnHostStart = document.getElementById('btn-online-host-start');
+    if (btnHostStart) {
+      btnHostStart.addEventListener('click', () => {
+        if (this.onlineManager.role !== 'host') return;
+        this.onlineManager.startGame();
+      });
+    }
+
+    // Unirse a Sala
+    const joinInput = document.getElementById('join-room-code-input');
+    const btnSubmitJoin = document.getElementById('btn-submit-join-room');
+    const joinError = document.getElementById('join-error-msg');
+    const joinConnectedCard = document.getElementById('join-connected-card');
+
+    if (btnSubmitJoin && joinInput) {
+      btnSubmitJoin.addEventListener('click', async () => {
+        const code = joinInput.value.trim();
+        if (joinError) joinError.style.display = 'none';
+        btnSubmitJoin.disabled = true;
+        btnSubmitJoin.innerText = 'CONECTANDO...';
+
+        const res = await this.onlineManager.joinRoom(code);
+        btnSubmitJoin.disabled = false;
+        btnSubmitJoin.innerText = '🔑 UNIRSE A LA SALA';
+
+        if (res.success) {
+          if (joinConnectedCard) joinConnectedCard.style.display = 'block';
+          if (window.soundEngine) window.soundEngine.playSfx('select');
+        } else {
+          if (joinError) {
+            joinError.innerText = res.error || 'Código incorrecto o sala no disponible.';
+            joinError.style.display = 'block';
+          }
+          if (window.soundEngine) window.soundEngine.playSfx('shock');
+        }
+      });
+    }
+
+    // 3. Callbacks de Conexión y Estado
+    window.onOnlineRoomUpdated = (room, ping) => {
+      this._handleOnlineLobbyUpdate(room, ping);
+    };
+
+    window.onOnlineStartDraft = (sec) => {
+      if (onlineModal) onlineModal.classList.remove('open');
+      if (draftModal) draftModal.classList.add('open');
+      if (window.soundEngine) window.soundEngine.playSfx('select');
+    };
+
+    window.onOnlineDraftTick = (sec) => {
+      const countdown = document.getElementById('draft-countdown-timer');
+      const fill = document.getElementById('draft-progress-fill');
+      if (countdown) countdown.innerText = sec;
+      if (fill) fill.style.width = `${(sec / 20) * 100}%`;
+    };
+
+    // Selección de Ítem en el Draft de 20s
+    const draftCards = document.querySelectorAll('#draft-items-container .draft-item-card');
+    let currentDraftChoice = 'restos';
+    draftCards.forEach(c => {
+      c.addEventListener('click', () => {
+        draftCards.forEach(dc => dc.classList.remove('selected'));
+        c.classList.add('selected');
+        currentDraftChoice = c.getAttribute('data-item-id') || 'restos';
+        const nameSpan = document.getElementById('draft-confirm-item-name');
+        if (nameSpan) {
+          const title = c.querySelector('.draft-item-name');
+          nameSpan.innerText = title ? title.innerText : currentDraftChoice;
+        }
+        if (window.soundEngine) window.soundEngine.playSfx('select');
+      });
+    });
+
+    const btnConfirmDraft = document.getElementById('btn-confirm-draft-item');
+    if (btnConfirmDraft) {
+      btnConfirmDraft.addEventListener('click', () => {
+        this.onlineManager.pickDraftItem(currentDraftChoice);
+        btnConfirmDraft.innerText = '✓ OBJETO CONFIRMADO';
+        btnConfirmDraft.disabled = true;
+        if (window.soundEngine) window.soundEngine.playSfx('select');
+      });
+    }
+
+    window.onOnlineBattleStart = (cfg) => {
+      if (onlineModal) onlineModal.classList.remove('open');
+      if (draftModal) draftModal.classList.remove('open');
+      if (startScreen) startScreen.classList.add('hidden');
+
+      this.isOnlineMatch = true;
+      this.onlineRole = cfg.role;
+      this.onlineRoomCode = cfg.room?.code;
+
+      this.startMatch({
+        mode: 'ONLINE',
+        stocks: 3,             // 3 Vidas Obligatorias
+        timeLimit: 300,        // 5 Minutos (300s)
+        stageId: cfg.stage || 'BATTLEFIELD',
+        itemsEnabled: cfg.itemsEnabled !== false,
+        playerDex: cfg.myDex,
+        dummyDex: cfg.rivalDex,
+        p1Type: 'HUMAN',
+        p2Type: 'ONLINE_RIVAL',
+        p1Item: cfg.role === 'host' ? cfg.p1Item : cfg.p2Item,
+        dummyItem: cfg.role === 'host' ? cfg.p2Item : cfg.p1Item
+      });
+
+      this._renderOnlineMatchBadge(cfg.room?.code);
+    };
+
+    window.onOnlineNetStatus = (type, ping) => {
+      const dot = document.getElementById('live-net-dot');
+      const pingText = document.getElementById('live-ping-val');
+      if (dot) {
+        dot.className = `net-dot ${type === 'p2p' ? 'p2p' : 'http'}`;
+      }
+      if (pingText) {
+        pingText.innerText = type === 'p2p' ? `P2P ${ping || 8}ms` : `HTTP ${ping || 45}ms`;
+      }
+    };
+  }
+
+  _initHostRoom() {
+    const stageSel = document.getElementById('online-stage-select');
+    const itemsToggle = document.getElementById('btn-online-items-toggle');
+    const itemsOn = itemsToggle ? itemsToggle.classList.contains('active') : true;
+    const stage = stageSel ? stageSel.value : 'BATTLEFIELD';
+
+    this.onlineManager.createRoom(stage, itemsOn).then(res => {
+      if (res.success) {
+        const codeDisplay = document.getElementById('online-host-code-display');
+        if (codeDisplay) codeDisplay.innerText = res.code;
+        this.onlineManager.initWebRTC();
+      }
+    });
+  }
+
+  _updateOnlineRosterUI() {
+    const dex = this.onlineManager.selectedDex || 25;
+    const cards = document.querySelectorAll('#online-roster-grid .fighter-preselect-card');
+    cards.forEach(card => {
+      const d = parseInt(card.getAttribute('data-online-dex'), 10);
+      const isSelected = (d === dex);
+      card.classList.toggle('active', isSelected);
+      if (isSelected) {
+        const badge = document.getElementById('online-selected-fighter-badge');
+        const name = card.getAttribute('data-name');
+        if (badge && name) badge.innerText = `⚡ ${name}`;
+
+        const hostImg = document.getElementById('host-slot-p1-img');
+        const hostName = document.getElementById('host-slot-p1-name');
+        if (hostImg) hostImg.src = `assets/pokemon/${dex}/Idle.png`;
+        if (hostName) hostName.innerText = name;
+      }
+    });
+  }
+
+  _handleOnlineLobbyUpdate(room, ping) {
+    if (!room) return;
+
+    if (this.onlineManager.role === 'host') {
+      const hostStartBtn = document.getElementById('btn-online-host-start');
+      const p2WaitText = document.getElementById('host-slot-p2-waiting-text');
+      const p2Content = document.getElementById('host-slot-p2-connected-content');
+      const p2Img = document.getElementById('host-slot-p2-img');
+      const p2Name = document.getElementById('host-slot-p2-name');
+
+      if (room.p2) {
+        if (p2WaitText) p2WaitText.style.display = 'none';
+        if (p2Content) p2Content.style.display = 'flex';
+        if (p2Img) p2Img.src = `assets/pokemon/${room.p2.dex}/Idle.png`;
+        const dexNames = { 25: 'Pikachu', 1: 'Bulbasaur', 312: 'Minun y Plusle', 94: 'Gengar', 39: 'Jigglypuff' };
+        if (p2Name) p2Name.innerText = dexNames[room.p2.dex] || 'Rival';
+
+        if (hostStartBtn) {
+          hostStartBtn.disabled = false;
+          hostStartBtn.innerText = '⚔️ ¡A LUCHAR! INICIAR PARTIDA';
+        }
+        const hint = document.getElementById('host-start-hint');
+        if (hint) hint.innerHTML = '<span style="color: #10b981; font-weight: 800;">✓ ¡Rival conectado! Puedes comenzar cuando quieras.</span>';
+      }
+    } else if (this.onlineManager.role === 'guest') {
+      const itemsBadge = document.getElementById('join-items-rule-badge');
+      if (itemsBadge) {
+        itemsBadge.innerText = room.rules?.itemsEnabled ? '🎒 Con Objetos (Draft 20s)' : '❌ Sin Objetos';
+      }
+    }
+  }
+
+  _renderOnlineMatchBadge(code) {
+    let badge = document.getElementById('online-live-badge');
+    if (!badge) {
+      badge = document.createElement('div');
+      badge.id = 'online-live-badge';
+      badge.className = 'online-match-badge';
+      const container = document.getElementById('canvas-container');
+      if (container) container.appendChild(badge);
+    }
+
+    badge.innerHTML = `
+      <span class="net-dot p2p" id="live-net-dot"></span>
+      <span>🌐 SALA: <strong style="color: #facc15;">${code || '----'}</strong></span>
+      <span style="font-size: 10px; color: #94a3b8;" id="live-ping-val">P2P 14ms</span>
+      <span class="anticheat-shield-tag" id="live-anticheat-tag">🛡️ Anti-Cheat: OK</span>
+    `;
+    badge.style.display = 'flex';
   }
 }
 
