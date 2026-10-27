@@ -1032,6 +1032,22 @@ $pokemon_items = [
     </div>
   </div>
 
+  <!-- Modal: Sala Cerrada / Rival Abandonó -->
+  <div id="abandoned-room-modal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 480px; text-align: center; border: 2px solid #ef4444; box-shadow: 0 0 35px rgba(239, 68, 68, 0.45); background: linear-gradient(180deg, #1e1b2e 0%, #0d0c15 100%); padding: 32px 24px;">
+      <div style="font-size: 54px; margin-bottom: 10px;">🚪</div>
+      <h2 class="retro-font" style="font-size: 15px; color: #f87171; margin-bottom: 14px; text-shadow: 0 0 10px rgba(239, 68, 68, 0.7);">
+        SALA CERRADA
+      </h2>
+      <p id="abandoned-room-msg" style="color: #cbd5e1; font-size: 14px; line-height: 1.6; margin-bottom: 24px;">
+        Un jugador ha abandonado o se ha desconectado.<br><strong style="color: #facc15;">La sala ha sido cerrada permanentemente.</strong>
+      </p>
+      <button type="button" class="btn-step-next" id="btn-close-abandoned-modal" style="width: 100%; justify-content: center; background: linear-gradient(135deg, #ef4444, #b91c1c); box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);">
+        🔙 VOLVER AL MENÚ PRINCIPAL
+      </button>
+    </div>
+  </div>
+
   <!-- Match Setup & Character Selection Modal (Compact & Retro Arcade Style) -->
   <div id="match-setup-modal" class="modal-overlay">
     <div class="modal-content setup-modal-content retro-setup-modal">

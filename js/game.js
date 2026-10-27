@@ -154,15 +154,17 @@ class PokeSmashGame {
     this.screenShakeTimer = Math.max(this.screenShakeTimer, duration);
   }
 
-  createFighter(dex, isPlayer, isDummy, stocks = 3, heldItem = 'none') {
+  createFighter(dex, isPlayer, isDummy, stocks = 3, heldItem = 'none', slot = null) {
+    const isSlot1 = (slot !== null) ? (slot === 1) : isPlayer;
     const config = {
-      x: isPlayer ? 360 : 664,
+      x: isSlot1 ? 360 : 664,
       y: 430,
-      facing: isPlayer ? 1 : -1,
+      facing: isSlot1 ? 1 : -1,
       isPlayer: isPlayer,
       isDummy: isDummy,
       stocks: stocks,
-      heldItem: heldItem
+      heldItem: heldItem,
+      playerSlot: (slot !== null) ? slot : (isPlayer ? 1 : 2)
     };
 
     switch (parseInt(dex, 10)) {
@@ -255,8 +257,20 @@ class PokeSmashGame {
 
     const initialStocks = (this.gameMode === 'BATTLE' || this.gameMode === 'ONLINE') ? this.matchStocks : 99;
 
-    this.player = this.createFighter(this.playerDex, true, false, initialStocks, this.p1Item);
-    this.dummy = this.createFighter(this.dummyDex, false, true, initialStocks, this.dummyItem);
+    if (this.gameMode === 'ONLINE') {
+      if (this.onlineRole === 'guest') {
+        // Guest: jugador local en Slot 2 (lado derecho 664), rival remoto en Slot 1 (lado izquierdo 360)
+        this.player = this.createFighter(this.playerDex, true, false, initialStocks, this.p1Item, 2);
+        this.dummy = this.createFighter(this.dummyDex, false, true, initialStocks, this.dummyItem, 1);
+      } else {
+        // Host: jugador local en Slot 1 (lado izquierdo 360), rival remoto en Slot 2 (lado derecho 664)
+        this.player = this.createFighter(this.playerDex, true, false, initialStocks, this.p1Item, 1);
+        this.dummy = this.createFighter(this.dummyDex, false, true, initialStocks, this.dummyItem, 2);
+      }
+    } else {
+      this.player = this.createFighter(this.playerDex, true, false, initialStocks, this.p1Item, 1);
+      this.dummy = this.createFighter(this.dummyDex, false, true, initialStocks, this.dummyItem, 2);
+    }
 
     if (this.p1Type === 'CPU') {
       this.p1Controller = new window.TrainingDummyController(this.player);
@@ -2282,6 +2296,14 @@ class PokeSmashGame {
         pingText.innerText = type === 'p2p' ? `P2P ${ping || 8}ms` : `HTTP ${ping || 45}ms`;
       }
     };
+
+    // Botón para cerrar modal de sala abandonada
+    const btnCloseAbandoned = document.getElementById('btn-close-abandoned-modal');
+    if (btnCloseAbandoned) {
+      btnCloseAbandoned.addEventListener('click', () => {
+        this.onlineManager.leaveRoom();
+      });
+    }
   }
 
   _initHostRoom() {
@@ -2294,7 +2316,6 @@ class PokeSmashGame {
       if (res.success) {
         const codeDisplay = document.getElementById('online-host-code-display');
         if (codeDisplay) codeDisplay.innerText = res.code;
-        this.onlineManager.initWebRTC();
       }
     });
   }
@@ -2366,8 +2387,18 @@ class PokeSmashGame {
       <span>🌐 SALA: <strong style="color: #facc15;">${code || '----'}</strong></span>
       <span style="font-size: 10px; color: #94a3b8;" id="live-ping-val">P2P 14ms</span>
       <span class="anticheat-shield-tag" id="live-anticheat-tag">🛡️ Anti-Cheat: OK</span>
+      <button id="btn-online-leave-match" class="btn-online-leave-badge" title="Abandonar partida y cerrar sala">🚪 Salir</button>
     `;
     badge.style.display = 'flex';
+
+    const leaveBtn = document.getElementById('btn-online-leave-match');
+    if (leaveBtn) {
+      leaveBtn.onclick = () => {
+        if (confirm('¿Deseas abandonar el combate en línea? Se cerrará la sala permanentemente.')) {
+          this.onlineManager.leaveRoom();
+        }
+      };
+    }
   }
 }
 

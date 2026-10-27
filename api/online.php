@@ -205,6 +205,23 @@ if ($action === 'get_room') {
         $room['p2']['last_seen'] = $now;
     }
 
+    // 🚪 DETECCIÓN DE ABANDONO: Si un jugador se desconecta durante draft o partida
+    if (in_array($room['status'], ['lobby', 'item_draft', 'playing'])) {
+        $p1Seen = $room['p1']['last_seen'] ?? 0;
+        $p2Seen = $room['p2']['last_seen'] ?? 0;
+        $timeout = 4.5; // 4.5 segundos sin señales
+
+        if ($room['status'] === 'playing' || $room['status'] === 'item_draft') {
+            if ($p1Seen > 0 && ($now - $p1Seen > $timeout)) {
+                $room['status'] = 'abandoned';
+                $room['abandoned_by'] = 'p1';
+            } elseif ($p2Seen > 0 && ($now - $p2Seen > $timeout)) {
+                $room['status'] = 'abandoned';
+                $room['abandoned_by'] = 'p2';
+            }
+        }
+    }
+
     // Verificar si el tiempo de draft de 20s ha expirado
     if ($room['status'] === 'item_draft') {
         $elapsed = $now - ($room['item_draft']['started_at'] ?: $now);
@@ -223,7 +240,9 @@ if ($action === 'get_room') {
         'success' => true,
         'room' => sanitizeRoom($room),
         'is_host' => $isHost,
-        'is_guest' => $isGuest
+        'is_guest' => $isGuest,
+        'abandoned' => ($room['status'] === 'abandoned'),
+        'abandoned_by' => $room['abandoned_by'] ?? null
     ]);
     exit;
 }
@@ -424,10 +443,40 @@ if ($action === 'sync' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    $now = microtime(true);
     if ($isHost) {
         $room['battle_state']['p1_state'] = $state;
+        if (isset($room['p1'])) $room['p1']['last_seen'] = $now;
     } else {
         $room['battle_state']['p2_state'] = $state;
+        if (isset($room['p2'])) $room['p2']['last_seen'] = $now;
+    }
+
+    // Verificar si la sala ya fue abandonada
+    if ($room['status'] === 'abandoned') {
+        saveRoom($file, $room);
+        echo json_encode([
+            'success' => false,
+            'status' => 'abandoned',
+            'abandoned' => true,
+            'abandoned_by' => $room['abandoned_by'] ?? null
+        ]);
+        exit;
+    }
+
+    // Verificar si el rival se desconectó (> 4.5 segundos)
+    $rivalSeen = $isHost ? ($room['p2']['last_seen'] ?? 0) : ($room['p1']['last_seen'] ?? 0);
+    if ($rivalSeen > 0 && ($now - $rivalSeen > 4.5)) {
+        $room['status'] = 'abandoned';
+        $room['abandoned_by'] = $isHost ? 'p2' : 'p1';
+        saveRoom($file, $room);
+        echo json_encode([
+            'success' => false,
+            'status' => 'abandoned',
+            'abandoned' => true,
+            'abandoned_by' => $room['abandoned_by']
+        ]);
+        exit;
     }
 
     saveRoom($file, $room);
@@ -437,6 +486,31 @@ if ($action === 'sync' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         'rival_state' => $isHost ? $room['battle_state']['p2_state'] : $room['battle_state']['p1_state'],
         'status' => $room['status']
     ]);
+    exit;
+}
+
+// -----------------------------------------------------------------------------
+// 9. ABANDONAR O SALIR DE LA SALA (Cierre Inmediato)
+// -----------------------------------------------------------------------------
+if ($action === 'leave_room') {
+    $code = $payload['code'] ?? $_GET['code'] ?? '';
+    $token = $payload['token'] ?? $_GET['token'] ?? '';
+
+    $file = getRoomFile($roomsDir, $code);
+    $room = loadRoom($file);
+
+    if ($room) {
+        $isHost = ($room['host_token'] === $token);
+        $isGuest = ($room['guest_token'] === $token);
+
+        if ($isHost || $isGuest) {
+            $room['status'] = 'abandoned';
+            $room['abandoned_by'] = $isHost ? 'p1' : 'p2';
+            saveRoom($file, $room);
+        }
+    }
+
+    echo json_encode(['success' => true, 'status' => 'abandoned']);
     exit;
 }
 

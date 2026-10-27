@@ -1,6 +1,6 @@
 /**
  * PokéFighters - Online Multiplayer Engine & Anti-Cheat System
- * Update: Multijugador en Línea (WebRTC Peer-to-Peer + HTTP Fallback Sync)
+ * Update: Multijugador en Línea 1v1 en Tiempo Real (WebRTC P2P DataChannel + Non-overlapping HTTP Sync)
  */
 
 class OnlineAntiCheat {
@@ -10,7 +10,6 @@ class OnlineAntiCheat {
     this.lastPacketTime = 0;
     this.lastX = 0;
     this.lastY = 0;
-    this.maxVelocityPerFrame = 42; // Tolerancia física máxima por fotograma
     this.suspiciousEvents = [];
     this.isDesynced = false;
   }
@@ -27,7 +26,7 @@ class OnlineAntiCheat {
 
   /**
    * Valida un paquete de estado recibido del rival.
-   * Retorna el estado sanitizado o null si es malicioso/descartable.
+   * Retorna el estado sanitizado o null si es descartable.
    */
   validateState(incomingState, currentLocalFighter) {
     if (!incomingState || typeof incomingState !== 'object') return null;
@@ -35,7 +34,6 @@ class OnlineAntiCheat {
     // 1. Verificación de Secuencia de Paquetes (Anti-Replay Attack)
     if (incomingState.seq !== undefined) {
       if (incomingState.seq <= this.lastPacketSeq && this.lastPacketSeq !== -1) {
-        // Paquete obsoleto o duplicado recibido fuera de orden
         return null;
       }
       this.lastPacketSeq = incomingState.seq;
@@ -51,10 +49,8 @@ class OnlineAntiCheat {
         sanitized.stocks = 3;
         this._flagSuspicious('Stock tampering: stocks > 3');
       }
-      // Los stocks nunca pueden aumentar durante una partida
       if (currentLocalFighter && sanitized.stocks > currentLocalFighter.stocks && currentLocalFighter.stocks > 0) {
         sanitized.stocks = currentLocalFighter.stocks;
-        this._flagSuspicious('Stock resurrection exploit detected');
       }
     }
 
@@ -63,21 +59,26 @@ class OnlineAntiCheat {
       sanitized.percent = Math.min(999, Math.max(0, parseFloat(sanitized.percent) || 0));
     }
 
-    // 4. Verificación de Velocidad y Teletransporte (Speed Hack / Position Spoofing)
+    // 4. Verificación de Velocidad y Teletransporte (Adaptativo al tiempo entre paquetes)
     if (sanitized.x !== undefined && sanitized.y !== undefined) {
+      const now = performance.now();
+      const dt = this.lastPacketTime > 0 ? Math.min(1.0, Math.max(0.016, (now - this.lastPacketTime) / 1000)) : 0.05;
+      this.lastPacketTime = now;
+
       if (this.lastX !== 0 && this.lastY !== 0) {
         const dx = sanitized.x - this.lastX;
         const dy = sanitized.y - this.lastY;
         const dist = Math.hypot(dx, dy);
 
-        // Excluir teletransportaciones legítimas (p.ej. Up-B de Gengar o reaparición)
-        const isLegitTeleport = (sanitized.state === 'SPECIAL_UP' || sanitized.state === 'RESPAWN' || sanitized.state === 'KO');
-        if (dist > this.maxVelocityPerFrame && !isLegitTeleport) {
-          this._flagSuspicious(`Speed hack / teleport anomaly: dist=${dist.toFixed(1)}`);
-          // Clampear desplazamiento máximo permitido
+        // Tolerancia física dinámica: base 95px + velocidad máxima posible en dt
+        const maxAllowed = Math.max(95, 620 * dt);
+        const isLegitTeleport = (sanitized.state === 'SPECIAL_UP' || sanitized.state === 'RESPAWN' || sanitized.state === 'KO' || sanitized.state === 'LEDGE_CLIMB');
+
+        if (dist > maxAllowed && !isLegitTeleport) {
+          this._flagSuspicious(`Speed anomaly: dist=${dist.toFixed(1)}px (dt=${dt.toFixed(3)}s)`);
           const angle = Math.atan2(dy, dx);
-          sanitized.x = this.lastX + Math.cos(angle) * this.maxVelocityPerFrame;
-          sanitized.y = this.lastY + Math.sin(angle) * this.maxVelocityPerFrame;
+          sanitized.x = this.lastX + Math.cos(angle) * maxAllowed;
+          sanitized.y = this.lastY + Math.sin(angle) * maxAllowed;
         }
       }
       this.lastX = sanitized.x;
@@ -100,7 +101,7 @@ class OnlineAntiCheat {
     this.flags++;
     this.suspiciousEvents.push({ time: Date.now(), reason });
     if (this.suspiciousEvents.length > 20) this.suspiciousEvents.shift();
-    console.warn(`[🛡️ Anti-Cheat] Infracción detectada: ${reason} (Total flags: ${this.flags})`);
+    console.warn(`[🛡️ Anti-Cheat] Infracción: ${reason} (Total flags: ${this.flags})`);
   }
 
   getSecurityReport() {
@@ -121,7 +122,7 @@ class OnlineManager {
     this.roomCode = null; // 4 dígitos
     this.token = null;
     this.room = null;
-    this.status = 'idle'; // 'idle' | 'waiting' | 'lobby' | 'item_draft' | 'playing' | 'ended'
+    this.status = 'idle'; // 'idle' | 'waiting' | 'lobby' | 'item_draft' | 'playing' | 'ended' | 'abandoned'
 
     this.selectedDex = 25; // Pikachu por defecto
     this.selectedItem = null;
@@ -130,31 +131,34 @@ class OnlineManager {
     this.peerConnection = null;
     this.dataChannel = null;
     this.isRtcConnected = false;
+    this.addedCandidates = new Set();
 
-    // Fallback Polling / Signaling
+    // Sincronización HTTP (No superpuesta)
     this.pollInterval = null;
     this.syncInterval = null;
-    this.lastPollTime = 0;
+    this.isHttpInFlight = false;
+    this.lastHttpSendTime = 0;
     this.packetSeq = 0;
     this.ping = 0;
-    this.lastPingSent = 0;
 
     // Draft de objetos
     this.draftTimeRemaining = 20.0;
     this.draftInterval = null;
 
     this.apiBase = 'api/online.php';
+
+    // Manejador de desconexión antes de cerrar pestaña
+    window.addEventListener('beforeunload', () => {
+      this._notifyLeaveBeacon();
+    });
   }
 
-  /**
-   * 1. Seleccionar Personaje antes de crear o unirse
-   */
   setSelectedFighter(dex) {
     this.selectedDex = parseInt(dex, 10) || 25;
   }
 
   /**
-   * 2. Crear Sala (Host)
+   * 1. Crear Sala (Host)
    */
   async createRoom(stageId = 'BATTLEFIELD', itemsEnabled = true) {
     try {
@@ -176,8 +180,11 @@ class OnlineManager {
       this.room = data.room;
       this.status = 'waiting';
       this.antiCheat.reset();
+      this.addedCandidates.clear();
 
       this._startPolling();
+      this.initWebRTC(); // Inicializar RTC Host
+
       return { success: true, code: this.roomCode, room: this.room };
     } catch (err) {
       console.error('[OnlineManager] createRoom error:', err);
@@ -186,7 +193,7 @@ class OnlineManager {
   }
 
   /**
-   * 3. Unirse a Sala (Guest)
+   * 2. Unirse a Sala (Guest)
    */
   async joinRoom(code) {
     const cleanCode = (code || '').trim().replace(/[^0-9]/g, '');
@@ -212,8 +219,11 @@ class OnlineManager {
       this.room = data.room;
       this.status = 'lobby';
       this.antiCheat.reset();
+      this.addedCandidates.clear();
 
       this._startPolling();
+      this.initWebRTC(); // Inicializar RTC Guest
+
       return { success: true, code: this.roomCode, room: this.room };
     } catch (err) {
       console.error('[OnlineManager] joinRoom error:', err);
@@ -222,7 +232,7 @@ class OnlineManager {
   }
 
   /**
-   * 4. Actualizar Ajustes de Sala (Solo Anfitrión)
+   * 3. Actualizar Ajustes de Sala (Solo Anfitrión)
    */
   async updateSettings(itemsEnabled, stageId) {
     if (this.role !== 'host') return;
@@ -248,7 +258,7 @@ class OnlineManager {
   }
 
   /**
-   * 5. Iniciar Partida (Solo Anfitrión)
+   * 4. Iniciar Partida (Solo Anfitrión)
    */
   async startGame() {
     if (this.role !== 'host') return;
@@ -273,7 +283,7 @@ class OnlineManager {
   }
 
   /**
-   * 6. Seleccionar Objeto durante el Draft de 20s
+   * 5. Seleccionar Objeto durante el Draft de 20s
    */
   async pickDraftItem(itemId) {
     this.selectedItem = itemId;
@@ -300,12 +310,12 @@ class OnlineManager {
   }
 
   /**
-   * Polling periódico del estado de la sala (heartbeat & sincronización de lobby)
+   * Polling periódico del estado de la sala (heartbeat, señales y detección de abandono)
    */
   _startPolling() {
     this._stopPolling();
     this._pollRoom();
-    this.pollInterval = setInterval(() => this._pollRoom(), 900);
+    this.pollInterval = setInterval(() => this._pollRoom(), 800);
   }
 
   _stopPolling() {
@@ -323,6 +333,12 @@ class OnlineManager {
       const data = await res.json();
       this.ping = Math.round(performance.now() - t0);
 
+      // Detección de abandono
+      if (data.abandoned || data.room?.status === 'abandoned') {
+        this.handleRoomAbandoned(data.abandoned_by || data.room?.abandoned_by);
+        return;
+      }
+
       if (data.success && data.room) {
         const prevStatus = this.status;
         this.room = data.room;
@@ -336,24 +352,23 @@ class OnlineManager {
           this._handleRoomStatusTransition(this.status);
         }
 
-        // WebRTC Signaling Poll si aún no se ha establecido canal de datos directo
+        // WebRTC Signaling Poll
         if (!this.isRtcConnected && this.status !== 'waiting') {
           this._handleSignaling(this.room.signaling);
         }
       }
     } catch (e) {
-      // Silencioso en desconexiones temporales
+      // Silencioso en pequeños fallos de red
     }
   }
 
-  /**
-   * Transiciones de Estado de Sala
-   */
   _handleRoomStatusTransition(newStatus) {
     if (newStatus === 'item_draft') {
       this._startItemDraft();
     } else if (newStatus === 'playing') {
       this._launchOnlineBattle();
+    } else if (newStatus === 'abandoned') {
+      this.handleRoomAbandoned(this.room?.abandoned_by);
     }
   }
 
@@ -375,7 +390,6 @@ class OnlineManager {
       if (this.draftTimeRemaining <= 0) {
         clearInterval(this.draftInterval);
         this.draftInterval = null;
-        // Si no seleccionó ítem, asignar uno automático
         if (!this.selectedItem) {
           this.pickDraftItem('restos');
         }
@@ -405,19 +419,22 @@ class OnlineManager {
       });
     }
 
-    // Iniciar bucle de sincronización en combate (WebRTC o HTTP Fallback)
+    // Iniciar bucle de sincronización en tiempo real
     this._startBattleSync();
   }
 
   /**
-   * Configuración de WebRTC PeerConnection para latencia mínima
+   * Configuración de WebRTC PeerConnection para latencia mínima directa (P2P)
    */
   initWebRTC() {
     if (this.peerConnection) return;
     const config = {
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun3.l.google.com:19302' },
+        { urls: 'stun:stun4.l.google.com:19302' }
       ]
     };
 
@@ -440,7 +457,7 @@ class OnlineManager {
         this.peerConnection.createOffer().then((offer) => {
           this.peerConnection.setLocalDescription(offer);
           this._sendSignal('offer', offer);
-        });
+        }).catch(err => console.warn('[WebRTC] CreateOffer error:', err));
       } else {
         this.peerConnection.ondatachannel = (event) => {
           this.dataChannel = event.channel;
@@ -448,22 +465,29 @@ class OnlineManager {
         };
       }
     } catch (err) {
-      console.warn('[WebRTC] Error al inicializar RTC, usando fallback HTTP:', err);
+      console.warn('[WebRTC] Error al inicializar RTC:', err);
     }
   }
 
   _setupDataChannel() {
     if (!this.dataChannel) return;
+
     this.dataChannel.onopen = () => {
       this.isRtcConnected = true;
-      console.log('[🌐 Online WebRTC] ¡DataChannel P2P Abierto con éxito!');
-      if (window.onOnlineNetStatus) window.onOnlineNetStatus('p2p', 0);
+      console.log('[🌐 Online WebRTC] ¡DataChannel P2P Abierto con éxito a 60 FPS!');
+      if (window.onOnlineNetStatus) window.onOnlineNetStatus('p2p', 8);
     };
+
     this.dataChannel.onclose = () => {
       this.isRtcConnected = false;
-      console.warn('[🌐 Online WebRTC] DataChannel cerrado, alternando a HTTP Sync');
+      console.warn('[🌐 Online WebRTC] DataChannel cerrado.');
       if (window.onOnlineNetStatus) window.onOnlineNetStatus('http', this.ping);
     };
+
+    this.dataChannel.onerror = (err) => {
+      console.warn('[🌐 Online WebRTC] DataChannel error:', err);
+    };
+
     this.dataChannel.onmessage = (event) => {
       this._handleIncomingPacket(event.data);
     };
@@ -481,52 +505,57 @@ class OnlineManager {
           data
         })
       });
-    } catch (e) {
-      // Ignorar errores de señalización transitorios
-    }
+    } catch (e) {}
   }
 
   async _handleSignaling(signals) {
     if (!signals || !this.peerConnection) return;
     try {
+      // 1. Manejo de Oferta (Guest)
       if (this.role === 'guest' && signals.offer && !this.peerConnection.remoteDescription) {
         await this.peerConnection.setRemoteDescription(new RTCSessionDescription(signals.offer));
         const answer = await this.peerConnection.createAnswer();
         await this.peerConnection.setLocalDescription(answer);
         await this._sendSignal('answer', answer);
-      } else if (this.role === 'host' && signals.answer && !this.peerConnection.remoteDescription) {
+      }
+      // 2. Manejo de Respuesta (Host)
+      else if (this.role === 'host' && signals.answer && !this.peerConnection.remoteDescription) {
         await this.peerConnection.setRemoteDescription(new RTCSessionDescription(signals.answer));
       }
 
-      // Procesar candidatos ICE
+      // 3. Procesar candidatos ICE sin duplicados
       const myCandidatesKey = this.role === 'host' ? 'candidates_p2' : 'candidates_p1';
       if (signals[myCandidatesKey] && Array.isArray(signals[myCandidatesKey])) {
         for (const c of signals[myCandidatesKey]) {
-          try {
-            await this.peerConnection.addIceCandidate(new RTCIceCandidate(c));
-          } catch (err) {}
+          const sig = `${c.candidate}_${c.sdpMid}_${c.sdpMLineIndex}`;
+          if (!this.addedCandidates.has(sig)) {
+            this.addedCandidates.add(sig);
+            try {
+              await this.peerConnection.addIceCandidate(new RTCIceCandidate(c));
+            } catch (err) {}
+          }
         }
       }
     } catch (err) {
-      // Fallback
+      // Manejo silencioso de carreras de señalización
     }
   }
 
   /**
-   * Bucle de sincronización de combate: Envío continuo de inputs y estado
+   * Bucle de sincronización de combate: Envío continuo a 60 FPS (WebRTC) o HTTP sin solapamiento
    */
   _startBattleSync() {
     if (this.syncInterval) clearInterval(this.syncInterval);
 
-    // Si WebRTC no está disponible, HTTP Fallback a 70ms (~14 ticks/segundo con interpolación suave)
+    // Ticks a ~60 Hz (16ms)
     this.syncInterval = setInterval(() => {
       if (this.status !== 'playing' || !this.game) return;
       this._sendLocalFighterState();
-    }, 65);
+    }, 16);
   }
 
   /**
-   * Envía los datos locales al rival (mediante WebRTC P2P si está activo, o HTTP Sync como fallback)
+   * Envía los datos locales al rival
    */
   _sendLocalFighterState() {
     if (!this.game) return;
@@ -538,6 +567,7 @@ class OnlineManager {
       seq: this.packetSeq,
       t: performance.now(),
       role: this.role,
+      slot: this.role === 'host' ? 1 : 2,
       x: Math.round(localFighter.x * 10) / 10,
       y: Math.round(localFighter.y * 10) / 10,
       vx: Math.round(localFighter.vx * 10) / 10,
@@ -548,6 +578,7 @@ class OnlineManager {
       stocks: localFighter.stocks,
       shield: Math.round(localFighter.shieldHealth || 0),
       hitstun: Math.round((localFighter.hitstun || 0) * 100) / 100,
+      animName: localFighter.anim?.currentAnimName || 'Idle',
       heldItem: localFighter.heldItem ? localFighter.heldItem.id : null,
       input: {
         left: !!localFighter.input?.left,
@@ -558,7 +589,16 @@ class OnlineManager {
         special: !!localFighter.input?.special,
         jump: !!localFighter.input?.jump,
         shield: !!localFighter.input?.shield,
-        grab: !!localFighter.input?.grab
+        grab: !!localFighter.input?.grab,
+        leftPressed: !!localFighter.input?.leftPressed,
+        rightPressed: !!localFighter.input?.rightPressed,
+        upPressed: !!localFighter.input?.upPressed,
+        downPressed: !!localFighter.input?.downPressed,
+        attackPressed: !!localFighter.input?.attackPressed,
+        specialPressed: !!localFighter.input?.specialPressed,
+        jumpPressed: !!localFighter.input?.jumpPressed,
+        shieldPressed: !!localFighter.input?.shieldPressed,
+        grabPressed: !!localFighter.input?.grabPressed
       }
     };
 
@@ -572,11 +612,18 @@ class OnlineManager {
       }
     }
 
-    // 2. HTTP Fallback Sync
-    this._httpSync(payload);
+    // 2. HTTP Fallback Sync: Garantiza no superposición de peticiones (Max 14 req/s)
+    const now = performance.now();
+    if (!this.isHttpInFlight && (now - this.lastHttpSendTime >= 65)) {
+      this.lastHttpSendTime = now;
+      this._httpSync(payload);
+    }
   }
 
   async _httpSync(payload) {
+    if (this.isHttpInFlight) return;
+    this.isHttpInFlight = true;
+
     try {
       const res = await fetch(`${this.apiBase}?action=sync`, {
         method: 'POST',
@@ -588,10 +635,19 @@ class OnlineManager {
         })
       });
       const data = await res.json();
+
+      if (data.status === 'abandoned' || data.abandoned) {
+        this.handleRoomAbandoned(data.abandoned_by);
+        return;
+      }
+
       if (data.success && data.rival_state) {
         this._applyRivalState(data.rival_state);
       }
-    } catch (e) {}
+    } catch (e) {
+    } finally {
+      this.isHttpInFlight = false;
+    }
   }
 
   _handleIncomingPacket(raw) {
@@ -602,7 +658,7 @@ class OnlineManager {
   }
 
   /**
-   * Aplica el estado del rival con validación Anti-Cheat e interpolación física
+   * Aplica el estado del rival en tiempo real con validación Anti-Cheat e interpolación física suave
    */
   _applyRivalState(incomingPacket) {
     if (!this.game) return;
@@ -613,45 +669,124 @@ class OnlineManager {
     const safe = this.antiCheat.validateState(incomingPacket, rivalFighter);
     if (!safe) return;
 
-    // Sincronizar inputs del rival
+    // 1. Sincronizar inputs del rival (movimiento continuo y acciones inmediatas)
     if (safe.input) {
-      rivalFighter.input = Object.assign(rivalFighter.input || {}, safe.input);
+      rivalFighter.input.left = !!safe.input.left;
+      rivalFighter.input.right = !!safe.input.right;
+      rivalFighter.input.up = !!safe.input.up;
+      rivalFighter.input.down = !!safe.input.down;
+      rivalFighter.input.jump = !!safe.input.jump;
+      rivalFighter.input.attack = !!safe.input.attack;
+      rivalFighter.input.special = !!safe.input.special;
+      rivalFighter.input.shield = !!safe.input.shield;
+      rivalFighter.input.grab = !!safe.input.grab;
+
+      if (safe.input.leftPressed) rivalFighter.input.leftPressed = true;
+      if (safe.input.rightPressed) rivalFighter.input.rightPressed = true;
+      if (safe.input.upPressed) rivalFighter.input.upPressed = true;
+      if (safe.input.downPressed) rivalFighter.input.downPressed = true;
+      if (safe.input.jumpPressed) rivalFighter.input.jumpPressed = true;
+      if (safe.input.attackPressed) rivalFighter.input.attackPressed = true;
+      if (safe.input.specialPressed) rivalFighter.input.specialPressed = true;
+      if (safe.input.shieldPressed) rivalFighter.input.shieldPressed = true;
+      if (safe.input.grabPressed) rivalFighter.input.grabPressed = true;
     }
 
-    // Suavizado e interpolación de posición
-    if (safe.x !== undefined && safe.y !== undefined) {
-      const dx = safe.x - rivalFighter.x;
-      const dy = safe.y - rivalFighter.y;
+    // 2. Orientación y Estado de Animación
+    if (safe.facing !== undefined) {
+      rivalFighter.facing = safe.facing;
+      if (rivalFighter.anim) rivalFighter.anim.setFacing(safe.facing);
+    }
 
-      if (Math.hypot(dx, dy) > 85 || safe.state === 'RESPAWN') {
-        // Corrección directa si la divergencia es muy alta
-        rivalFighter.x = safe.x;
-        rivalFighter.y = safe.y;
-      } else {
-        // Interpolación lineal suave (lerp 35%)
-        rivalFighter.x += dx * 0.35;
-        rivalFighter.y += dy * 0.35;
+    if (safe.state !== undefined && rivalFighter.state !== safe.state) {
+      rivalFighter.state = safe.state;
+      if (safe.animName && rivalFighter.anim && rivalFighter.anim.currentAnimName !== safe.animName) {
+        rivalFighter.anim.play(safe.animName);
       }
     }
 
-    if (safe.vx !== undefined) rivalFighter.vx = safe.vx;
-    if (safe.vy !== undefined) rivalFighter.vy = safe.vy;
-    if (safe.facing !== undefined) rivalFighter.facing = safe.facing;
-    if (safe.percent !== undefined) rivalFighter.percent = safe.percent;
-    if (safe.stocks !== undefined) rivalFighter.stocks = safe.stocks;
-    if (safe.shield !== undefined) rivalFighter.shieldHealth = safe.shield;
-    if (safe.state !== undefined && safe.state !== 'IDLE' && rivalFighter.state !== safe.state) {
-      rivalFighter.state = safe.state;
+    // 3. Suavizado e Interpolación Física de Posición
+    if (typeof safe.x === 'number' && typeof safe.y === 'number') {
+      const dx = safe.x - rivalFighter.x;
+      const dy = safe.y - rivalFighter.y;
+      const dist = Math.hypot(dx, dy);
+
+      if (dist > 130 || safe.state === 'RESPAWN') {
+        // Teletransporte / Reaparición directa
+        rivalFighter.x = safe.x;
+        rivalFighter.y = safe.y;
+      } else {
+        // Interpolación fluida (45% por paquete)
+        rivalFighter.x += dx * 0.45;
+        rivalFighter.y += dy * 0.45;
+      }
+    }
+
+    if (typeof safe.vx === 'number') rivalFighter.vx = safe.vx;
+    if (typeof safe.vy === 'number') rivalFighter.vy = safe.vy;
+    if (typeof safe.percent === 'number') rivalFighter.percent = safe.percent;
+    if (typeof safe.stocks === 'number') rivalFighter.stocks = safe.stocks;
+    if (typeof safe.shield === 'number') rivalFighter.shieldHealth = safe.shield;
+  }
+
+  /**
+   * Manejador de Abandono: Si un jugador abandona, se cierra la sala y se notifica
+   */
+  handleRoomAbandoned(abandonedBy) {
+    if (this.status === 'abandoned') return;
+    this.status = 'abandoned';
+
+    console.warn('[OnlineManager] Sala abandonada por:', abandonedBy);
+
+    // Detener la partida y sincronización
+    this._stopPolling();
+    if (this.syncInterval) clearInterval(this.syncInterval);
+    if (this.draftInterval) clearInterval(this.draftInterval);
+
+    if (this.game) {
+      this.game.isMatchOver = true;
+    }
+
+    // Mostrar modal interactivo de sala cerrada
+    const modal = document.getElementById('abandoned-room-modal');
+    const msg = document.getElementById('abandoned-room-msg');
+    if (modal) {
+      if (msg) {
+        const who = (abandonedBy === this.role) ? 'Has salido de la partida.' : 'El rival ha abandonado o se ha desconectado.';
+        msg.innerHTML = `${who}<br><strong style="color: #facc15;">La sala ha sido cerrada permanentemente.</strong>`;
+      }
+      modal.classList.add('open');
+      if (window.soundEngine) window.soundEngine.playSfx('shock');
+    } else {
+      alert('⚠️ El rival ha abandonado la partida. La sala ha sido cerrada.');
+      this.leaveRoom();
+    }
+  }
+
+  _notifyLeaveBeacon() {
+    if (this.roomCode && this.token) {
+      try {
+        const url = `${this.apiBase}?action=leave_room`;
+        const data = JSON.stringify({ code: this.roomCode, token: this.token });
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon(url, data);
+        } else {
+          fetch(url, { method: 'POST', body: data, keepalive: true });
+        }
+      } catch (e) {}
     }
   }
 
   /**
-   * Salir o cerrar la sala
+   * Salir o cerrar la sala de forma voluntaria
    */
-  leaveRoom() {
+  async leaveRoom() {
+    this._notifyLeaveBeacon();
+
     this._stopPolling();
     if (this.syncInterval) clearInterval(this.syncInterval);
     if (this.draftInterval) clearInterval(this.draftInterval);
+
     if (this.dataChannel) {
       try { this.dataChannel.close(); } catch (e) {}
     }
@@ -667,6 +802,28 @@ class OnlineManager {
     this.isRtcConnected = false;
     this.peerConnection = null;
     this.dataChannel = null;
+    this.addedCandidates.clear();
+
+    const badge = document.getElementById('online-live-badge');
+    if (badge) badge.style.display = 'none';
+
+    const modal = document.getElementById('abandoned-room-modal');
+    if (modal) modal.classList.remove('open');
+
+    const onlineModal = document.getElementById('online-modal');
+    if (onlineModal) onlineModal.classList.remove('open');
+
+    const draftModal = document.getElementById('item-draft-modal');
+    if (draftModal) draftModal.classList.remove('open');
+
+    const startScreen = document.getElementById('start-screen');
+    if (startScreen) startScreen.classList.remove('hidden');
+
+    if (this.game) {
+      this.game.matchStarted = false;
+      this.game.isMatchOver = false;
+      this.game.isOnlineMatch = false;
+    }
   }
 }
 
