@@ -50,6 +50,7 @@ $fighters = [
         'type' => 'Eléctrico (Dúo)',
         'type_color' => '#38bdf8',
         'weight' => '4.2 kg (Dúo)',
+        'weight_category' => 'Ligero (Dúo)',
         'desc' => 'Dúo de roedores coordinados estilo Ice Climbers. Minun (-) lidera y Plusle (+) asiste en tándem. ¡Si Minun muere, mueren ambos de inmediato! Si Plusle muere, reaparece a los 10 segundos. Plusle salta exactamente 0.4 segundos después de Minun (en tierra y aire), pero NO por su propia cuenta. Refuerzo (⬇️+X) aumenta el daño un 10% durante 5s y teletransporta a Plusle junto a Minun si está cerca.',
         'moves_z' => [
             'Neutral' => ['name' => 'Chispa Jab (Suelo) / Giro Bipolar (Aire)', 'damage' => '4.2% (+3.4% Tándem)', 'desc' => 'Puñetazos rápidos cuerpo a cuerpo a corta distancia. En el aire giran en doble vórtice.'],
@@ -1946,7 +1947,7 @@ $pokemon_items = [
       <?php foreach ($fighters as $dex => $f): ?>
         <div style="margin-bottom: 24px;">
           <h3 style="color: <?= $f['type_color'] ?>; font-size: 17px; margin-bottom: 4px;">
-            <?= $f['name'] ?> <span style="font-size: 13px; color: #94a3b8;">(Tipo: <?= $f['type'] ?> · ⚖️ Peso: <?= $f['weight'] ?> [<?= $f['weight_category'] ?>])</span>
+            <?= $f['name'] ?> <span style="font-size: 13px; color: #94a3b8;">(Tipo: <?= $f['type'] ?> · ⚖️ Peso: <?= $f['weight'] ?> [<?= $f['weight_category'] ?? 'Estándar' ?>])</span>
           </h3>
           <p style="font-size: 13px; color: #cbd5e1; margin-bottom: 12px;"><?= $f['desc'] ?></p>
 
