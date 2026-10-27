@@ -111,10 +111,10 @@ $fighters = [
 $stages = [
     'BATTLEFIELD' => [
         'id' => 'BATTLEFIELD',
-        'name' => 'Campo de Batalla',
-        'badge' => '3 Plataformas Flotantes',
-        'desc' => 'Plataforma principal sólida y 3 plataformas aéreas flotantes. Ideal para combos y juego vertical.',
-        'icon' => '🏛️'
+        'name' => 'Pueblo Paleta',
+        'badge' => 'Plataformas Móviles Dinámicas',
+        'desc' => 'Escenario en los prados de Pueblo Paleta con dos plataformas laterales móviles que oscilan arriba y abajo lentamente, sin plataforma central.',
+        'icon' => '🏡'
     ],
     'FINAL_DESTINATION' => [
         'id' => 'FINAL_DESTINATION',
@@ -129,6 +129,20 @@ $stages = [
         'badge' => 'Lápidas Ancestrales & Niebla Espectral',
         'desc' => 'Escenario tétrico en tonos morados con niebla en movimiento, plataformas en forma de lápidas ancestrales y ojos fantasmales vigilantes.',
         'icon' => '👻'
+    ],
+    'CINNABAR_ISLAND' => [
+        'id' => 'CINNABAR_ISLAND',
+        'name' => 'Isla Canela (Volcán Activo)',
+        'badge' => 'Marea de Lava & Peligro Ígneo',
+        'desc' => 'Escenario volcánico donde el nivel de la lava sube y baja periódicamente por la base, forzando a los luchadores a disputarse las plataformas altas.',
+        'icon' => '🌋'
+    ],
+    'POWER_PLANT' => [
+        'id' => 'POWER_PLANT',
+        'name' => 'Central de Energía de Kanto',
+        'badge' => 'Bobinas de Faraday & Chispas',
+        'desc' => 'Instalación industrial con bobinas de Faraday que disparan chispas de alto voltaje y electrifican plataformas de forma temporal.',
+        'icon' => '⚡'
     ]
 ];
 
@@ -327,8 +341,8 @@ $pokemon_items = [
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PokéFighters - Super Smash Bros Pokémon Edition · Update 1</title>
-  <meta name="description" content="Juego estilo Super Smash Bros con sprites de Pokémon Mundo Misterioso usando PHP y JS. Controla a Pikachu, Bulbasaur, Minun & Plusle, Gengar y Jigglypuff.">
+  <title>PokéFighters - Super Smash Bros Pokémon Edition · Update 2</title>
+  <meta name="description" content="Juego estilo Super Smash Bros con sprites de Pokémon Mundo Misterioso usando PHP y JS. Sistema de Agarres y Lanzamientos, Isla Canela, Central de Energía, Training Lab, Multijugador Local y Soporte de Mando.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet">
@@ -340,18 +354,23 @@ $pokemon_items = [
   <!-- Game Header -->
   <header class="game-header">
     <div class="logo-container">
-      <div class="logo-badge">UPDATE 1</div>
+      <div class="logo-badge">UPDATE 2</div>
       <h1 class="logo-title">POKÉ<span>FIGHTERS</span></h1>
     </div>
 
     <div class="header-actions">
+      <!-- Gamepad indicator badge -->
+      <div id="gamepad-indicator-badge" class="gamepad-badge" title="Conecta un mando USB o Bluetooth para jugar con mando">
+        <span class="gp-dot"></span> 🎮 Mando: Desconectado
+      </div>
+
       <button id="btn-start-menu-return" class="btn-header" title="Volver al Menú de Inicio">
         🏠 Inicio
       </button>
       <button id="btn-open-match-menu" class="btn-header highlight" title="Configurar modo de combate y elegir personajes">
         ⚔️ Partida
       </button>
-      <button id="btn-open-changelog" class="btn-header changelog-badge-btn" title="Registro de cambios de la Update 1">
+      <button id="btn-open-changelog" class="btn-header changelog-badge-btn" title="Registro de cambios de la Update 2">
         📜 Novedades
       </button>
       <button id="btn-open-settings" class="btn-header" title="Ajustes de sonido, controles y gráficos">
@@ -456,9 +475,23 @@ $pokemon_items = [
         <div class="deck-buttons-row">
           <button class="btn-deck active" data-dummy-mode="STAND">Quieto (Stand)</button>
           <button class="btn-deck" data-dummy-mode="JUMP">Saltar (Jump)</button>
+          <button class="btn-deck" data-dummy-mode="SHIELD">🛡️ Escudo</button>
+          <button class="btn-deck" data-dummy-mode="ROLL">🤸 Rodar</button>
           <button class="btn-deck" data-dummy-mode="CROUCH">Agachado</button>
           <button class="btn-deck" data-dummy-mode="CPU_EASY">CPU Fácil</button>
           <button class="btn-deck" data-dummy-mode="CPU_BATTLE">CPU Batalla</button>
+        </div>
+
+        <div class="deck-section-title" style="margin-top: 14px;">
+          🔬 Laboratorio Avanzado (Training Lab Tools)
+        </div>
+        <div class="deck-buttons-row">
+          <button class="btn-deck" id="btn-toggle-hitboxes" title="Atajo: Tecla H">
+            🎯 Ver Hitboxes: OFF [H]
+          </button>
+          <button class="btn-deck" id="btn-lock-dummy-percent">
+            🔒 Fijar % Constante: OFF
+          </button>
         </div>
 
         <div class="deck-section-title" style="margin-top: 14px;">
@@ -610,11 +643,45 @@ $pokemon_items = [
           </div>
         </div>
 
-        <div class="control-item">
-          <div class="key-badge">R / M</div>
+        <!-- NUEVO: Agarre y Lanzamientos -->
+        <div class="control-item" style="border-left: 3px solid #f43f5e;">
+          <div class="key-badge" style="background: linear-gradient(135deg, #e11d48, #f43f5e); color: #fff; font-weight: 800;">Shift (Izq / Der)</div>
           <div class="control-desc">
-            <span class="control-title">Atajos de Teclado</span>
-            <span class="control-sub"><strong>[R]</strong>: Resetear dummy a posición inicial. <strong>[M]</strong>: Música ON/OFF.</span>
+            <span class="control-title" style="color: #fb7185;">🤼 Sistema de Agarres y Lanzamientos (Grabs & Throws)</span>
+            <span class="control-sub"><strong>¡Atraviesa los escudos!</strong> Pulsa Shift junto al rival para inmovilizarlo. Pulsa <strong>Z</strong> para castigar (Pummel). Para lanzar, pulsa una dirección:
+            <br>• <strong>➡️/⬅️ Adelante / Atrás:</strong> Busca noqueos y expulsión fuera del escenario (Kill Throws).
+            <br>• <strong>⬆️ Arriba:</strong> Lanzamiento vertical (88°) ideal para continuar con combos aéreos (Up-Air / Nair).
+            <br>• <strong>⬇️ Abajo:</strong> Estampa al rival contra el suelo (70°) forzando Tech Chase.
+            <br><em>¡Si te agarran, machea teclas rápidamente para liberarte antes!</em></span>
+          </div>
+        </div>
+
+        <!-- NUEVO: Atajos de Laboratorio & Hitboxes -->
+        <div class="control-item" style="border-left: 3px solid #10b981;">
+          <div class="key-badge" style="background: linear-gradient(135deg, #059669, #10b981); color: #fff; font-weight: 800;">H / R / M</div>
+          <div class="control-desc">
+            <span class="control-title" style="color: #34d399;">🔬 Training Lab & Atajos Rápidos</span>
+            <span class="control-sub"><strong>[H]</strong>: Alternar visualizador de Hitboxes (rojo) y Hurtboxes (verde) en tiempo real. <strong>[R]</strong>: Resetear dummy y % de combate. <strong>[M]</strong>: Música ON/OFF.</span>
+          </div>
+        </div>
+
+        <!-- NUEVO: Controles Jugador 2 (Multijugador Local) -->
+        <div class="control-item" style="border-left: 3px solid #a855f7;">
+          <div class="key-badge" style="background: linear-gradient(135deg, #7e22ce, #a855f7); color: #fff; font-weight: 800;">👥 Controles J2 (Local)</div>
+          <div class="control-desc">
+            <span class="control-title" style="color: #c084fc;">🎮 Multijugador Local en el Mismo Teclado</span>
+            <span class="control-sub">Cuando el Jugador 2 es Humano, los mandos no interfieren:
+            <br>• <strong>J1:</strong> W/A/S/D (Moverse), Espacio (Salto), Z (Ataque), X (Especial), C (Escudo), Shift Izq (Agarre).
+            <br>• <strong>J2:</strong> Flechas (Moverse), Numpad 1 / U / . (Ataque), Numpad 2 / I / , (Especial), Numpad 3 / O / - (Escudo), Numpad 0 / P / Enter (Agarre).</span>
+          </div>
+        </div>
+
+        <!-- NUEVO: Mandos de Consola -->
+        <div class="control-item" style="border-left: 3px solid #38bdf8;">
+          <div class="key-badge" style="background: linear-gradient(135deg, #0284c7, #38bdf8); color: #fff; font-weight: 800;">🎮 Mandos de Consola</div>
+          <div class="control-desc">
+            <span class="control-title" style="color: #38bdf8;">🕹️ Soporte Nativo Gamepad (Xbox, PS, Switch Pro)</span>
+            <span class="control-sub">Conecta cualquier mando USB o Bluetooth. Stick/Cruceta (Moverse), Botón A/Y (Salto), Botón X (Ataque), Botón B (Especial), Gatillos L1/L2 (Escudo), Gatillos R1/R2 (Agarre). Soporta hasta 2 mandos simultáneos para P1 y P2.</span>
           </div>
         </div>
       </div>
@@ -626,7 +693,7 @@ $pokemon_items = [
   <div id="start-screen" class="start-screen-overlay">
     <div class="start-screen-backdrop"></div>
     <div class="start-screen-content">
-      <div class="start-screen-badge retro-font">UPDATE 1 · SUPER SMASH BROS</div>
+      <div class="start-screen-badge retro-font">UPDATE 2 · SUPER SMASH BROS</div>
       <h1 class="start-screen-title">
         <span class="poke-glow">POKÉ</span><span class="fighters-glow">FIGHTERS</span>
       </h1>
@@ -671,7 +738,7 @@ $pokemon_items = [
           <span class="btn-icon">📜</span>
           <div class="btn-text-group">
             <span class="btn-main-title retro-font">NOVEDADES (CHANGELOG)</span>
-            <span class="btn-sub-desc">Jigglypuff, dificultad 1-9, nerf pociones</span>
+            <span class="btn-sub-desc">Agarres, Isla Canela, Central, Lab, J2 y Mandos</span>
           </div>
         </button>
 
@@ -812,7 +879,30 @@ $pokemon_items = [
           <div class="stage-select-grid">
             <?php foreach ($stages as $sId => $st): ?>
               <div class="stage-card <?= $sId === 'BATTLEFIELD' ? 'active' : '' ?>" data-stage="<?= $sId ?>">
-                <div class="stage-icon"><?= $st['icon'] ?></div>
+                <div class="stage-preview-thumb stage-thumb-<?= strtolower(str_replace('_', '-', $sId)) ?>">
+                  <div class="stage-thumb-bg"></div>
+                  <div class="stage-thumb-scene">
+                    <span class="stage-thumb-plat main-floor"></span>
+                    <?php if ($sId === 'BATTLEFIELD'): ?>
+                      <span class="stage-thumb-plat floating float-left"></span>
+                      <span class="stage-thumb-plat floating float-right"></span>
+                    <?php elseif ($sId === 'LAVENDER_TOWER'): ?>
+                      <span class="stage-thumb-plat tombstone tomb-l"></span>
+                      <span class="stage-thumb-plat tombstone tomb-c"></span>
+                      <span class="stage-thumb-plat tombstone tomb-r"></span>
+                      <div class="stage-thumb-mist"></div>
+                    <?php elseif ($sId === 'CINNABAR_ISLAND'): ?>
+                      <span class="stage-thumb-plat rock-plat rock-l"></span>
+                      <span class="stage-thumb-plat rock-plat rock-r"></span>
+                      <div class="stage-thumb-lava"></div>
+                    <?php elseif ($sId === 'POWER_PLANT'): ?>
+                      <span class="stage-thumb-plat grate-plat grate-l"></span>
+                      <span class="stage-thumb-plat grate-plat grate-r"></span>
+                      <div class="stage-thumb-sparks"></div>
+                    <?php endif; ?>
+                  </div>
+                  <div class="stage-icon-overlay"><?= $st['icon'] ?></div>
+                </div>
                 <div class="stage-info">
                   <div class="stage-title"><?= $st['name'] ?></div>
                   <div class="stage-badge"><?= $st['badge'] ?></div>
@@ -906,9 +996,28 @@ $pokemon_items = [
             </div>
           </div>
 
-          <!-- CPU Roster -->
+          <!-- CPU / Player 2 Roster -->
           <div class="roster-column">
-            <label class="setup-label">Pokémon de la CPU (Rival)</label>
+            <label class="setup-label">Oponente (Jugador 2 / CPU)</label>
+
+            <!-- Control de Jugador 2: CPU o Humano (Local) -->
+            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em;">
+              Control de Jugador 2:
+            </div>
+            <div class="deck-buttons-row" style="margin-bottom: 10px; display: flex; gap: 8px;">
+              <button type="button" class="btn-deck p2-control-toggle-btn active" data-p2-control="CPU" style="flex: 1; padding: 7px 10px; font-weight: 700; font-size: 12px; border-radius: 8px;">
+                🤖 CPU (Auto)
+              </button>
+              <button type="button" class="btn-deck p2-control-toggle-btn" data-p2-control="HUMAN" style="flex: 1; padding: 7px 10px; font-weight: 700; font-size: 12px; border-radius: 8px;">
+                👥 Jugador 2 (Local)
+              </button>
+            </div>
+
+            <!-- Aviso de controles cuando J2 es humano -->
+            <div id="p2-human-hint" style="display: none; margin-bottom: 10px; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 8px; padding: 8px 12px; font-size: 11.5px; color: #bae6fd;">
+              🎮 <strong>Modo Multijugador Local:</strong> El Jugador 2 usará Flechas (Moverse/Saltar/Bajar), Numpad 1/U (Ataque), Numpad 2/I (Especial), Numpad 3/O (Escudo) y Numpad 0/P/Enter (Agarre).
+            </div>
+
             <div class="roster-grid" id="cpu-modal-roster">
               <div class="roster-card" data-roster-cpu="25">
                 <div class="roster-card-avatar" data-avatar-dex="25"></div>
@@ -1084,14 +1193,61 @@ $pokemon_items = [
     <div class="modal-content changelog-modal-content retro-setup-modal">
       <div class="modal-header">
         <h2 class="retro-font" style="font-size: 14px; color: #facc15; display: flex; align-items: center; gap: 8px;">
-          📜 REGISTRO DE CAMBIOS · UPDATE 1
+          📜 REGISTRO DE CAMBIOS · UPDATE 2
         </h2>
         <button class="modal-close" id="btn-close-changelog-modal">✕</button>
       </div>
       <div class="changelog-body">
         <div class="changelog-badge-header">
+          <span class="cl-ver retro-font">VERSIÓN 2.0.0</span>
+          <span class="cl-badge" style="background: linear-gradient(135deg, #ef4444, #f59e0b);">UPDATE 2 · AGARRES, ESCENARIOS, LAB, MULTIJUGADOR & MANDOS</span>
+        </div>
+
+        <div class="changelog-section" style="border-left: 3px solid #f43f5e;">
+          <h3 class="cl-sec-title" style="color: #fb7185;">🤼 SISTEMA DE AGARRES Y LANZAMIENTOS (GRABS & THROWS)</h3>
+          <ul class="cl-list">
+            <li><strong>Tecla Dedicada Shift:</strong> Agarre directo con la tecla Shift (o Shift Derecho / Enter / Numpad 0 para J2). ¡Atraviesa y rompe la guardia del escudo!</li>
+            <li><strong>4 Lanzamientos Direccionales:</strong>
+              <ul>
+                <li><strong>⬆️ Lanzamiento Arriba (88°):</strong> Impulsa hacia el cielo para encadenar combos aéreos (Up-Air).</li>
+                <li><strong>⬇️ Lanzamiento Abajo (70°):</strong> Estampa al rival contra el suelo forzando situaciones de Tech Chase.</li>
+                <li><strong>➡️/⬅️ Adelante / Atrás (40°-42°):</strong> Proyecta hacia el abismo lateral (Kill Throws) para buscar noqueos en el borde.</li>
+              </ul>
+            </li>
+            <li><strong>Pummel & Escape:</strong> Pulsa [Z] para golpear mientras sostienes al rival. ¡El rival puede machear teclas para escapar antes si su daño acumulado es bajo!</li>
+          </ul>
+        </div>
+
+        <div class="changelog-section" style="border-left: 3px solid #f97316;">
+          <h3 class="cl-sec-title" style="color: #fb923c;">🌋 NUEVOS ESCENARIOS DINÁMICOS CON HAZARDS</h3>
+          <ul class="cl-list">
+            <li><strong>Isla Canela (Volcán Activo):</strong> Un mar de lava al rojo vivo en la base que sube y baja periódicamente con aviso sísmico. Si un luchador cae en la lava, sufre <strong>14% de daño de fuego</strong> y sale disparado verticalmente en una violenta erupción volcánica, forzando a disputar las plataformas superiores.</li>
+            <li><strong>Central de Energía de Kanto:</strong> Instalación eléctrica industrial con bobinas de Faraday que acumulan sobretensión, disparan chispas y electrifican plataformas de rejilla con arcos de plasma de alto voltaje (daño eléctrico continuado y consumo severo de escudo).</li>
+            <li><strong>Miniaturas Visuales Ilustradas:</strong> La pantalla de selección de escenario ahora cuenta con iconos y vistas previas gráficas que muestran el layout y estilo de cada campo de batalla.</li>
+          </ul>
+        </div>
+
+        <div class="changelog-section" style="border-left: 3px solid #10b981;">
+          <h3 class="cl-sec-title" style="color: #34d399;">🔬 MODO ENTRENAMIENTO AVANZADO (TRAINING LAB)</h3>
+          <ul class="cl-list">
+            <li><strong>Visualizador de Hitboxes en Tiempo Real:</strong> Pulsa la <strong>tecla [H]</strong> o el botón de laboratorio para alternar cajas de impacto (rojo) y hurtboxes de los Pokémon (verde traslúcido).</li>
+            <li><strong>Fijar % Constante:</strong> Opción para congelar el daño del dummy a un valor constante (0%, 50%, 100%, 150%) con reseteo automático al terminar el combo para practicar combos a porcentajes específicos.</li>
+            <li><strong>Configuración de CPU:</strong> Configura al dummy para que solo salte (JUMP), ruede (ROLL) o bloquee con escudo (SHIELD).</li>
+            <li><strong>True Combo Counter:</strong> Contador inteligente que detecta si el combo fue garantizado e ineludible (True Combo) o si hubo ventana de escape.</li>
+          </ul>
+        </div>
+
+        <div class="changelog-section" style="border-left: 3px solid #a855f7;">
+          <h3 class="cl-sec-title" style="color: #c084fc;">👥 MULTIJUGADOR LOCAL & 🎮 SOPORTE DE MANDOS</h3>
+          <ul class="cl-list">
+            <li><strong>Multijugador Local (P1 vs P2):</strong> Juega contra un amigo en el mismo teclado con esquemas de controles independientes sin solapamiento (P1: WASD; P2: Flechas y Numpad/U,I,O,P).</li>
+            <li><strong>Soporte Nativo Gamepad API:</strong> Detección automática de mandos de consola (Xbox, PlayStation DualShock/DualSense, Nintendo Switch Pro y genéricos USB) con mapeo completo de sticks, cruceta, saltos y gatillos de escudo/agarre.</li>
+          </ul>
+        </div>
+
+        <div class="changelog-badge-header" style="margin-top: 24px;">
           <span class="cl-ver retro-font">VERSIÓN 1.2.0</span>
-          <span class="cl-badge" style="background: linear-gradient(135deg, #a855f7, #ec4899);">NUEVOS ESCENARIOS & MECÁNICAS</span>
+          <span class="cl-badge" style="background: linear-gradient(135deg, #a855f7, #ec4899);">UPDATE 1 · ANTERIOR</span>
         </div>
 
         <div class="changelog-section" style="border-left: 3px solid #a855f7;">
@@ -1341,6 +1497,11 @@ $pokemon_items = [
               <td>Escudo (C)</td>
               <td>Bloquear impactos y proyectiles</td>
               <td><button class="keybind-code-btn">C</button></td>
+            </tr>
+            <tr data-rebind-action="grab">
+              <td>Agarrar (Grab)</td>
+              <td>Atraviesa escudos y permite 4 lanzamientos</td>
+              <td><button class="keybind-code-btn">Shift Izq</button></td>
             </tr>
             <tr data-rebind-action="item">
               <td>Usar Objeto / Poción (1)</td>

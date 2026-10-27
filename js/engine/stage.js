@@ -184,7 +184,11 @@ class Stage {
   }
 
   setStage(stageId) {
-    if (stageId === 'LAVENDER_TOWER') {
+    if (stageId === 'CINNABAR_ISLAND') {
+      this.stageId = 'CINNABAR_ISLAND';
+    } else if (stageId === 'POWER_PLANT') {
+      this.stageId = 'POWER_PLANT';
+    } else if (stageId === 'LAVENDER_TOWER') {
       this.stageId = 'LAVENDER_TOWER';
     } else if (stageId === 'FINAL_DESTINATION') {
       this.stageId = 'FINAL_DESTINATION';
@@ -192,7 +196,208 @@ class Stage {
       this.stageId = 'BATTLEFIELD';
     }
 
-    if (this.stageId === 'LAVENDER_TOWER') {
+    if (this.stageId === 'CINNABAR_ISLAND') {
+      // 🌋 ISLA CANELA: Volcán Activo & Plataformas de Roca Ígnea con Marea de Lava Dinámica
+      const stageWidth = 640;
+      const stageX = (this.width - stageWidth) / 2; // 192
+      const stageY = 440;
+
+      this.solidPlatforms = [
+        {
+          id: 'main_ground',
+          x: stageX,
+          y: stageY,
+          width: stageWidth,
+          height: 185,
+          color: '#26120e',
+          grassColor: '#ea580c',
+          accentColor: '#f97316',
+          type: 'solid'
+        }
+      ];
+
+      const platW = 145;
+      const platH = 14;
+      this.semiSolidPlatforms = [
+        {
+          id: 'plat_left',
+          x: stageX + 30, // 222
+          y: stageY - 110, // 330
+          width: platW,
+          height: platH,
+          color: '#1c0e0a',
+          accentColor: '#f97316',
+          glowColor: 'rgba(249, 115, 22, 0.65)',
+          type: 'semi'
+        },
+        {
+          id: 'plat_right',
+          x: stageX + stageWidth - platW - 30, // 657
+          y: stageY - 110, // 330
+          width: platW,
+          height: platH,
+          color: '#1c0e0a',
+          accentColor: '#f97316',
+          glowColor: 'rgba(249, 115, 22, 0.65)',
+          type: 'semi'
+        },
+        {
+          id: 'plat_top',
+          x: (this.width - 150) / 2, // 437
+          y: stageY - 210, // 230
+          width: 150,
+          height: platH,
+          color: '#1c0e0a',
+          accentColor: '#ef4444',
+          glowColor: 'rgba(239, 68, 68, 0.75)',
+          type: 'semi'
+        }
+      ];
+
+      this.blastZones = {
+        left: -180,
+        right: this.width + 180,
+        top: -190,
+        bottom: this.height + 140
+      };
+      this.respawnX = this.width / 2;
+      this.respawnY = 190;
+
+      // 🌋 ISLA CANELA: Dinámica de Lava y Sistema de Partículas Volcánicas Avanzado
+      this.lavaLevel = 580;
+      this.lavaBaseLevel = 580;
+      this.lavaTargetLevel = 580;
+      this.lavaMaxLevel = 436; // Cubre la plataforma principal al subir
+      this.lavaCycleTimer = 0;
+      this.lavaWarning = false;
+
+      // Enjambre de cenizas incandescentes y chispas térmicas (65 embers)
+      this.volcanoSparks = [];
+      const emberPalette = ['#ffffff', '#fef08a', '#facc15', '#fb923c', '#f97316', '#ef4444'];
+      for (let i = 0; i < 65; i++) {
+        this.volcanoSparks.push({
+          x: Math.random() * this.width,
+          y: Math.random() * this.height,
+          vx: (Math.random() - 0.5) * 35,
+          vy: -35 - Math.random() * 65,
+          size: 1.2 + Math.random() * 2.8,
+          color: emberPalette[Math.floor(Math.random() * emberPalette.length)],
+          swayAmp: 16 + Math.random() * 28,
+          swayFreq: 1.4 + Math.random() * 2.2,
+          phase: Math.random() * Math.PI * 2,
+          flickerSpeed: 3 + Math.random() * 5
+        });
+      }
+
+      // Escamas de ceniza volcánica oscura en suspensión
+      this.volcanoAsh = [];
+      for (let i = 0; i < 28; i++) {
+        this.volcanoAsh.push({
+          x: Math.random() * this.width,
+          y: Math.random() * this.height,
+          vx: -18 - Math.random() * 25,
+          vy: 8 + Math.random() * 18,
+          size: 2.2 + Math.random() * 4.2,
+          rot: Math.random() * Math.PI * 2,
+          rotSpeed: (Math.random() - 0.5) * 2.2,
+          alpha: 0.25 + Math.random() * 0.40
+        });
+      }
+
+      // Rayos volcánicos de ceniza (Dirty Lightning)
+      this.volcanoLightningTimer = 3.5;
+      this.volcanoLightningFlash = 0;
+      this.volcanoLightningBolts = [];
+
+      // Bombas de magma / piroclastos incandescentes arrojados por la caldera
+      this.magmaBombs = [];
+      this.magmaBombTimer = 2.2;
+
+      // Goteras de lava fundida bajo la plataforma de basalto
+      this.lavaDrips = [];
+      for (let i = 0; i < 10; i++) {
+        this.lavaDrips.push({
+          x: stageX + 45 + Math.random() * (stageWidth - 90),
+          y: stageY + 24,
+          vy: 25 + Math.random() * 45,
+          size: 2.0 + Math.random() * 2.4,
+          life: Math.random() * 1.5,
+          maxLife: 1.2 + Math.random() * 0.8
+        });
+      }
+    } else if (this.stageId === 'POWER_PLANT') {
+      // ⚡ CENTRAL DE ENERGÍA DE KANTO: Arena Industrial & Bobinas de Faraday Electrificadas
+      const stageWidth = 660;
+      const stageX = (this.width - stageWidth) / 2; // 182
+      const stageY = 430;
+
+      this.solidPlatforms = [
+        {
+          id: 'main_ground',
+          x: stageX,
+          y: stageY,
+          width: stageWidth,
+          height: 195,
+          color: '#0f172a',
+          grassColor: '#eab308',
+          type: 'solid'
+        }
+      ];
+
+      const platW = 150;
+      const platH = 15;
+      this.semiSolidPlatforms = [
+        {
+          id: 'plat_left',
+          x: stageX + 40, // 222
+          y: stageY - 115, // 315
+          width: platW,
+          height: platH,
+          color: '#1e293b',
+          accentColor: '#38bdf8',
+          glowColor: 'rgba(56, 189, 248, 0.55)',
+          type: 'semi',
+          isElectrified: false
+        },
+        {
+          id: 'plat_right',
+          x: stageX + stageWidth - platW - 40, // 652
+          y: stageY - 115, // 315
+          width: platW,
+          height: platH,
+          color: '#1e293b',
+          accentColor: '#38bdf8',
+          glowColor: 'rgba(56, 189, 248, 0.55)',
+          type: 'semi',
+          isElectrified: false
+        }
+      ];
+
+      this.blastZones = {
+        left: -175,
+        right: this.width + 175,
+        top: -185,
+        bottom: this.height + 140
+      };
+      this.respawnX = this.width / 2;
+      this.respawnY = 195;
+
+      // Bobinas de Faraday
+      this.coilCycleTimer = 0;
+      this.activeElectrifiedPlat = null;
+      this.coilWarning = false;
+      this.coilTurn = 'plat_left';
+      this.electricSparks = [];
+      for (let i = 0; i < 20; i++) {
+        this.electricSparks.push({
+          x: Math.random() * this.width,
+          y: Math.random() * this.height,
+          vx: (Math.random() - 0.5) * 60,
+          vy: (Math.random() - 0.5) * 60,
+          life: Math.random() * 0.4
+        });
+      }
+    } else if (this.stageId === 'LAVENDER_TOWER') {
       // TORRE POKÉMON DE PUEBLO LAVANDA:
       // Dark gothic spectral arena with 3 floating ancestral tombstone platforms
       const stageWidth = 680;
@@ -312,41 +517,38 @@ class Stage {
         }
       ];
 
-      const platW = 160;
+      const platW = 155;
       const platH = 14;
       this.semiSolidPlatforms = [
         {
           id: 'plat_left',
           x: stageX + 38, // 210
-          y: stageY - 105, // 325
+          baseY: stageY - 105, // 325
+          y: stageY - 105,
           width: platW,
           height: platH,
           color: '#1e293b',
           accentColor: '#38bdf8',
-          glowColor: 'rgba(56, 189, 248, 0.45)',
-          type: 'semi'
+          glowColor: 'rgba(56, 189, 248, 0.65)',
+          type: 'semi',
+          moveSpeed: 0.85,
+          moveAmp: 38,
+          phase: 0
         },
         {
           id: 'plat_right',
           x: stageX + stageWidth - platW - 38, // 654
-          y: stageY - 105, // 325
+          baseY: stageY - 105, // 325
+          y: stageY - 105,
           width: platW,
           height: platH,
           color: '#1e293b',
           accentColor: '#f43f5e',
-          glowColor: 'rgba(244, 63, 94, 0.45)',
-          type: 'semi'
-        },
-        {
-          id: 'plat_top',
-          x: (this.width - 170) / 2, // 427
-          y: stageY - 198, // 232
-          width: 170,
-          height: platH,
-          color: '#1e293b',
-          accentColor: '#a855f7',
-          glowColor: 'rgba(168, 85, 247, 0.45)',
-          type: 'semi'
+          glowColor: 'rgba(244, 63, 94, 0.65)',
+          type: 'semi',
+          moveSpeed: 0.85,
+          moveAmp: 38,
+          phase: Math.PI // Movimiento alterno armónico
         }
       ];
 
@@ -373,6 +575,181 @@ class Stage {
 
   update(dt) {
     this.time += dt;
+
+    // Movimiento oscilatorio suave de plataformas en Pueblo Paleta
+    if (this.stageId === 'BATTLEFIELD' && this.semiSolidPlatforms) {
+      for (const plat of this.semiSolidPlatforms) {
+        if (plat.moveAmp) {
+          plat.y = plat.baseY + Math.sin(this.time * plat.moveSpeed + plat.phase) * plat.moveAmp;
+        }
+      }
+    }
+
+    // 🌋 Dinámica de Lava en Isla Canela (Mareas periódicas con advertencia)
+    if (this.stageId === 'CINNABAR_ISLAND') {
+      this.lavaCycleTimer += dt;
+      const cycle = this.lavaCycleTimer % 18.0;
+
+      if (cycle < 10.0) {
+        // Calma: Nivel normal bajo
+        this.lavaTargetLevel = this.lavaBaseLevel;
+        this.lavaWarning = false;
+      } else if (cycle < 12.5) {
+        // Advertencia: Temblores y humo
+        this.lavaWarning = true;
+        this.lavaTargetLevel = this.lavaBaseLevel - 25;
+        if (window.game && Math.random() < 0.25) {
+          window.game.triggerScreenShake(3.5, 0.12);
+        }
+      } else if (cycle < 15.8) {
+        // Erupción: La lava sube e inunda la plataforma central
+        this.lavaWarning = false;
+        this.lavaTargetLevel = this.lavaMaxLevel;
+      } else {
+        // Descenso
+        this.lavaWarning = false;
+        this.lavaTargetLevel = this.lavaBaseLevel;
+      }
+
+      this.lavaLevel += (this.lavaTargetLevel - this.lavaLevel) * Math.min(1.0, dt * 3.5);
+
+      // Actualizar enjambre de cenizas incandescentes (sway turbulento)
+      if (this.volcanoSparks) {
+        for (const s of this.volcanoSparks) {
+          s.y += s.vy * dt;
+          s.x += (s.vx + Math.sin(this.time * s.swayFreq + s.phase) * s.swayAmp) * dt;
+          if (s.y < -25) {
+            s.y = this.height + 20;
+            s.x = Math.random() * this.width;
+          }
+          if (s.x < -30) s.x = this.width + 20;
+          else if (s.x > this.width + 30) s.x = -20;
+        }
+      }
+
+      // Actualizar escamas de ceniza volcánica suspendidas
+      if (this.volcanoAsh) {
+        for (const a of this.volcanoAsh) {
+          a.x += a.vx * dt;
+          a.y += a.vy * dt;
+          a.rot += a.rotSpeed * dt;
+          if (a.x < -30 || a.y > this.height + 30) {
+            a.x = this.width + 20;
+            a.y = Math.random() * this.height * 0.7;
+          }
+        }
+      }
+
+      // Rayos volcánicos de ceniza (Dirty Lightning)
+      if (this.volcanoLightningTimer !== undefined) {
+        this.volcanoLightningTimer -= dt;
+        if (this.volcanoLightningTimer <= 0) {
+          this.volcanoLightningTimer = 3.8 + Math.random() * 4.2;
+          this.volcanoLightningFlash = 1.0;
+          // Generar ramas de rayo sobre la nube del cráter
+          const cx = this.width / 2;
+          this.volcanoLightningBolts = [];
+          const boltCount = 1 + (Math.random() < 0.4 ? 1 : 0);
+          for (let b = 0; b < boltCount; b++) {
+            const startX = cx - 90 + Math.random() * 180;
+            const startY = 30 + Math.random() * 40;
+            const pts = [{ x: startX, y: startY }];
+            let curX = startX;
+            let curY = startY;
+            const segs = 4 + Math.floor(Math.random() * 4);
+            for (let s = 0; s < segs; s++) {
+              curX += (Math.random() - 0.5) * 45;
+              curY += 20 + Math.random() * 25;
+              pts.push({ x: curX, y: curY });
+            }
+            this.volcanoLightningBolts.push(pts);
+          }
+          if (window.soundEngine && Math.random() < 0.5) {
+            window.soundEngine.playSfx('shock');
+          }
+        }
+        if (this.volcanoLightningFlash > 0) {
+          this.volcanoLightningFlash = Math.max(0, this.volcanoLightningFlash - dt * 3.8);
+        }
+      }
+
+      // Bombas de magma / piroclastos arrojados desde el cráter
+      if (this.magmaBombTimer !== undefined) {
+        this.magmaBombTimer -= dt;
+        if (this.magmaBombTimer <= 0) {
+          this.magmaBombTimer = 2.2 + Math.random() * 2.5;
+          const peakCx = this.width / 2;
+          this.magmaBombs.push({
+            x: peakCx + (Math.random() - 0.5) * 60,
+            y: 170,
+            vx: (Math.random() - 0.5) * 95,
+            vy: -175 - Math.random() * 85,
+            grav: 210,
+            size: 3.2 + Math.random() * 2.6,
+            life: 2.6,
+            color: Math.random() < 0.5 ? '#fef08a' : '#f97316',
+            trail: []
+          });
+        }
+        if (this.magmaBombs) {
+          for (let i = this.magmaBombs.length - 1; i >= 0; i--) {
+            const mb = this.magmaBombs[i];
+            mb.vy += mb.grav * dt;
+            mb.x += mb.vx * dt;
+            mb.y += mb.vy * dt;
+            mb.life -= dt;
+            mb.trail.unshift({ x: mb.x, y: mb.y, size: mb.size });
+            if (mb.trail.length > 7) mb.trail.pop();
+            if (mb.life <= 0 || mb.y > this.height + 60) {
+              this.magmaBombs.splice(i, 1);
+            }
+          }
+        }
+      }
+
+      // Goteras de lava fundida bajo la plataforma de basalto
+      if (this.lavaDrips) {
+        const mainP = this.solidPlatforms[0];
+        for (const drip of this.lavaDrips) {
+          drip.life += dt;
+          drip.y += drip.vy * dt;
+          drip.vy += 75 * dt;
+          if (drip.life > drip.maxLife || (mainP && drip.y >= this.lavaLevel)) {
+            drip.life = 0;
+            drip.maxLife = 1.2 + Math.random() * 0.8;
+            drip.y = (mainP ? mainP.y + 24 : 460);
+            drip.x = (mainP ? mainP.x + 45 + Math.random() * (mainP.width - 90) : this.width / 2);
+            drip.vy = 20 + Math.random() * 40;
+          }
+        }
+      }
+    }
+
+    // ⚡ Dinámica de Bobinas de Faraday en Central de Energía
+    if (this.stageId === 'POWER_PLANT') {
+      this.coilCycleTimer += dt;
+      const cTime = this.coilCycleTimer % 14.0;
+
+      if (cTime < 7.5) {
+        this.activeElectrifiedPlat = null;
+        this.coilWarning = false;
+        for (const p of this.semiSolidPlatforms) p.isElectrified = false;
+      } else if (cTime < 9.8) {
+        this.coilWarning = true;
+        this.activeElectrifiedPlat = null;
+        for (const p of this.semiSolidPlatforms) p.isElectrified = false;
+      } else {
+        this.coilWarning = false;
+        this.activeElectrifiedPlat = this.coilTurn;
+        for (const p of this.semiSolidPlatforms) {
+          p.isElectrified = (p.id === this.activeElectrifiedPlat);
+        }
+      }
+
+      if (cTime >= 13.9) {
+        this.coilTurn = this.coilTurn === 'plat_left' ? 'plat_right' : 'plat_left';
+      }
+    }
 
     // Cloud drift
     for (const c of this.clouds) {
@@ -450,11 +827,80 @@ class Stage {
     }
   }
 
+  // =========================================================================
+  // ⚡ DYNAMIC STAGE HAZARDS (Isla Canela Lava & Central Eléctrica Coils)
+  // =========================================================================
+  updateHazards(fighters) {
+    if (!fighters || !Array.isArray(fighters)) return;
+
+    if (this.stageId === 'CINNABAR_ISLAND') {
+      for (const f of fighters) {
+        if (!f || f.state === 'RESPAWN' || f.invulnTimer > 0) continue;
+        // Check if fighter touches or is below the current lava level
+        if (f.y >= this.lavaLevel - 10) {
+          if ((f.lavaBurnCooldown || 0) <= 0) {
+            f.lavaBurnCooldown = 0.55;
+            f.percent += 14;
+            f.vy = -16.5; // Massive upward volcano launch!
+            f.vx = (f.x < this.width / 2 ? 1 : -1) * (3.5 + Math.random() * 2);
+            f.state = 'HURT';
+            f.hitstun = 0.45;
+            f.hitstop = 4;
+            if (window.soundEngine) window.soundEngine.playSfx('lava_burn');
+            if (window.particleManager) {
+              window.particleManager.spawnRadialBurst(f.x, this.lavaLevel, '#f97316', 'fire', 40);
+              window.particleManager.spawnHitSparks(f.x, f.y - f.height * 0.5, 12, 'fire');
+              window.particleManager.spawnFloatingText(f.x, f.y - f.height - 18, '🔥 ¡LAVA! (14%)', '#f97316', 18);
+            }
+          }
+        }
+      }
+    } else if (this.stageId === 'POWER_PLANT') {
+      if (!this.activeElectrifiedPlat) return;
+      const targetPlat = this.semiSolidPlatforms.find(p => p.id === this.activeElectrifiedPlat);
+      if (!targetPlat) return;
+
+      for (const f of fighters) {
+        if (!f || f.state === 'RESPAWN' || f.invulnTimer > 0) continue;
+        // Check if fighter is standing on the electrified platform
+        const onPlat = f.isGrounded && Math.abs(f.y - targetPlat.y) < 8 &&
+                       f.x >= targetPlat.x - 14 && f.x <= targetPlat.x + targetPlat.width + 14;
+        if (onPlat) {
+          if ((f.shockCooldown || 0) <= 0) {
+            f.shockCooldown = 0.35;
+            f.percent += 3;
+            f.hitstop = 3;
+            f.vx += (Math.random() - 0.5) * 4;
+            if (f.state === 'SHIELD') {
+              f.shield = Math.max(0, f.shield - 22); // Drains shield very quickly!
+            }
+            if (window.soundEngine) window.soundEngine.playSfx('electric_arc');
+            if (window.particleManager) {
+              window.particleManager.spawnHitSparks(f.x, f.y - f.height * 0.5, 6, 'electric');
+              window.particleManager.spawnFloatingText(f.x, f.y - f.height - 14, '⚡ 3%', '#38bdf8', 13);
+            }
+          }
+        }
+        if (f.shockCooldown > 0) f.shockCooldown -= 1/60;
+      }
+    }
+  }
+
   drawBackground(ctx) {
     const quality = this.graphicsQuality || (window.game ? window.game.graphicsQuality : 'ultra');
     const isUltra = quality === 'ultra';
     const isHigh = quality === 'high' || isUltra;
     const isLow = quality === 'low';
+
+    if (this.stageId === 'CINNABAR_ISLAND') {
+      this._drawCinnabarBackground(ctx, quality);
+      return;
+    }
+
+    if (this.stageId === 'POWER_PLANT') {
+      this._drawPowerPlantBackground(ctx, quality);
+      return;
+    }
 
     if (this.stageId === 'LAVENDER_TOWER') {
       this._drawLavenderBackground(ctx, quality);
@@ -582,121 +1028,180 @@ class Stage {
 
     } else {
       // =====================================================================
-      // CAMPO DE BATALLA: Twilight Stadium & Crowd
+      // PUEBLO PALETA (Campo de Batalla): Scenic Kanto Dawn & Oak Lab Horizon
       // =====================================================================
+      // 1. Cielo vibrante estilo anime (azul cobalto a ámbar dorado y melocotón)
       const sky = ctx.createLinearGradient(0, 0, 0, this.height);
-      sky.addColorStop(0, '#040712');
-      sky.addColorStop(0.35, '#0b1129');
-      sky.addColorStop(0.7, '#1b1845');
-      sky.addColorStop(1, '#2c1a59');
+      sky.addColorStop(0, '#0284c7');
+      sky.addColorStop(0.32, '#0ea5e9');
+      sky.addColorStop(0.60, '#f59e0b');
+      sky.addColorStop(0.85, '#fbbf24');
+      sky.addColorStop(1, '#fde68a');
       ctx.fillStyle = sky;
       ctx.fillRect(0, 0, this.width, this.height);
 
-      // Twinkling stars & cross flares
+      // 2. Sol matutino radiante con halo coronal y destellos
       ctx.save();
-      for (const star of this.stars) {
-        const alpha = 0.35 + 0.65 * Math.sin(this.time * star.twinkleSpeed + star.twinklePhase);
-        ctx.globalAlpha = Math.max(0.1, alpha);
-        ctx.fillStyle = star.color;
-        ctx.beginPath();
-        ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
-        ctx.fill();
+      const sunX = this.width * 0.78;
+      const sunY = 75;
+      const sunGlow = ctx.createRadialGradient(sunX, sunY, 10, sunX, sunY, 140);
+      sunGlow.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+      sunGlow.addColorStop(0.2, 'rgba(254, 240, 138, 0.7)');
+      sunGlow.addColorStop(0.55, 'rgba(251, 191, 36, 0.3)');
+      sunGlow.addColorStop(1, 'rgba(245, 158, 11, 0)');
+      ctx.fillStyle = sunGlow;
+      ctx.beginPath();
+      ctx.arc(sunX, sunY, 140, 0, Math.PI * 2);
+      ctx.fill();
 
-        if (star.isCrossStar && isUltra) {
-          ctx.strokeStyle = star.color;
-          ctx.lineWidth = 1;
-          const flareLen = star.radius * 3.2;
-          ctx.beginPath();
-          ctx.moveTo(star.x - flareLen, star.y); ctx.lineTo(star.x + flareLen, star.y);
-          ctx.moveTo(star.x, star.y - flareLen); ctx.lineTo(star.x, star.y + flareLen);
-          ctx.stroke();
-        }
-      }
+      // Disco solar
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = '#facc15';
+      ctx.shadowBlur = 28;
+      ctx.beginPath();
+      ctx.arc(sunX, sunY, 26, 0, Math.PI * 2);
+      ctx.fill();
       ctx.restore();
 
-      // Shooting stars
-      this._drawShootingStars(ctx);
-
-      // Stadium Arch
-      ctx.save();
-      ctx.strokeStyle = 'rgba(147, 197, 253, 0.08)';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(this.width / 2, this.height * 1.15, this.width * 0.62, Math.PI, 0);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(this.width / 2, this.height * 1.15, this.width * 0.72, Math.PI, 0);
-      ctx.stroke();
-
-      for (let tx = 80; tx < this.width; tx += 120) {
-        ctx.beginPath();
-        ctx.moveTo(tx, 0);
-        ctx.lineTo(tx, this.height - 100);
-        ctx.stroke();
-      }
-      ctx.restore();
-
-      // Volumetric stadium beams
+      // 3. Rayos de sol dorados volumétricos (God Rays)
       if (!isLow) {
         ctx.save();
-        const drawLightBeam = (lx, ly, baseAngle, swingSpeed, swingAmp, colorHex) => {
-          const angle = baseAngle + Math.sin(this.time * swingSpeed) * swingAmp;
+        const drawGodRay = (startX, angleOffset, speed, widthTop, widthBottom, alpha) => {
+          const angle = angleOffset + Math.sin(this.time * speed) * 0.05;
           ctx.save();
-          ctx.translate(lx, ly);
+          ctx.translate(startX, 0);
           ctx.rotate(angle);
 
-          const beamH = this.height * 1.6;
-          const beam = ctx.createLinearGradient(0, 0, 0, -beamH);
-          beam.addColorStop(0, `${colorHex}44`);
-          beam.addColorStop(0.35, `${colorHex}18`);
-          beam.addColorStop(0.8, `${colorHex}05`);
-          beam.addColorStop(1, `${colorHex}00`);
-          ctx.fillStyle = beam;
-
+          const rayH = this.height * 1.5;
+          const rayGrad = ctx.createLinearGradient(0, 0, 0, rayH);
+          rayGrad.addColorStop(0, `rgba(254, 240, 138, ${alpha})`);
+          rayGrad.addColorStop(0.4, `rgba(250, 204, 21, ${alpha * 0.45})`);
+          rayGrad.addColorStop(1, 'rgba(245, 158, 11, 0)');
+          ctx.fillStyle = rayGrad;
           ctx.beginPath();
-          ctx.moveTo(-16, 0);
-          ctx.lineTo(16, 0);
-          ctx.lineTo(160, -beamH);
-          ctx.lineTo(-160, -beamH);
+          ctx.moveTo(-widthTop * 0.5, 0);
+          ctx.lineTo(widthTop * 0.5, 0);
+          ctx.lineTo(widthBottom * 0.5, rayH);
+          ctx.lineTo(-widthBottom * 0.5, rayH);
           ctx.closePath();
           ctx.fill();
           ctx.restore();
         };
 
-        drawLightBeam(90, this.height - 30, -0.28, 0.65, 0.16, '#38bdf8');
-        drawLightBeam(this.width - 90, this.height - 30, 0.28, 0.7, 0.16, '#f43f5e');
-        if (isUltra) {
-          drawLightBeam(this.width * 0.35, this.height - 20, -0.08, 0.5, 0.12, '#a855f7');
-          drawLightBeam(this.width * 0.65, this.height - 20, 0.08, 0.55, 0.12, '#38bdf8');
-        }
+        drawGodRay(sunX - 100, -0.22, 0.4, 28, 190, 0.28);
+        drawGodRay(sunX + 60, -0.15, 0.35, 22, 160, 0.22);
+        drawGodRay(this.width * 0.35, 0.12, 0.3, 30, 210, 0.20);
         ctx.restore();
       }
 
-      // Distant bleachers & crowd
+      // 4. Colinas onduladas de Kanto y Ruta 1 (Plano lejano)
       ctx.save();
-      ctx.fillStyle = '#060a14';
+      ctx.fillStyle = '#166534';
       ctx.beginPath();
-      ctx.moveTo(0, this.height - 75);
-      ctx.lineTo(140, this.height - 155);
-      ctx.lineTo(280, this.height - 105);
-      ctx.lineTo(512, this.height - 195);
-      ctx.lineTo(740, this.height - 105);
-      ctx.lineTo(880, this.height - 155);
-      ctx.lineTo(this.width, this.height - 75);
+      ctx.moveTo(0, this.height - 120);
+      ctx.quadraticCurveTo(this.width * 0.25, this.height - 210, this.width * 0.5, this.height - 150);
+      ctx.quadraticCurveTo(this.width * 0.75, this.height - 100, this.width, this.height - 170);
       ctx.lineTo(this.width, this.height);
       ctx.lineTo(0, this.height);
       ctx.closePath();
       ctx.fill();
 
-      // Audience lightsticks
-      for (const cl of this.crowdLights) {
-        const bobY = cl.y + Math.sin(this.time * cl.bobSpeed + cl.bobPhase) * 5;
-        ctx.save();
-        ctx.shadowColor = cl.color;
-        ctx.shadowBlur = 8;
-        ctx.fillStyle = cl.color;
+      // Niebla matutina sobre las colinas lejanas
+      const hillMist = ctx.createLinearGradient(0, this.height - 190, 0, this.height - 100);
+      hillMist.addColorStop(0, 'rgba(254, 240, 138, 0.25)');
+      hillMist.addColorStop(1, 'rgba(22, 101, 52, 0)');
+      ctx.fillStyle = hillMist;
+      ctx.fill();
+
+      // 5. Colinas intermedias con la silueta del Laboratorio de Oak y el Molino
+      ctx.fillStyle = '#14532d';
+      ctx.beginPath();
+      ctx.moveTo(0, this.height - 85);
+      ctx.quadraticCurveTo(160, this.height - 160, 340, this.height - 95);
+      ctx.quadraticCurveTo(580, this.height - 50, 780, this.height - 125);
+      ctx.quadraticCurveTo(900, this.height - 150, this.width, this.height - 90);
+      ctx.lineTo(this.width, this.height);
+      ctx.lineTo(0, this.height);
+      ctx.closePath();
+      ctx.fill();
+
+      // Laboratorio del Profesor Oak
+      const labX = 210;
+      const labY = this.height - 150;
+      ctx.fillStyle = '#0f3923';
+      ctx.fillRect(labX - 22, labY - 26, 44, 28);
+      ctx.fillStyle = '#991b1b'; // Tejado rojo teja característico
+      ctx.beginPath();
+      ctx.moveTo(labX - 26, labY - 26);
+      ctx.lineTo(labX, labY - 44);
+      ctx.lineTo(labX + 26, labY - 26);
+      ctx.closePath();
+      ctx.fill();
+
+      // Molino de viento con aspas giratorias
+      const millX = labX + 38;
+      const millY = labY - 14;
+      ctx.fillStyle = '#0f3923';
+      ctx.beginPath();
+      ctx.moveTo(millX - 8, millY);
+      ctx.lineTo(millX - 5, millY - 32);
+      ctx.lineTo(millX + 5, millY - 32);
+      ctx.lineTo(millX + 8, millY);
+      ctx.closePath();
+      ctx.fill();
+
+      // Aspas giratorias
+      ctx.save();
+      ctx.translate(millX, millY - 30);
+      ctx.rotate(this.time * 0.65);
+      ctx.strokeStyle = '#fef08a';
+      ctx.lineWidth = 1.6;
+      for (let b = 0; b < 4; b++) {
+        ctx.rotate(Math.PI * 0.5);
         ctx.beginPath();
-        ctx.arc(cl.x, bobY, cl.size, 0, Math.PI * 2);
+        ctx.moveTo(0, 0);
+        ctx.lineTo(0, -18);
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.fillRect(-2.5, -16, 5, 12);
+      }
+      ctx.restore();
+
+      // Arboledas de Pueblo Paleta
+      const drawTree = (tx, ty, r) => {
+        ctx.fillStyle = '#052e16';
+        ctx.beginPath();
+        ctx.arc(tx, ty, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(tx - r * 0.4, ty + r * 0.2, r * 0.7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(tx + r * 0.4, ty + r * 0.2, r * 0.7, 0, Math.PI * 2);
+        ctx.fill();
+      };
+      drawTree(160, labY - 10, 14);
+      drawTree(175, labY - 6, 11);
+      drawTree(275, labY - 8, 12);
+      drawTree(780, this.height - 120, 16);
+      drawTree(810, this.height - 115, 13);
+      ctx.restore();
+
+      // 6. Esporas flotantes, polen y pétalos al viento
+      ctx.save();
+      for (let i = 0; i < this.ambientPetals.length; i++) {
+        const petal = this.ambientPetals[i];
+        const driftX = (petal.x + this.time * petal.vx + Math.sin(this.time * petal.swayFreq + i) * petal.swayAmp) % (this.width + 40) - 20;
+        const driftY = (petal.y + this.time * petal.vy) % this.height;
+
+        ctx.save();
+        ctx.translate(driftX, driftY);
+        ctx.rotate(petal.rot + this.time * petal.rotSpeed);
+        ctx.fillStyle = petal.color;
+        ctx.shadowColor = '#fde047';
+        ctx.shadowBlur = 4;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, petal.size * 1.2, petal.size * 0.65, 0, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
       }
@@ -708,6 +1213,16 @@ class Stage {
     const mainP = this.solidPlatforms[0];
 
     const quality = this.graphicsQuality || (window.game ? window.game.graphicsQuality : 'ultra');
+    if (this.stageId === 'CINNABAR_ISLAND') {
+      this._drawCinnabarPlatforms(ctx, quality);
+      return;
+    }
+
+    if (this.stageId === 'POWER_PLANT') {
+      this._drawPowerPlantPlatforms(ctx, quality);
+      return;
+    }
+
     if (this.stageId === 'LAVENDER_TOWER') {
       this._drawLavenderPlatforms(ctx, quality);
       return;
@@ -1123,33 +1638,73 @@ class Stage {
     let totalAlpha = 0;
     let r = 0, g = 0, b = 0;
 
-    // 1. Moving God Rays in Battlefield & Final Destination
-    if (this.stageId === 'BATTLEFIELD') {
-      // Left spotlight beam (cyan, centered ~180 at top, angling downwards)
-      const leftRayX = 180 + Math.sin(this.time * 0.35) * 60 + (y / this.height) * 140;
-      const distL = Math.abs(x - leftRayX);
-      if (distL < 110) {
-        const a = (1 - distL / 110) * 0.22;
+    // 1. Moving God Rays in Pueblo Paleta (Warm Morning Sunlight)
+    if (this.stageId === 'CINNABAR_ISLAND') {
+      // Lava sea upward warm radiance (#f97316 / #ef4444)
+      const dLava = Math.max(0, this.lavaLevel - y);
+      if (dLava < 220) {
+        const a = (1 - dLava / 220) * 0.32;
         totalAlpha += a;
-        r += 56 * a; g += 189 * a; b += 248 * a; // #38bdf8
+        r += 249 * a; g += 115 * a; b += 22 * a;
+      }
+      // Crater peak backlight
+      const dCrater = Math.hypot(x - 512, y - 160);
+      if (dCrater < 160) {
+        const a = (1 - dCrater / 160) * 0.22;
+        totalAlpha += a;
+        r += 239 * a; g += 68 * a; b += 68 * a;
+      }
+    } else if (this.stageId === 'POWER_PLANT') {
+      // Cold industrial electric cyan ambient (#38bdf8)
+      const dGen = Math.hypot(x - 512, y - 260);
+      if (dGen < 180) {
+        const a = (1 - dGen / 180) * 0.20;
+        totalAlpha += a;
+        r += 56 * a; g += 189 * a; b += 248 * a;
+      }
+      // Electrified platform intense spark aura
+      if (this.activeElectrifiedPlat) {
+        const p = this.semiSolidPlatforms.find(plat => plat.id === this.activeElectrifiedPlat);
+        if (p) {
+          const dPlat = Math.hypot(x - (p.x + p.width / 2), y - p.y);
+          if (dPlat < 110) {
+            const a = (1 - dPlat / 110) * 0.35;
+            totalAlpha += a;
+            r += 250 * a; g += 204 * a; b += 21 * a; // #facc15 yellow electric corona
+          }
+        }
+      }
+    } else if (this.stageId === 'BATTLEFIELD') {
+      // Rayo matutino principal desde el cuadrante del sol
+      const sunRay1X = 720 - (y / this.height) * 160 + Math.sin(this.time * 0.3) * 45;
+      const dist1 = Math.abs(x - sunRay1X);
+      if (dist1 < 125) {
+        const a = (1 - dist1 / 125) * 0.26;
+        totalAlpha += a;
+        r += 254 * a; g += 240 * a; b += 138 * a; // #fef08a
       }
 
-      // Right spotlight beam (rose/coral, centered ~840 at top)
-      const rightRayX = 840 - Math.sin(this.time * 0.38) * 60 - (y / this.height) * 140;
-      const distR = Math.abs(x - rightRayX);
-      if (distR < 110) {
-        const a = (1 - distR / 110) * 0.22;
-        totalAlpha += a;
-        r += 244 * a; g += 63 * a; b += 94 * a; // #f43f5e
-      }
-
-      // Center golden spotlight
-      const centerRayX = 512 + Math.sin(this.time * 0.28) * 45;
-      const distC = Math.abs(x - centerRayX);
-      if (distC < 95) {
-        const a = (1 - distC / 95) * 0.18;
+      // Rayo cálido secundario sobre el centro y plataforma izquierda
+      const sunRay2X = 360 - (y / this.height) * 110 + Math.sin(this.time * 0.25) * 35;
+      const dist2 = Math.abs(x - sunRay2X);
+      if (dist2 < 115) {
+        const a = (1 - dist2 / 115) * 0.22;
         totalAlpha += a;
         r += 250 * a; g += 204 * a; b += 21 * a; // #facc15
+      }
+
+      // Resplandor ambiental de las plataformas móviles (cyan izquierda, rosa derecha)
+      for (const plat of this.semiSolidPlatforms) {
+        const dPlat = Math.hypot(x - (plat.x + plat.width / 2), y - plat.y);
+        if (dPlat < 85) {
+          const a = (1 - dPlat / 85) * 0.16;
+          totalAlpha += a;
+          if (plat.id === 'plat_left') {
+            r += 56 * a; g += 189 * a; b += 248 * a; // #38bdf8
+          } else {
+            r += 244 * a; g += 63 * a; b += 94 * a; // #f43f5e
+          }
+        }
       }
     } else if (this.stageId === 'LAVENDER_TOWER') {
       const rayX1 = 300 + Math.sin(this.time * 0.3) * 50;
@@ -1545,7 +2100,15 @@ class Stage {
         ctx.restore();
       };
 
-      if (this.stageId === 'LAVENDER_TOWER') {
+      if (this.stageId === 'CINNABAR_ISLAND') {
+        this._drawCinnabarForeground(ctx, quality);
+        ctx.restore();
+        return;
+      } else if (this.stageId === 'POWER_PLANT') {
+        this._drawPowerPlantForeground(ctx, quality);
+        ctx.restore();
+        return;
+      } else if (this.stageId === 'LAVENDER_TOWER') {
         this._drawLavenderForeground(ctx, quality);
         ctx.restore();
         return;
@@ -1840,6 +2403,905 @@ class Stage {
 
     ctx.fillStyle = vig;
     ctx.fillRect(0, 0, this.width, this.height);
+    ctx.restore();
+  }
+
+  // =========================================================================
+  // 🌋 ISLA CANELA: RENDERIZADO VISUAL & DINÁMICA DE LAVA
+  // =========================================================================
+  _drawCinnabarBackground(ctx, quality) {
+    const isUltra = quality === 'ultra';
+    const isHigh = quality === 'high' || isUltra;
+    const peakCx = this.width / 2;
+    const peakBaseY = 470;
+
+    // 1. Cielo Volcánico Apocalíptico (Obsidiana a Naranja Incandescente)
+    const sky = ctx.createLinearGradient(0, 0, 0, this.height);
+    sky.addColorStop(0, '#060102');
+    sky.addColorStop(0.25, '#1e0407');
+    sky.addColorStop(0.50, '#4a080b');
+    sky.addColorStop(0.72, '#7f1d1d');
+    sky.addColorStop(0.88, '#c2410c');
+    sky.addColorStop(1, '#ea580c');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    // Destello de Rayos Volcánicos (Dirty Lightning Flash)
+    if (this.volcanoLightningFlash > 0.04) {
+      ctx.save();
+      ctx.fillStyle = `rgba(254, 240, 245, ${this.volcanoLightningFlash * 0.38})`;
+      ctx.fillRect(0, 0, this.width, this.height);
+      ctx.restore();
+    }
+
+    // Bruma de calor en el horizonte (Heat Haze Shimmer)
+    ctx.save();
+    const hazeY = 320;
+    const hazeGrad = ctx.createLinearGradient(0, hazeY - 60, 0, hazeY + 120);
+    hazeGrad.addColorStop(0, 'rgba(234, 88, 12, 0)');
+    hazeGrad.addColorStop(0.5, 'rgba(249, 115, 22, 0.18)');
+    hazeGrad.addColorStop(1, 'rgba(220, 38, 38, 0)');
+    ctx.fillStyle = hazeGrad;
+    ctx.fillRect(0, hazeY - 60, this.width, 180);
+    ctx.restore();
+
+    // 2. Cordillera Volcánica Lejana (Capa de Profundidad 1 - Silueta Oscura)
+    ctx.save();
+    ctx.fillStyle = '#140305';
+    ctx.beginPath();
+    ctx.moveTo(0, peakBaseY - 30);
+    ctx.lineTo(80, 340);
+    ctx.lineTo(160, 375);
+    ctx.lineTo(260, 310);
+    ctx.lineTo(360, 360);
+    ctx.lineTo(peakCx - 220, 280);
+    ctx.lineTo(peakCx + 220, 280);
+    ctx.lineTo(this.width - 360, 360);
+    ctx.lineTo(this.width - 260, 310);
+    ctx.lineTo(this.width - 160, 375);
+    ctx.lineTo(this.width - 80, 340);
+    ctx.lineTo(this.width, peakBaseY - 30);
+    ctx.lineTo(this.width, this.height);
+    ctx.lineTo(0, this.height);
+    ctx.closePath();
+    ctx.fill();
+
+    // Borde iluminado de las crestas lejanas
+    ctx.strokeStyle = 'rgba(234, 88, 12, 0.45)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.restore();
+
+    // 3. Gran Estratovolcán de Isla Canela (Monte Canela - Capa 2)
+    ctx.save();
+    const volcanoGrad = ctx.createLinearGradient(peakCx, 160, peakCx, peakBaseY);
+    volcanoGrad.addColorStop(0, '#1c0507');
+    volcanoGrad.addColorStop(0.4, '#120304');
+    volcanoGrad.addColorStop(1, '#090102');
+    ctx.fillStyle = volcanoGrad;
+
+    // Silueta esculpida del volcán con crestas de basalto
+    ctx.beginPath();
+    ctx.moveTo(peakCx - 440, peakBaseY);
+    ctx.lineTo(peakCx - 360, 420);
+    ctx.lineTo(peakCx - 290, 360);
+    ctx.lineTo(peakCx - 210, 290);
+    ctx.lineTo(peakCx - 140, 220);
+    ctx.lineTo(peakCx - 85, 162);
+    ctx.lineTo(peakCx - 38, 178); // Labio izquierdo del cráter
+    ctx.lineTo(peakCx + 38, 178); // Labio derecho del cráter
+    ctx.lineTo(peakCx + 85, 162);
+    ctx.lineTo(peakCx + 140, 220);
+    ctx.lineTo(peakCx + 210, 290);
+    ctx.lineTo(peakCx + 290, 360);
+    ctx.lineTo(peakCx + 360, 420);
+    ctx.lineTo(peakCx + 440, peakBaseY);
+    ctx.closePath();
+    ctx.fill();
+
+    // Sombras y facetas de roca volcánica
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+    ctx.beginPath();
+    ctx.moveTo(peakCx - 38, 178);
+    ctx.lineTo(peakCx - 60, 260);
+    ctx.lineTo(peakCx - 140, 360);
+    ctx.lineTo(peakCx - 80, 430);
+    ctx.lineTo(peakCx - 210, 290);
+    ctx.lineTo(peakCx - 140, 220);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(peakCx + 38, 178);
+    ctx.lineTo(peakCx + 70, 270);
+    ctx.lineTo(peakCx + 150, 370);
+    ctx.lineTo(peakCx + 90, 440);
+    ctx.lineTo(peakCx + 210, 290);
+    ctx.lineTo(peakCx + 140, 220);
+    ctx.closePath();
+    ctx.fill();
+
+    // 4. Cataratas y Ríos de Magma Fluyendo por las Laderas
+    const drawLavaRiver = (points, width, glowColor, coreColor) => {
+      if (!points || points.length < 2) return;
+      ctx.save();
+      // Borde incandescente
+      ctx.strokeStyle = glowColor;
+      ctx.lineWidth = width + 3;
+      ctx.shadowColor = glowColor;
+      ctx.shadowBlur = 12;
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, points[0].y);
+      for (let i = 1; i < points.length; i++) {
+        const xc = (points[i - 1].x + points[i].x) / 2;
+        const yc = (points[i - 1].y + points[i].y) / 2;
+        ctx.quadraticCurveTo(points[i - 1].x, points[i - 1].y, xc, yc);
+      }
+      ctx.lineTo(points[points.length - 1].x, points[points.length - 1].y);
+      ctx.stroke();
+
+      // Núcleo brillante
+      ctx.strokeStyle = coreColor;
+      ctx.lineWidth = Math.max(1.5, width * 0.45);
+      ctx.shadowBlur = 4;
+      ctx.stroke();
+      ctx.restore();
+    };
+
+    // Río central ramificado
+    drawLavaRiver([
+      { x: peakCx - 12, y: 178 },
+      { x: peakCx - 25, y: 235 },
+      { x: peakCx - 10, y: 290 },
+      { x: peakCx - 35, y: 350 },
+      { x: peakCx - 20, y: 430 },
+      { x: peakCx - 40, y: peakBaseY }
+    ], 5.0, '#ea580c', '#fef08a');
+
+    // Brazo derecho del río central
+    drawLavaRiver([
+      { x: peakCx + 15, y: 178 },
+      { x: peakCx + 30, y: 240 },
+      { x: peakCx + 18, y: 310 },
+      { x: peakCx + 45, y: 380 },
+      { x: peakCx + 60, y: peakBaseY }
+    ], 4.2, '#f97316', '#fffbeb');
+
+    // Cascada de lava del flanco izquierdo
+    drawLavaRiver([
+      { x: peakCx - 85, y: 162 },
+      { x: peakCx - 110, y: 210 },
+      { x: peakCx - 145, y: 275 },
+      { x: peakCx - 180, y: 355 },
+      { x: peakCx - 220, y: peakBaseY }
+    ], 3.2, '#f97316', '#fef08a');
+
+    // Cascada de lava del flanco derecho
+    drawLavaRiver([
+      { x: peakCx + 85, y: 162 },
+      { x: peakCx + 115, y: 215 },
+      { x: peakCx + 150, y: 280 },
+      { x: peakCx + 190, y: 360 },
+      { x: peakCx + 230, y: peakBaseY }
+    ], 3.2, '#f97316', '#fef08a');
+
+    // 5. Núcleo Incandescente del Cráter (Caldera Magmática en Erupción)
+    const craterPulse = 1.0 + 0.18 * Math.sin(this.time * 3.5);
+    const craterGlow = ctx.createRadialGradient(peakCx, 178, 8, peakCx, 178, 135 * craterPulse);
+    craterGlow.addColorStop(0, 'rgba(255, 255, 255, 1.0)');
+    craterGlow.addColorStop(0.18, 'rgba(254, 240, 138, 0.95)');
+    craterGlow.addColorStop(0.42, 'rgba(249, 115, 22, 0.80)');
+    craterGlow.addColorStop(0.70, 'rgba(220, 38, 38, 0.40)');
+    craterGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = craterGlow;
+    ctx.beginPath();
+    ctx.arc(peakCx, 178, 135 * craterPulse, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 6. Columna Piroclástica de Humo y Ceniza Volcánica (Volumetric Plume)
+    const drawAshLobe = (cx, cy, r, rot, alpha, isUnderlit) => {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(rot);
+
+      const lobeGrad = ctx.createRadialGradient(0, r * 0.35, r * 0.1, 0, 0, r);
+      if (isUnderlit) {
+        lobeGrad.addColorStop(0, `rgba(234, 88, 12, ${alpha * 0.85})`);
+        lobeGrad.addColorStop(0.35, `rgba(127, 29, 29, ${alpha * 0.70})`);
+        lobeGrad.addColorStop(0.75, `rgba(28, 7, 9, ${alpha})`);
+        lobeGrad.addColorStop(1, 'rgba(15, 3, 4, 0)');
+      } else {
+        lobeGrad.addColorStop(0, `rgba(45, 15, 18, ${alpha * 0.9})`);
+        lobeGrad.addColorStop(0.6, `rgba(24, 7, 9, ${alpha * 0.85})`);
+        lobeGrad.addColorStop(1, 'rgba(10, 2, 3, 0)');
+      }
+
+      ctx.fillStyle = lobeGrad;
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    };
+
+    const sTime = this.time * 0.55;
+    // Lóbulos inferiores (con fuerte resplandor del magma)
+    drawAshLobe(peakCx + Math.sin(sTime * 1.2) * 18, 138, 48, sTime, 0.80, true);
+    drawAshLobe(peakCx - 28 + Math.cos(sTime) * 15, 122, 42, -sTime * 0.8, 0.75, true);
+    drawAshLobe(peakCx + 26 + Math.sin(sTime + 1.5) * 16, 118, 44, sTime * 0.9, 0.75, true);
+
+    // Lóbulos medios ascendentes
+    drawAshLobe(peakCx + Math.sin(sTime + 1.2) * 32, 88, 62, sTime * 0.7, 0.65, true);
+    drawAshLobe(peakCx - 35 + Math.cos(sTime * 1.1) * 25, 75, 58, -sTime, 0.60, false);
+    drawAshLobe(peakCx + 38 + Math.sin(sTime * 0.9) * 28, 70, 60, sTime * 1.1, 0.60, false);
+
+    // Gran nube superior de estratosfera
+    drawAshLobe(peakCx + Math.sin(sTime + 2.5) * 48, 35, 82, sTime * 0.5, 0.52, false);
+    drawAshLobe(peakCx - 50 + Math.cos(sTime + 1.8) * 35, 30, 78, -sTime * 0.6, 0.48, false);
+    drawAshLobe(peakCx + 55 + Math.sin(sTime * 0.8) * 38, 25, 80, sTime * 0.6, 0.48, false);
+
+    // 7. Rayos Volcánicos de Ceniza (Dirty Lightning Arcs)
+    if (this.volcanoLightningFlash > 0.08 && this.volcanoLightningBolts) {
+      ctx.save();
+      for (const bolt of this.volcanoLightningBolts) {
+        if (!bolt || bolt.length < 2) continue;
+        // Resplandor exterior
+        ctx.strokeStyle = '#f43f5e';
+        ctx.lineWidth = 4.0;
+        ctx.shadowColor = '#f43f5e';
+        ctx.shadowBlur = 16;
+        ctx.beginPath();
+        ctx.moveTo(bolt[0].x, bolt[0].y);
+        for (let i = 1; i < bolt.length; i++) ctx.lineTo(bolt[i].x, bolt[i].y);
+        ctx.stroke();
+
+        // Núcleo eléctrico blanco
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.8;
+        ctx.shadowColor = '#ffffff';
+        ctx.shadowBlur = 6;
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // 8. Bombas de Magma / Piroclastos en Vuelo Parabólico
+    if (this.magmaBombs && this.magmaBombs.length > 0) {
+      ctx.save();
+      for (const mb of this.magmaBombs) {
+        // Estela de fuego y humo
+        if (mb.trail && mb.trail.length > 1) {
+          for (let i = 0; i < mb.trail.length - 1; i++) {
+            const p1 = mb.trail[i];
+            const p2 = mb.trail[i + 1];
+            const tAlpha = (1 - i / mb.trail.length) * 0.65;
+            ctx.strokeStyle = `rgba(249, 115, 22, ${tAlpha})`;
+            ctx.lineWidth = Math.max(1, (mb.size || 3) * (1 - i / mb.trail.length));
+            ctx.beginPath();
+            ctx.moveTo(p1.x, p1.y);
+            ctx.lineTo(p2.x, p2.y);
+            ctx.stroke();
+          }
+        }
+
+        // Núcleo de la bomba de magma
+        const bRad = mb.size || 3.5;
+        const bGlow = ctx.createRadialGradient(mb.x, mb.y, 0, mb.x, mb.y, bRad * 2.2);
+        bGlow.addColorStop(0, '#ffffff');
+        bGlow.addColorStop(0.35, mb.color || '#fef08a');
+        bGlow.addColorStop(0.8, '#ef4444');
+        bGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = bGlow;
+        ctx.beginPath();
+        ctx.arc(mb.x, mb.y, bRad * 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    // 9. Escamas de Ceniza Volcánica Oscura en Suspensión
+    if (this.volcanoAsh) {
+      ctx.save();
+      for (const a of this.volcanoAsh) {
+        ctx.save();
+        ctx.translate(a.x, a.y);
+        ctx.rotate(a.rot);
+        ctx.fillStyle = `rgba(25, 8, 10, ${a.alpha || 0.35})`;
+        ctx.fillRect(-a.size * 0.5, -a.size * 0.5, a.size, a.size * 0.65);
+        ctx.restore();
+      }
+      ctx.restore();
+    }
+
+    // 10. Enjambre de Cenizas Incandescentes y Chispas Térmicas (Embers)
+    if (this.volcanoSparks) {
+      ctx.save();
+      for (const s of this.volcanoSparks) {
+        const flicker = 0.75 + 0.25 * Math.sin(this.time * s.flickerSpeed + s.phase);
+        ctx.fillStyle = s.color;
+        ctx.shadowColor = s.color;
+        ctx.shadowBlur = 8 * flicker;
+        ctx.globalAlpha = flicker;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.size * flicker, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    ctx.restore();
+  }
+
+  _drawCinnabarPlatforms(ctx, quality) {
+    const mainP = this.solidPlatforms[0];
+    if (!mainP) return;
+
+    ctx.save();
+
+    // 1. Plataforma Principal: Bastión de Basalto Negro con Fisuras de Magma Vivas
+    const rockGrad = ctx.createLinearGradient(mainP.x, mainP.y, mainP.x, mainP.y + mainP.height);
+    rockGrad.addColorStop(0, '#2d140e');
+    rockGrad.addColorStop(0.25, '#1e0c08');
+    rockGrad.addColorStop(0.70, '#100503');
+    rockGrad.addColorStop(1, '#080202');
+    ctx.fillStyle = rockGrad;
+
+    // Geometría angular de roca volcánica facetada
+    ctx.beginPath();
+    ctx.moveTo(mainP.x + 22, mainP.y);
+    ctx.lineTo(mainP.x + mainP.width - 22, mainP.y);
+    ctx.lineTo(mainP.x + mainP.width, mainP.y + 26);
+    ctx.lineTo(mainP.x + mainP.width - 32, mainP.y + mainP.height);
+    ctx.lineTo(mainP.x + 32, mainP.y + mainP.height);
+    ctx.lineTo(mainP.x, mainP.y + 26);
+    ctx.closePath();
+    ctx.fill();
+
+    // Facetas de columnas de basalto (columnar jointing)
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.55)';
+    ctx.lineWidth = 2.0;
+    const colStep = 75;
+    for (let cx = mainP.x + 55; cx < mainP.x + mainP.width - 40; cx += colStep) {
+      ctx.beginPath();
+      ctx.moveTo(cx, mainP.y + 6);
+      ctx.lineTo(cx - 10, mainP.y + mainP.height - 10);
+      ctx.stroke();
+    }
+
+    // 2. Red Intricada de Fisuras y Venas de Magma Vivas (Pulsing Magma Lattice)
+    const veinPulse = 0.72 + 0.28 * Math.sin(this.time * 3.0);
+    const drawCrack = (pts, w, blur) => {
+      if (!pts || pts.length < 2) return;
+      ctx.save();
+      // Resplandor exterior de calor
+      ctx.strokeStyle = `rgba(249, 115, 22, ${veinPulse})`;
+      ctx.lineWidth = w + 2.5;
+      ctx.shadowColor = '#facc15';
+      ctx.shadowBlur = blur;
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.stroke();
+
+      // Núcleo incandescente
+      ctx.strokeStyle = `rgba(254, 240, 138, ${veinPulse * 0.95})`;
+      ctx.lineWidth = Math.max(1.2, w * 0.45);
+      ctx.shadowBlur = 4;
+      ctx.stroke();
+      ctx.restore();
+    };
+
+    // Fisura izquierda
+    drawCrack([
+      { x: mainP.x + 75, y: mainP.y },
+      { x: mainP.x + 115, y: mainP.y + 32 },
+      { x: mainP.x + 95, y: mainP.y + 70 },
+      { x: mainP.x + 125, y: mainP.y + 115 }
+    ], 3.0, 12);
+    // Ramificación izquierda
+    drawCrack([
+      { x: mainP.x + 115, y: mainP.y + 32 },
+      { x: mainP.x + 155, y: mainP.y + 48 },
+      { x: mainP.x + 140, y: mainP.y + 80 }
+    ], 2.0, 8);
+
+    // Fisura central principal (Cráter menor en la plataforma)
+    drawCrack([
+      { x: mainP.x + mainP.width / 2 - 60, y: mainP.y },
+      { x: mainP.x + mainP.width / 2 - 15, y: mainP.y + 35 },
+      { x: mainP.x + mainP.width / 2 + 25, y: mainP.y + 30 },
+      { x: mainP.x + mainP.width / 2 + 55, y: mainP.y }
+    ], 3.5, 14);
+    drawCrack([
+      { x: mainP.x + mainP.width / 2 - 15, y: mainP.y + 35 },
+      { x: mainP.x + mainP.width / 2, y: mainP.y + 90 },
+      { x: mainP.x + mainP.width / 2 - 25, y: mainP.y + 135 }
+    ], 2.8, 10);
+
+    // Fisura derecha
+    drawCrack([
+      { x: mainP.x + mainP.width - 85, y: mainP.y },
+      { x: mainP.x + mainP.width - 125, y: mainP.y + 38 },
+      { x: mainP.x + mainP.width - 105, y: mainP.y + 82 },
+      { x: mainP.x + mainP.width - 135, y: mainP.y + 125 }
+    ], 3.0, 12);
+
+    // Borde superior incandescente fundido
+    ctx.strokeStyle = '#fef08a';
+    ctx.lineWidth = 3.2;
+    ctx.shadowColor = '#facc15';
+    ctx.shadowBlur = 14;
+    ctx.beginPath();
+    ctx.moveTo(mainP.x + 22, mainP.y);
+    ctx.lineTo(mainP.x + mainP.width - 22, mainP.y);
+    ctx.stroke();
+
+    // 3. Estalactitas de Basalto y Goteras de Magma Fundido Bajo la Plataforma
+    // Estalactitas fijas
+    const drawStalactite = (sx, sy, sw, sh) => {
+      ctx.fillStyle = '#140604';
+      ctx.beginPath();
+      ctx.moveTo(sx - sw * 0.5, sy);
+      ctx.lineTo(sx + sw * 0.5, sy);
+      ctx.lineTo(sx, sy + sh);
+      ctx.closePath();
+      ctx.fill();
+
+      // Gota ardiente en la punta
+      ctx.fillStyle = '#f97316';
+      ctx.shadowColor = '#facc15';
+      ctx.shadowBlur = 6;
+      ctx.beginPath();
+      ctx.arc(sx, sy + sh, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+    };
+
+    drawStalactite(mainP.x + 65, mainP.y + mainP.height, 14, 28);
+    drawStalactite(mainP.x + 135, mainP.y + mainP.height, 18, 38);
+    drawStalactite(mainP.x + 220, mainP.y + mainP.height, 12, 24);
+    drawStalactite(mainP.x + mainP.width - 220, mainP.y + mainP.height, 12, 24);
+    drawStalactite(mainP.x + mainP.width - 135, mainP.y + mainP.height, 18, 38);
+    drawStalactite(mainP.x + mainP.width - 65, mainP.y + mainP.height, 14, 28);
+
+    // Goteras dinámicas de lava fundida cayendo al vacío
+    if (this.lavaDrips) {
+      for (const drip of this.lavaDrips) {
+        ctx.save();
+        ctx.fillStyle = '#fef08a';
+        ctx.shadowColor = '#f97316';
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        // Forma de lágrima cayendo
+        ctx.ellipse(drip.x, drip.y, drip.size * 0.7, drip.size * 1.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    // 4. Plataformas Flotantes de Roca Pómez Ígnea (Porous Magma Pumice)
+    for (const plat of this.semiSolidPlatforms) {
+      const pGrad = ctx.createLinearGradient(plat.x, plat.y, plat.x, plat.y + plat.height);
+      pGrad.addColorStop(0, '#381812');
+      pGrad.addColorStop(0.5, '#220e0a');
+      pGrad.addColorStop(1, '#110504');
+      ctx.fillStyle = pGrad;
+
+      ctx.beginPath();
+      ctx.roundRect(plat.x, plat.y, plat.width, plat.height, 5);
+      ctx.fill();
+
+      // Borde incandescente superior
+      ctx.strokeStyle = plat.accentColor || '#f97316';
+      ctx.lineWidth = 2.4;
+      ctx.shadowColor = plat.accentColor || '#f97316';
+      ctx.shadowBlur = 10;
+      ctx.beginPath();
+      ctx.moveTo(plat.x + 2, plat.y + 1);
+      ctx.lineTo(plat.x + plat.width - 2, plat.y + 1);
+      ctx.stroke();
+
+      // Fisura ígnea en la plataforma flotante
+      ctx.strokeStyle = '#fef08a';
+      ctx.lineWidth = 1.4;
+      ctx.shadowBlur = 5;
+      ctx.beginPath();
+      ctx.moveTo(plat.x + 35, plat.y + 3);
+      ctx.lineTo(plat.x + 55, plat.y + plat.height - 3);
+      ctx.lineTo(plat.x + 75, plat.y + 3);
+      ctx.stroke();
+
+      // Resplandor térmico inferior pulsante
+      const pPulse = Math.sin(this.time * 3.5 + plat.x) * 2.5;
+      ctx.fillStyle = '#ea580c';
+      ctx.shadowColor = '#f97316';
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.arc(plat.x + plat.width * 0.25, plat.y + plat.height + 3 + pPulse, 3.2, 0, Math.PI * 2);
+      ctx.arc(plat.x + plat.width * 0.50, plat.y + plat.height + 4 - pPulse, 3.5, 0, Math.PI * 2);
+      ctx.arc(plat.x + plat.width * 0.75, plat.y + plat.height + 3 + pPulse * 0.8, 3.0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Micro-respiradero de vapor volcánico
+      const ventPhase = (this.time * 2.5 + plat.x * 0.05) % Math.PI;
+      const vSize = 2 + Math.sin(ventPhase) * 2;
+      ctx.fillStyle = 'rgba(255, 180, 100, 0.45)';
+      ctx.beginPath();
+      ctx.arc(plat.x + 12, plat.y - vSize * 1.5, vSize, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  _drawCinnabarForeground(ctx, quality) {
+    ctx.save();
+
+    // 1. Iluminación Radiante Volumétrica de la Lava (Lava Glow Upward Bloom)
+    const bloomGrad = ctx.createLinearGradient(0, this.lavaLevel - 80, 0, this.lavaLevel + 10);
+    bloomGrad.addColorStop(0, 'rgba(234, 88, 12, 0)');
+    bloomGrad.addColorStop(0.5, 'rgba(249, 115, 22, 0.16)');
+    bloomGrad.addColorStop(1, 'rgba(254, 240, 138, 0.32)');
+    ctx.fillStyle = bloomGrad;
+    ctx.fillRect(0, this.lavaLevel - 80, this.width, 90);
+
+    // 2. Mar de Lava Fundida Multicapa (Olas Turbulentas Dinámicas)
+    // Capa de fondo del océano de magma
+    const lavaGrad = ctx.createLinearGradient(0, this.lavaLevel, 0, this.height);
+    lavaGrad.addColorStop(0, '#fef08a');
+    lavaGrad.addColorStop(0.08, '#facc15');
+    lavaGrad.addColorStop(0.24, '#f97316');
+    lavaGrad.addColorStop(0.55, '#dc2626');
+    lavaGrad.addColorStop(0.85, '#991b1b');
+    lavaGrad.addColorStop(1, '#450a0a');
+    ctx.fillStyle = lavaGrad;
+
+    ctx.beginPath();
+    ctx.moveTo(0, this.height);
+    ctx.lineTo(0, this.lavaLevel);
+    for (let x = 0; x <= this.width; x += 25) {
+      const wave = Math.sin(this.time * 3.4 + x * 0.022) * 7.5 +
+                   Math.cos(this.time * 2.2 + x * 0.038) * 4.5 +
+                   Math.sin(this.time * 5.0 + x * 0.055) * 2.0;
+      ctx.lineTo(x, this.lavaLevel + wave);
+    }
+    ctx.lineTo(this.width, this.height);
+    ctx.closePath();
+    ctx.fill();
+
+    // 3. Cresta Incandescente y Línea de Fuego Brillante
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 3.5;
+    ctx.shadowColor = '#facc15';
+    ctx.shadowBlur = 18;
+    ctx.beginPath();
+    for (let x = 0; x <= this.width; x += 25) {
+      const wave = Math.sin(this.time * 3.4 + x * 0.022) * 7.5 +
+                   Math.cos(this.time * 2.2 + x * 0.038) * 4.5 +
+                   Math.sin(this.time * 5.0 + x * 0.055) * 2.0;
+      if (x === 0) ctx.moveTo(x, this.lavaLevel + wave);
+      else ctx.lineTo(x, this.lavaLevel + wave);
+    }
+    ctx.stroke();
+
+    // 4. Costras de Roca Volcánica Enfriada Flotando en la Superficie (Basalt Rafts)
+    for (let i = 0; i < 5; i++) {
+      const raftX = ((this.time * 22 + i * 220) % (this.width + 120)) - 60;
+      const waveAtRaft = Math.sin(this.time * 3.4 + raftX * 0.022) * 7.5;
+      const raftY = this.lavaLevel + waveAtRaft + 2;
+
+      ctx.save();
+      ctx.fillStyle = '#1a0604';
+      ctx.beginPath();
+      ctx.roundRect(raftX - 25, raftY - 4, 50, 9, 3);
+      ctx.fill();
+
+      // Borde fundido alrededor de la balsa
+      ctx.strokeStyle = '#ea580c';
+      ctx.lineWidth = 1.6;
+      ctx.shadowColor = '#facc15';
+      ctx.shadowBlur = 6;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // 5. Burbujas Hirvientes de Magma y Puntos Calientes (Boiling Blisters)
+    for (let i = 0; i < 8; i++) {
+      const bx = 90 + i * 125 + Math.sin(this.time * 1.8 + i * 1.2) * 25;
+      const bPhase = (this.time * 3.2 + i * 1.4) % Math.PI;
+      const bRad = Math.sin(bPhase) * 11;
+      const waveAtB = Math.sin(this.time * 3.4 + bx * 0.022) * 7.5;
+
+      if (bRad > 1.2) {
+        ctx.fillStyle = '#fef08a';
+        ctx.shadowColor = '#f97316';
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(bx, this.lavaLevel + waveAtB - 2, bRad, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Si la burbuja está en su punto álgido, mostrar chispa de ruptura
+        if (bRad > 9.5) {
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(bx + 3, this.lavaLevel + waveAtB - bRad - 4, 2.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+
+    // 6. Banner de Emergencia: Alerta de Volcán / Erupción Inminente
+    if (this.lavaWarning) {
+      const flash = Math.sin(this.time * 14) > 0;
+      ctx.save();
+
+      // Viñeta roja de advertencia en los bordes de la pantalla
+      ctx.fillStyle = flash ? 'rgba(239, 68, 68, 0.18)' : 'rgba(249, 115, 22, 0.08)';
+      ctx.fillRect(0, 0, this.width, 24);
+      ctx.fillRect(0, this.height - 24, this.width, 24);
+
+      // Banner central con franjas de peligro industrial
+      ctx.fillStyle = flash ? 'rgba(185, 28, 28, 0.88)' : 'rgba(154, 18, 18, 0.75)';
+      ctx.fillRect(0, 32, this.width, 44);
+
+      // Franjas diagonales de peligro (Hazard Stripes)
+      ctx.strokeStyle = flash ? 'rgba(254, 240, 138, 0.35)' : 'rgba(251, 146, 60, 0.25)';
+      ctx.lineWidth = 14;
+      for (let x = -40; x < this.width + 40; x += 36) {
+        ctx.beginPath();
+        ctx.moveTo(x + (this.time * 60) % 36, 32);
+        ctx.lineTo(x + 24 + (this.time * 60) % 36, 76);
+        ctx.stroke();
+      }
+
+      // Bordes neón
+      ctx.strokeStyle = '#fef08a';
+      ctx.lineWidth = 2.5;
+      ctx.shadowColor = '#ef4444';
+      ctx.shadowBlur = 14;
+      ctx.strokeRect(0, 32, this.width, 44);
+
+      // Texto de alerta
+      ctx.font = '900 17px monospace, sans-serif';
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.shadowColor = '#facc15';
+      ctx.shadowBlur = 12;
+      ctx.fillText('⚠️ ¡ALERTA DE VOLCÁN: LA MAREA DE LAVA ESTÁ SUBIENDO! ⚠️', this.width / 2, 60);
+
+      ctx.restore();
+    }
+
+    ctx.restore();
+  }
+
+  // =========================================================================
+  // ⚡ CENTRAL DE ENERGÍA DE KANTO: RENDERIZADO VISUAL & BOBINAS DE FARADAY
+  // =========================================================================
+  _drawPowerPlantBackground(ctx, quality) {
+    const isUltra = quality === 'ultra';
+
+    // 1. Dark Industrial Grid Background
+    const wallGrad = ctx.createLinearGradient(0, 0, 0, this.height);
+    wallGrad.addColorStop(0, '#020617');
+    wallGrad.addColorStop(0.4, '#0f172a');
+    wallGrad.addColorStop(1, '#1e293b');
+    ctx.fillStyle = wallGrad;
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    ctx.save();
+
+    // 2. High-voltage Power Grid Conduits & Steel Trusses
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 4;
+    // Overhead steel truss girder
+    ctx.beginPath();
+    ctx.moveTo(0, 80); ctx.lineTo(this.width, 80);
+    ctx.moveTo(0, 110); ctx.lineTo(this.width, 110);
+    for (let x = 20; x < this.width; x += 60) {
+      ctx.moveTo(x, 80); ctx.lineTo(x + 30, 110);
+      ctx.moveTo(x + 30, 110); ctx.lineTo(x + 60, 80);
+    }
+    ctx.stroke();
+
+    // Broken arched windows with stormy thunder sky in background
+    for (let w = 0; w < 3; w++) {
+      const winX = 160 + w * 280;
+      ctx.fillStyle = '#090d16';
+      ctx.fillRect(winX, 130, 120, 140);
+      ctx.strokeStyle = '#475569';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(winX, 130, 120, 140);
+
+      // Distant lightning flash (occasional)
+      const flashTimer = (this.time * 0.7 + w) % 4.0;
+      if (flashTimer < 0.15) {
+        ctx.fillStyle = 'rgba(56, 189, 248, 0.65)';
+        ctx.fillRect(winX, 130, 120, 140);
+      }
+    }
+
+    // Generator Turbine Core Silhouette in Center
+    ctx.fillStyle = '#090e17';
+    ctx.beginPath();
+    ctx.arc(this.width / 2, 340, 120, Math.PI, 0);
+    ctx.lineTo(this.width / 2 + 120, 440);
+    ctx.lineTo(this.width / 2 - 120, 440);
+    ctx.closePath();
+    ctx.fill();
+
+    // Glowing core reactor slot
+    const pulse = Math.sin(this.time * 5) * 0.2 + 0.8;
+    ctx.fillStyle = `rgba(56, 189, 248, ${0.45 * pulse})`;
+    ctx.shadowColor = '#38bdf8';
+    ctx.shadowBlur = 18;
+    ctx.fillRect(this.width / 2 - 40, 310, 80, 24);
+
+    ctx.restore();
+  }
+
+  _drawPowerPlantPlatforms(ctx, quality) {
+    const mainP = this.solidPlatforms[0];
+    if (!mainP) return;
+
+    ctx.save();
+
+    // 1. Reinforced Steel Ground Platform
+    const metalGrad = ctx.createLinearGradient(mainP.x, mainP.y, mainP.x, mainP.y + mainP.height);
+    metalGrad.addColorStop(0, '#1e293b');
+    metalGrad.addColorStop(0.3, '#0f172a');
+    metalGrad.addColorStop(1, '#020617');
+    ctx.fillStyle = metalGrad;
+
+    ctx.beginPath();
+    ctx.roundRect(mainP.x, mainP.y, mainP.width, mainP.height, [8, 8, 0, 0]);
+    ctx.fill();
+
+    // Hazard Stripes (Yellow & Black caution stripes on upper edge)
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(mainP.x, mainP.y, mainP.width, 10);
+    ctx.clip();
+    for (let x = mainP.x - 20; x < mainP.x + mainP.width + 20; x += 22) {
+      ctx.fillStyle = '#eab308';
+      ctx.beginPath();
+      ctx.moveTo(x, mainP.y + 10);
+      ctx.lineTo(x + 10, mainP.y + 10);
+      ctx.lineTo(x + 20, mainP.y);
+      ctx.lineTo(x + 10, mainP.y);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // 2. Semi-Solid Metal Grate Platforms
+    for (const plat of this.semiSolidPlatforms) {
+      ctx.fillStyle = plat.isElectrified ? '#1e1b4b' : '#1e293b';
+      ctx.fillRect(plat.x, plat.y, plat.width, plat.height);
+
+      ctx.strokeStyle = plat.isElectrified ? '#38bdf8' : '#64748b';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(plat.x, plat.y, plat.width, plat.height);
+
+      // Electrified Platform Visual: Intense crackling sparks running along surface!
+      if (plat.isElectrified) {
+        ctx.save();
+        ctx.strokeStyle = '#fde047';
+        ctx.lineWidth = 2;
+        ctx.shadowColor = '#38bdf8';
+        ctx.shadowBlur = 12;
+
+        ctx.beginPath();
+        let curX = plat.x;
+        ctx.moveTo(curX, plat.y);
+        while (curX < plat.x + plat.width) {
+          curX += 8 + Math.random() * 12;
+          const py = plat.y - (Math.random() * 8);
+          ctx.lineTo(Math.min(plat.x + plat.width, curX), py);
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    // 3. Faraday Tesla Coils (Drawn at the flanks)
+    const drawCoil = (cx, cy, isActive, isWarning) => {
+      ctx.save();
+      // Base stand
+      ctx.fillStyle = '#334155';
+      ctx.fillRect(cx - 16, cy + 30, 32, 25);
+
+      // Stacked Copper Rings (Induction coil)
+      for (let r = 0; r < 5; r++) {
+        ctx.fillStyle = '#b45309';
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 1.5;
+        ctx.fillRect(cx - 12, cy + 8 + r * 5, 24, 4);
+        ctx.strokeRect(cx - 12, cy + 8 + r * 5, 24, 4);
+      }
+
+      // Top Spherical Capacitor Terminal
+      ctx.fillStyle = '#94a3b8';
+      ctx.beginPath();
+      ctx.arc(cx, cy, 14, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#f8fafc';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Active Corona Discharge or Warning Glow
+      if (isActive || isWarning) {
+        const glowColor = isActive ? '#38bdf8' : '#eab308';
+        ctx.shadowColor = glowColor;
+        ctx.shadowBlur = isActive ? 20 : 12;
+        ctx.strokeStyle = glowColor;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 18 + Math.sin(this.time * 15) * 3, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    };
+
+    drawCoil(185, 275, this.activeElectrifiedPlat === 'plat_left', this.coilWarning);
+    drawCoil(840, 275, this.activeElectrifiedPlat === 'plat_right', this.coilWarning);
+
+    ctx.restore();
+  }
+
+  _drawPowerPlantForeground(ctx, quality) {
+    ctx.save();
+
+    // 1. Procedural High-Voltage Lightning Bolts from Active Coil to Platform
+    if (this.activeElectrifiedPlat) {
+      const isLeft = this.activeElectrifiedPlat === 'plat_left';
+      const coilX = isLeft ? 185 : 840;
+      const coilY = 275;
+      const targetPlat = this.semiSolidPlatforms.find(p => p.id === this.activeElectrifiedPlat);
+
+      if (targetPlat) {
+        ctx.save();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = '#38bdf8';
+        ctx.shadowBlur = 16;
+
+        // Draw 2 branching electric bolts
+        for (let b = 0; b < 2; b++) {
+          const targetX = targetPlat.x + targetPlat.width * (0.25 + b * 0.5) + (Math.random() - 0.5) * 20;
+          const targetY = targetPlat.y;
+
+          ctx.beginPath();
+          ctx.moveTo(coilX, coilY);
+
+          let curX = coilX;
+          let curY = coilY;
+          const steps = 6;
+          for (let s = 1; s <= steps; s++) {
+            const nextX = coilX + (targetX - coilX) * (s / steps) + (Math.random() - 0.5) * 18;
+            const nextY = coilY + (targetY - coilY) * (s / steps) + (Math.random() - 0.5) * 14;
+            ctx.lineTo(nextX, nextY);
+            curX = nextX;
+            curY = nextY;
+          }
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+    }
+
+    // 2. Overload Warning Banner
+    if (this.coilWarning) {
+      const flash = Math.sin(this.time * 14) > 0;
+      ctx.fillStyle = flash ? 'rgba(234, 179, 8, 0.40)' : 'rgba(56, 189, 248, 0.25)';
+      ctx.fillRect(0, 30, this.width, 42);
+
+      ctx.font = '900 16px monospace, sans-serif';
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.shadowColor = '#eab308';
+      ctx.shadowBlur = 12;
+      ctx.fillText('⚡ ¡ADVERTENCIA: SOBRETENSIÓN EN BOBINAS DE FARADAY! ⚡', this.width / 2, 57);
+    }
+
     ctx.restore();
   }
 

@@ -204,6 +204,9 @@ class Gengar extends window.Fighter {
           slashColor: '#9333ea',
           onStart: (g) => {
             window.soundEngine.playSfx('shadow');
+            if (window.particleManager) {
+              window.particleManager.spawnShadowFist(g.x, g.y, 'side', g.facing, 1.0);
+            }
           }
         };
 
@@ -349,7 +352,7 @@ class Gengar extends window.Fighter {
             g.vx = g.facing * 7.5;
             window.soundEngine.playSfx('shadow');
             if (window.particleManager) {
-              window.particleManager.spawnMeleeSlash(g.x, g.y, 'up', g.facing, '#c084fc', 'shadow', 48, false);
+              window.particleManager.spawnShadowFist(g.x, g.y, 'up', g.facing, 1.35);
               window.particleManager.spawnFloatingText(g.x, g.y - g.height - 18, '¡PUÑO SOMBRA VERTICAL! ⬆️', '#c084fc', 16);
               window.particleManager.spawnRadialBurst(g.x + g.facing * 28, g.y - 20, '#7c3aed', 'shadow', 36);
             }
@@ -527,6 +530,7 @@ class Gengar extends window.Fighter {
           onStart: (g) => {
             window.soundEngine.playSfx('shadow');
             if (window.particleManager) {
+              window.particleManager.spawnShadowFist(g.x, g.y, 'side', g.facing, 1.75);
               window.particleManager.spawnSmoke(g.x + g.facing * 25, g.y - 20, '#9333ea', 12);
               window.particleManager.spawnHitSparks(g.x + g.facing * 30, g.y - 20, 8, 'shadow');
             }

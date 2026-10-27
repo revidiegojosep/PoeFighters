@@ -1130,6 +1130,263 @@ body {
   box-shadow: 0 0 20px rgba(192, 132, 252, 0.4);
 }
 
+.stage-card[data-stage="LAVENDER_TOWER"].active {
+  background: linear-gradient(135deg, rgba(88, 28, 135, 0.6), rgba(15, 23, 42, 0.95));
+  border-color: #a855f7;
+  box-shadow: 0 0 20px rgba(168, 85, 247, 0.45);
+}
+
+.stage-card[data-stage="CINNABAR_ISLAND"].active {
+  background: linear-gradient(135deg, rgba(153, 27, 27, 0.6), rgba(20, 10, 10, 0.95));
+  border-color: #f97316;
+  box-shadow: 0 0 22px rgba(249, 115, 22, 0.55);
+}
+
+.stage-card[data-stage="POWER_PLANT"].active {
+  background: linear-gradient(135deg, rgba(14, 116, 144, 0.6), rgba(15, 23, 42, 0.95));
+  border-color: #facc15;
+  box-shadow: 0 0 22px rgba(250, 204, 21, 0.5);
+}
+
+/* Stage Preview Thumbnails (Mini Visual Representation) */
+.stage-preview-thumb {
+  position: relative;
+  width: 90px;
+  height: 62px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  flex-shrink: 0;
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.6), 0 4px 10px rgba(0, 0, 0, 0.4);
+}
+
+.stage-thumb-bg {
+  position: absolute;
+  inset: 0;
+  transition: transform 0.3s ease;
+}
+
+.stage-card:hover .stage-thumb-bg {
+  transform: scale(1.06);
+}
+
+/* Specific Thumbnail Backgrounds */
+.stage-thumb-battlefield .stage-thumb-bg {
+  background: linear-gradient(180deg, #38bdf8 0%, #60a5fa 35%, #86efac 75%, #15803d 100%);
+}
+
+.stage-thumb-final-destination .stage-thumb-bg {
+  background: radial-gradient(circle at 50% 30%, #581c87 0%, #1e1b4b 60%, #030712 100%);
+}
+
+.stage-thumb-lavender-tower .stage-thumb-bg {
+  background: linear-gradient(180deg, #1e102e 0%, #3b0764 45%, #0f172a 100%);
+}
+
+.stage-thumb-cinnabar-island .stage-thumb-bg {
+  background: linear-gradient(180deg, #450a0a 0%, #7f1d1d 35%, #b91c1c 65%, #ea580c 100%);
+}
+
+.stage-thumb-power-plant .stage-thumb-bg {
+  background: linear-gradient(180deg, #042f2e 0%, #0f172a 40%, #111827 100%);
+}
+
+/* Thumbnail Scene & Platforms */
+.stage-thumb-scene {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.stage-thumb-plat {
+  position: absolute;
+  display: block;
+  border-radius: 2px;
+}
+
+.stage-thumb-plat.main-floor {
+  bottom: 12px;
+  left: 14px;
+  right: 14px;
+  height: 6px;
+  background: #334155;
+  border-top: 2px solid #94a3b8;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+}
+
+.stage-thumb-battlefield .stage-thumb-plat.main-floor {
+  background: #166534;
+  border-top: 2px solid #4ade80;
+}
+
+.stage-thumb-battlefield .stage-thumb-plat.floating {
+  width: 20px;
+  height: 3px;
+  background: #84cc16;
+  border-top: 1px solid #bef264;
+  top: 24px;
+}
+.stage-thumb-battlefield .stage-thumb-plat.float-left { left: 14px; }
+.stage-thumb-battlefield .stage-thumb-plat.float-right { right: 14px; }
+
+.stage-thumb-final-destination .stage-thumb-plat.main-floor {
+  bottom: 16px;
+  left: 12px;
+  right: 12px;
+  height: 5px;
+  background: #3b0764;
+  border-top: 2px solid #d8b4fe;
+  box-shadow: 0 0 8px #c084fc;
+}
+
+.stage-thumb-lavender-tower .stage-thumb-plat.main-floor {
+  background: #1e1b4b;
+  border-top: 2px solid #818cf8;
+}
+.stage-thumb-lavender-tower .stage-thumb-plat.tombstone {
+  width: 13px;
+  height: 4px;
+  background: #475569;
+  border-top: 1px solid #94a3b8;
+  top: 26px;
+}
+.stage-thumb-lavender-tower .tomb-l { left: 14px; }
+.stage-thumb-lavender-tower .tomb-c { left: 38px; top: 18px; }
+.stage-thumb-lavender-tower .tomb-r { right: 14px; }
+.stage-thumb-mist {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 80%, rgba(168, 85, 247, 0.35), transparent 70%);
+}
+
+.stage-thumb-cinnabar-island .stage-thumb-plat.main-floor {
+  background: #27272a;
+  border-top: 2px solid #71717a;
+  bottom: 20px;
+}
+.stage-thumb-cinnabar-island .stage-thumb-plat.rock-plat {
+  width: 20px;
+  height: 4px;
+  background: #3f3f46;
+  border-top: 1px solid #fb923c;
+  top: 20px;
+}
+.stage-thumb-cinnabar-island .rock-l { left: 14px; }
+.stage-thumb-cinnabar-island .rock-r { right: 14px; }
+.stage-thumb-lava {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 12px;
+  background: linear-gradient(0deg, #ea580c, #facc15);
+  box-shadow: 0 -2px 8px #ef4444;
+  animation: lavaThumbPulse 2s ease-in-out infinite alternate;
+}
+@keyframes lavaThumbPulse {
+  0% { height: 10px; opacity: 0.85; }
+  100% { height: 14px; opacity: 1; }
+}
+
+.stage-thumb-power-plant .stage-thumb-plat.main-floor {
+  background: #1e293b;
+  border-top: 2px solid #eab308;
+}
+.stage-thumb-power-plant .stage-thumb-plat.grate-plat {
+  width: 24px;
+  height: 4px;
+  background: #0f766e;
+  border-top: 1px solid #22d3ee;
+  top: 24px;
+}
+.stage-thumb-power-plant .grate-l { left: 14px; }
+.stage-thumb-power-plant .grate-r { right: 14px; }
+.stage-thumb-sparks {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 50%, rgba(34, 211, 238, 0.3), transparent 60%);
+}
+
+.stage-icon-overlay {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  font-size: 14px;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Gamepad Indicator Badge */
+.gamepad-badge {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 9999px;
+  padding: 5px 12px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  transition: all 0.25s ease;
+}
+
+.gamepad-badge.connected {
+  background: rgba(16, 185, 129, 0.18);
+  border-color: #10b981;
+  color: #a7f3d0;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.35);
+}
+
+.gp-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #64748b;
+  display: inline-block;
+}
+
+.gp-dot.active {
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+  animation: pulseDot 1.8s infinite;
+}
+
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.85); }
+}
+
+/* Training Lab Active State */
+#btn-toggle-hitboxes.active {
+  background: linear-gradient(135deg, #059669, #10b981) !important;
+  color: #fff !important;
+  border-color: #34d399 !important;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.5) !important;
+}
+
+#btn-lock-dummy-percent.active {
+  background: linear-gradient(135deg, #d97706, #f59e0b) !important;
+  color: #000 !important;
+  font-weight: 800 !important;
+  border-color: #fbbf24 !important;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.5) !important;
+}
+
+.p2-control-toggle-btn.active {
+  background: linear-gradient(135deg, #7e22ce, #a855f7) !important;
+  color: #fff !important;
+  border-color: #c084fc !important;
+  box-shadow: 0 0 12px rgba(168, 85, 247, 0.5) !important;
+}
+
 .stage-icon {
   font-size: 32px;
   width: 50px;

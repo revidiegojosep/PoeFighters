@@ -253,6 +253,105 @@ class ParticleManager {
           ctx.arc(lx, ly, 3.8 * (1 - t * 0.3), 0, Math.PI * 2);
           ctx.fill();
         }
+      } else if (p.type === 'shadow_fist') {
+        // ★ ESPECTACULAR PUÑO SOMBRA DE GENGAR (Anatomía de puño espectral real) ★
+        const t = 1 - (p.life / p.maxLife); // 0.0 a 1.0
+        const scale = (p.scale || 1.0) * (0.82 + Math.sin(t * Math.PI) * 0.42);
+        ctx.scale(p.facing, 1);
+
+        let rot = 0;
+        if (p.dir === 'up') rot = -Math.PI * 0.30;
+        else if (p.dir === 'down') rot = Math.PI * 0.30;
+        ctx.rotate(rot);
+
+        // 1. Estela de fuego espectral y humo etéreo detrás de la muñeca
+        const wispCount = 5;
+        for (let w = 0; w < wispCount; w++) {
+          const wPhase = t * 12 + w * 1.4;
+          const wispX = -28 * scale - w * 11 * scale - Math.sin(wPhase) * 6;
+          const wispY = (w - 2) * 8 * scale + Math.cos(wPhase) * 6;
+          const wispR = Math.max(1, (11 - w * 1.9) * (1 - t * 0.6) * scale);
+          const wGrad = ctx.createRadialGradient(wispX, wispY, 0, wispX, wispY, wispR * 1.6);
+          wGrad.addColorStop(0, 'rgba(232, 121, 249, 0.75)');
+          wGrad.addColorStop(0.45, 'rgba(147, 51, 234, 0.45)');
+          wGrad.addColorStop(1, 'rgba(21, 6, 40, 0)');
+          ctx.fillStyle = wGrad;
+          ctx.beginPath();
+          ctx.arc(wispX, wispY, wispR * 1.6, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // 2. Base de Muñeca y Cuerpo del Puño Cerrado
+        ctx.save();
+        ctx.shadowColor = '#c084fc';
+        ctx.shadowBlur = 24 * scale;
+
+        const wristGrad = ctx.createLinearGradient(-34 * scale, 0, 24 * scale, 0);
+        wristGrad.addColorStop(0, '#130424');
+        wristGrad.addColorStop(0.4, '#3b0764');
+        wristGrad.addColorStop(0.75, '#6b21a8');
+        wristGrad.addColorStop(1, '#9333ea');
+        ctx.fillStyle = wristGrad;
+        ctx.strokeStyle = '#e879f9';
+        ctx.lineWidth = 2.4 * scale;
+
+        ctx.beginPath();
+        // Muñeca superior
+        ctx.moveTo(-30 * scale, -13 * scale);
+        ctx.quadraticCurveTo(-14 * scale, -17 * scale, 0, -19 * scale);
+        // Nudillo 1 (Índice)
+        ctx.arc(14 * scale, -15 * scale, 7.5 * scale, -Math.PI * 0.7, Math.PI * 0.1);
+        // Nudillo 2 (Corazón - nudillo líder de impacto)
+        ctx.arc(24 * scale, -5 * scale, 8.8 * scale, -Math.PI * 0.5, Math.PI * 0.2);
+        // Nudillo 3 (Anular)
+        ctx.arc(19 * scale, 6 * scale, 7.8 * scale, -Math.PI * 0.4, Math.PI * 0.3);
+        // Nudillo 4 (Meñique)
+        ctx.arc(11 * scale, 15 * scale, 6.8 * scale, -Math.PI * 0.3, Math.PI * 0.5);
+        // Curva inferior de la palma hasta la muñeca
+        ctx.quadraticCurveTo(-10 * scale, 17 * scale, -30 * scale, 13 * scale);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // 3. Pulgar cerrado y flexionado sobre los dedos
+        ctx.fillStyle = '#581c87';
+        ctx.strokeStyle = '#f472b6';
+        ctx.lineWidth = 2.0 * scale;
+        ctx.beginPath();
+        ctx.ellipse(5 * scale, 4 * scale, 9.5 * scale, 6.5 * scale, Math.PI * 0.28, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // 4. Relieve y crestas de los nudillos cerrados
+        ctx.strokeStyle = '#f5d0fe';
+        ctx.lineWidth = 1.9 * scale;
+        ctx.beginPath();
+        ctx.moveTo(8 * scale, -13 * scale); ctx.lineTo(16 * scale, -13 * scale);
+        ctx.moveTo(13 * scale, -4 * scale); ctx.lineTo(26 * scale, -4 * scale);
+        ctx.moveTo(10 * scale, 6 * scale);  ctx.lineTo(21 * scale, 6 * scale);
+        ctx.stroke();
+
+        // 5. Núcleo Rúnico / Ojo Espectral vigilante en el centro de la mano
+        const coreAlpha = Math.sin(t * Math.PI);
+        ctx.fillStyle = `rgba(255, 255, 255, ${0.92 * coreAlpha})`;
+        ctx.shadowColor = '#38bdf8';
+        ctx.shadowBlur = 16 * scale;
+        ctx.beginPath();
+        ctx.arc(1 * scale, -2 * scale, 4.5 * scale, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 6. Onda de choque sónica / impacto al frente de los nudillos
+        if (t > 0.12 && t < 0.75) {
+          const flashT = (t - 0.12) / 0.63;
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 3.2 * (1 - flashT) * scale;
+          ctx.shadowColor = '#c084fc';
+          ctx.shadowBlur = 26;
+          ctx.beginPath();
+          ctx.arc(24 * scale, -2 * scale, (12 + flashT * 26) * scale, -Math.PI * 0.5, Math.PI * 0.5);
+          ctx.stroke();
+        }
+        ctx.restore();
       }
 
       ctx.restore();
@@ -653,6 +752,32 @@ class ParticleManager {
         this.spawnSmoke(x + Math.cos(ang) * dist, y + Math.sin(ang) * dist, '#a855f7', 6);
         this.spawnHitSparks(x + Math.cos(ang) * dist, y + Math.sin(ang) * dist, 1, 'poison');
       }
+    }
+  }
+
+  spawnShadowFist(x, y, dir = 'side', facing = 1, powerScale = 1.0) {
+    const fistX = x + facing * 24;
+    const fistY = y - (dir === 'up' ? 26 : 18);
+
+    this.particles.push({
+      type: 'shadow_fist',
+      x: fistX,
+      y: fistY,
+      dir: dir,
+      facing: facing,
+      scale: powerScale,
+      life: 0.28,
+      maxLife: 0.28,
+      vx: (dir === 'up' ? 2.5 * facing : 8.5 * facing),
+      vy: (dir === 'up' ? -7.0 : -0.5),
+      friction: 0.90
+    });
+
+    // Humo fantasmal y chispas de impacto espectral
+    for (let i = 0; i < 9; i++) {
+      const angle = (Math.PI * 2 * i) / 9;
+      this.spawnSmoke(fistX + Math.cos(angle) * 12, fistY + Math.sin(angle) * 12, '#9333ea', 7);
+      this.spawnHitSparks(fistX + facing * 22, fistY, 3, 'shadow');
     }
   }
 }

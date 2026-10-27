@@ -105,7 +105,7 @@ class PhysicsEngine {
    * Updates fighter kinematics and handles stage/platform collisions
    */
   updateFighter(fighter, stage, dt) {
-    if (fighter.state === 'LEDGE') {
+    if (fighter.state === 'LEDGE' || fighter.state === 'LEDGE_CLIMB' || fighter.state === 'GRABBED' || fighter.state === 'GRABBING') {
       fighter.vx = 0;
       fighter.vy = 0;
       return;
@@ -167,6 +167,18 @@ class PhysicsEngine {
       if (Math.abs(fighter.vx) < 0.05) fighter.vx = 0;
     }
 
+    // Sincronización vertical continua con plataformas móviles
+    if (fighter.isGrounded && fighter.groundedPlat && fighter.groundedPlat.moveAmp && !fighter.isDroppingThrough) {
+      const p = fighter.groundedPlat;
+      if (fighter.x >= p.x - 6 && fighter.x <= p.x + p.width + 6) {
+        fighter.y = p.y;
+        fighter.vy = 0;
+      } else {
+        fighter.groundedPlat = null;
+        fighter.isGrounded = false;
+      }
+    }
+
     // Previous position for tunneling prevention
     const oldX = fighter.x;
     const oldY = fighter.y;
@@ -212,6 +224,9 @@ class PhysicsEngine {
       if (
         !fighter.isGrounded &&
         fighter.state !== 'LEDGE' &&
+        fighter.state !== 'LEDGE_CLIMB' &&
+        fighter.state !== 'GRABBED' &&
+        fighter.state !== 'GRABBING' &&
         fighter.state !== 'RESPAWN' &&
         fighter.state !== 'HURT' &&
         (fighter.ledgeCooldown || 0) <= 0 &&
@@ -262,10 +277,10 @@ class PhysicsEngine {
     if (!fighter.isDroppingThrough) {
       for (const plat of stage.semiSolidPlatforms) {
         if (
-          oldY <= plat.y + 2 &&
+          oldY <= plat.y + 6 &&
           fighter.y >= plat.y &&
-          fighter.x >= plat.x &&
-          fighter.x <= plat.x + plat.width &&
+          fighter.x >= plat.x - 4 &&
+          fighter.x <= plat.x + plat.width + 4 &&
           fighter.vy >= 0
         ) {
           fighter.y = plat.y;
@@ -274,10 +289,12 @@ class PhysicsEngine {
           fighter.jumpsLeft = fighter.maxJumps;
           fighter.isFastFalling = false;
           fighter.hitstun = 0;
+          fighter.groundedPlat = plat;
           return;
         }
       }
     }
+    fighter.groundedPlat = null;
   }
 }
 

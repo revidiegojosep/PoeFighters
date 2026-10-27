@@ -251,12 +251,17 @@ class GameHUD {
       }
     }
 
-    // 4. Update Combo Counter
+    // 4. Update Combo Counter (True Combo vs Escapable Combo)
     if (this.comboDisplayEl && dummyController) {
       if (dummyController.comboActive && dummyController.comboCount > 1) {
         this.comboDisplayEl.classList.add('visible');
+        const isTrue = dummyController.isTrueCombo !== false;
         if (this.comboHitsEl) {
-          this.comboHitsEl.innerText = `${dummyController.comboCount} GOLPES!`;
+          this.comboHitsEl.innerText = isTrue
+            ? `🔥 ¡TRUE COMBO! ${dummyController.comboCount} GOLPES`
+            : `⚡ COMBO ${dummyController.comboCount} GOLPES (Escapable)`;
+          this.comboHitsEl.style.color = isTrue ? '#facc15' : '#38bdf8';
+          this.comboHitsEl.style.textShadow = isTrue ? '0 0 10px rgba(250, 204, 21, 0.6)' : '0 0 10px rgba(56, 189, 248, 0.6)';
         }
         if (this.comboDamageEl) {
           this.comboDamageEl.innerText = `${Math.floor(dummyController.comboDamage)}% Daño`;

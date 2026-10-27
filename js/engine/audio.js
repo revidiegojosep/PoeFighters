@@ -463,6 +463,72 @@ class SoundEngine {
         break;
       }
 
+      case 'grab': {
+        // Swift whoosh into wrestling grip snap
+        const osc = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(140 * pitch, t);
+        osc.frequency.exponentialRampToValueAtTime(320 * pitch, t + 0.06);
+        osc.frequency.exponentialRampToValueAtTime(180 * pitch, t + 0.12);
+        g.gain.setValueAtTime(0.40, t);
+        g.gain.exponentialRampToValueAtTime(0.01, t + 0.14);
+        osc.connect(g).connect(this.sfxGain);
+        osc.start(t);
+        osc.stop(t + 0.14);
+        this._noise(t, 0.08, 0.25);
+        break;
+      }
+
+      case 'throw': {
+        // Heavy impact whip and aerodynamic launch whoosh
+        const osc = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(280 * pitch, t);
+        osc.frequency.exponentialRampToValueAtTime(110 * pitch, t + 0.16);
+        g.gain.setValueAtTime(0.55, t);
+        g.gain.exponentialRampToValueAtTime(0.01, t + 0.18);
+        osc.connect(g).connect(this.sfxGain);
+        osc.start(t);
+        osc.stop(t + 0.18);
+        this._noise(t, 0.12, 0.40);
+        break;
+      }
+
+      case 'lava_burn': {
+        // Magma sizzle & fiery blast
+        const osc = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(90 * pitch, t);
+        osc.frequency.exponentialRampToValueAtTime(240 * pitch, t + 0.22);
+        g.gain.setValueAtTime(0.60, t);
+        g.gain.exponentialRampToValueAtTime(0.01, t + 0.35);
+        osc.connect(g).connect(this.sfxGain);
+        osc.start(t);
+        osc.stop(t + 0.35);
+        this._noise(t, 0.30, 0.65);
+        break;
+      }
+
+      case 'electric_arc': {
+        // High voltage crackling tesla arc
+        const osc = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(440 * pitch, t);
+        osc.frequency.linearRampToValueAtTime(880 * pitch, t + 0.08);
+        osc.frequency.linearRampToValueAtTime(220 * pitch, t + 0.16);
+        g.gain.setValueAtTime(0.35, t);
+        g.gain.exponentialRampToValueAtTime(0.01, t + 0.20);
+        osc.connect(g).connect(this.sfxGain);
+        osc.start(t);
+        osc.stop(t + 0.20);
+        this._noise(t, 0.15, 0.30);
+        break;
+      }
+
       case 'countdown_beep': {
         // High retro arcade beep for 3.. 2.. 1..
         const osc = this.ctx.createOscillator();

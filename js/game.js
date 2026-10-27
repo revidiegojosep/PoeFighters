@@ -23,11 +23,13 @@ class PokeSmashGame {
     this.p1Type = 'HUMAN';    // 'HUMAN' or 'CPU'
     this.p1CpuLevel = 2;      // 1, 2, 3
     this.p1Controller = null;
+    this.p2Type = 'CPU';      // 'CPU' or 'HUMAN' (Local Multiplayer)
+    this.showHitboxes = false; // Training Lab Hitbox Visualizer
     this.matchStarted = false; // Menu displays by default BEFORE playing!
     this.isMatchOver = false;
 
     // Stage Selection & Held Items
-    this.stageId = 'BATTLEFIELD'; // 'BATTLEFIELD' or 'FINAL_DESTINATION'
+    this.stageId = 'BATTLEFIELD'; // 'BATTLEFIELD', 'FINAL_DESTINATION', 'LAVENDER_TOWER', 'CINNABAR_ISLAND', 'POWER_PLANT'
     this.p1Item = 'none';
     this.dummyItem = 'none';
 
@@ -40,16 +42,22 @@ class PokeSmashGame {
     this.lastFpsUpdateTime = performance.now();
     this.currentFps = 140;
 
+    // Gamepad API Support (Xbox, PS, Switch Pro, USB)
+    this.gamepads = [];
+    this.gamepadConnected = false;
+    this.lastGamepadState = [{}, {}];
+
     // Customizable Keybinds
     this.defaultKeybinds = {
-      left: 'ArrowLeft',
-      right: 'ArrowRight',
-      up: 'ArrowUp',
-      down: 'ArrowDown',
+      left: 'KeyA',
+      right: 'KeyD',
+      up: 'KeyW',
+      down: 'KeyS',
       jump: 'Space',
       attack: 'KeyZ',
       special: 'KeyX',
       shield: 'KeyC',
+      grab: 'ShiftLeft',
       item: 'Digit1'
     };
     this.keybinds = Object.assign({}, this.defaultKeybinds);
@@ -59,6 +67,8 @@ class PokeSmashGame {
         Object.assign(this.keybinds, savedKeybinds);
       }
     } catch (e) {}
+
+    this._initGamepadListeners();
 
     // Entities
     this.stage = new window.Stage(this.width, this.height);
@@ -96,6 +106,11 @@ class PokeSmashGame {
     this.matchTimeLimit = 0; // 0 = Sin límite
     this.matchTimeRemaining = 0;
     this.itemsEnabled = true;
+
+    // Gamepad controller support
+    this.gamepadPrevButtons = { p1: {}, p2: {} };
+    this.gamepadConnected = false;
+    this._initGamepadListeners();
 
     this._bindControls();
     this._bindTrainingButtons();
@@ -201,6 +216,7 @@ class PokeSmashGame {
     this.dummyDex = options.dummyDex || this.dummyDex || 1;
     this.p1Type = options.p1Type || this.p1Type || 'HUMAN';
     this.p1CpuLevel = options.p1CpuLevel || this.p1CpuLevel || 2;
+    this.p2Type = options.p2Type || this.p2Type || 'CPU';
     this.stageId = options.stageId || this.stageId || 'BATTLEFIELD';
     this.matchStocks = options.stocks !== undefined ? options.stocks : (this.matchStocks || 3);
     this.matchTimeLimit = options.timeLimit !== undefined ? options.timeLimit : (this.matchTimeLimit || 0);
@@ -235,7 +251,9 @@ class PokeSmashGame {
     }
 
     this.dummyController.setDummyFighter(this.dummy);
-    if (this.gameMode === 'BATTLE') {
+    if (this.p2Type === 'HUMAN') {
+      this.dummyController.setMode('STAND');
+    } else if (this.gameMode === 'BATTLE') {
       this.dummyController.setMode('CPU_BATTLE');
       this.dummyController.setCpuLevel(this.cpuLevel);
     } else {
@@ -410,31 +428,96 @@ class PokeSmashGame {
         return;
       }
 
-      // If P1 is controlled by CPU, ignore fighting inputs from keyboard
+      // Hitbox / Hurtbox Visualizer Toggle (Key H)
+      if (code === 'KeyH' || key === 'h') {
+        this.showHitboxes = !this.showHitboxes;
+        const hbBtn = document.getElementById('btn-toggle-hitboxes');
+        if (hbBtn) {
+          hbBtn.innerText = this.showHitboxes ? '🎯 Hitboxes: ON' : '🎯 Hitboxes: OFF';
+          hbBtn.classList.toggle('active', this.showHitboxes);
+        }
+        if (window.soundEngine) window.soundEngine.playSfx('select');
+        return;
+      }
+
+      // =====================================================================
+      // 👥 CONTROLES JUGADOR 2 (Multijugador Local)
+      // =====================================================================
+      if (this.p2Type === 'HUMAN' && this.dummy) {
+        if (code === 'ArrowLeft') {
+          this.dummy.input.left = true;
+          this.dummy.input.leftPressed = true;
+        }
+        if (code === 'ArrowRight') {
+          this.dummy.input.right = true;
+          this.dummy.input.rightPressed = true;
+        }
+        if (code === 'ArrowUp') {
+          this.dummy.input.up = true;
+          this.dummy.input.upPressed = true;
+          this.dummy.input.jump = true;
+          this.dummy.input.jumpPressed = true;
+        }
+        if (code === 'ArrowDown') {
+          this.dummy.input.down = true;
+          this.dummy.input.downPressed = true;
+        }
+        // Attack: Numpad1 or KeyU or Period
+        if (code === 'Numpad1' || code === 'KeyU' || code === 'Period') {
+          this.dummy.input.attack = true;
+          this.dummy.input.attackPressed = true;
+        }
+        // Special: Numpad2 or KeyI or Comma
+        if (code === 'Numpad2' || code === 'KeyI' || code === 'Comma') {
+          this.dummy.input.special = true;
+          this.dummy.input.specialPressed = true;
+        }
+        // Shield: Numpad3 or KeyO or Slash or Minus
+        if (code === 'Numpad3' || code === 'KeyO' || code === 'Slash' || code === 'Minus') {
+          this.dummy.input.shield = true;
+          this.dummy.input.shieldPressed = true;
+        }
+        // Grab: Numpad0 or KeyP or ShiftRight or Enter
+        if (code === 'Numpad0' || code === 'KeyP' || code === 'ShiftRight' || code === 'Enter') {
+          this.dummy.input.grab = true;
+          this.dummy.input.grabPressed = true;
+        }
+        // Item: Numpad4 or Digit0
+        if (code === 'Numpad4' || code === 'Digit0') {
+          if (typeof this.dummy.useActiveItem === 'function') this.dummy.useActiveItem();
+        }
+      }
+
+      // =====================================================================
+      // 🎮 CONTROLES JUGADOR 1 (WASD + Z/X/C + Shift)
+      // =====================================================================
       if (this.p1Type === 'CPU') return;
 
       if (this.keysDown[code]) return;
       this.keysDown[code] = true;
 
       const kb = this.keybinds;
-      if (code === kb.left || (kb.left === 'ArrowLeft' && (key === 'a' || code === 'KeyA'))) {
+      const isP2Human = (this.p2Type === 'HUMAN');
+
+      // If P2 is human, arrow keys belong to P2, so P1 uses WASD
+      if (code === 'KeyA' || key === 'a' || (!isP2Human && (code === kb.left || code === 'ArrowLeft'))) {
         this.player.input.left = true;
         this.player.input.leftPressed = true;
       }
-      if (code === kb.right || (kb.right === 'ArrowRight' && (key === 'd' || code === 'KeyD'))) {
+      if (code === 'KeyD' || key === 'd' || (!isP2Human && (code === kb.right || code === 'ArrowRight'))) {
         this.player.input.right = true;
         this.player.input.rightPressed = true;
       }
-      if (code === kb.up || (kb.up === 'ArrowUp' && (key === 'w' || code === 'KeyW'))) {
+      if (code === 'KeyW' || key === 'w' || (!isP2Human && (code === kb.up || code === 'ArrowUp'))) {
         this.player.input.up = true;
         this.player.input.upPressed = true;
       }
-      if (code === kb.down || (kb.down === 'ArrowDown' && (key === 's' || code === 'KeyS'))) {
+      if (code === 'KeyS' || key === 's' || (!isP2Human && (code === kb.down || code === 'ArrowDown'))) {
         this.player.input.down = true;
         this.player.input.downPressed = true;
       }
 
-      if (code === kb.jump) {
+      if (code === kb.jump || code === 'Space') {
         this.player.input.jump = true;
         this.player.input.jumpPressed = true;
       }
@@ -454,7 +537,13 @@ class PokeSmashGame {
         this.player.input.shieldPressed = true;
       }
 
-      if (code === kb.item || code === 'Digit1' || code === 'Numpad1' || key === '1') {
+      // Agarre P1 (Shift Izquierdo o tecla grab configurada)
+      if (code === kb.grab || code === 'ShiftLeft' || (!isP2Human && code === 'ShiftRight')) {
+        this.player.input.grab = true;
+        this.player.input.grabPressed = true;
+      }
+
+      if (code === kb.item || code === 'Digit1' || (!isP2Human && (code === 'Numpad1' || key === '1'))) {
         if (this.player && typeof this.player.useActiveItem === 'function') {
           this.player.useActiveItem();
         }
@@ -466,20 +555,38 @@ class PokeSmashGame {
       const code = e.code;
       this.keysDown[code] = false;
 
+      // Player 2 Keyup
+      if (this.p2Type === 'HUMAN' && this.dummy) {
+        if (code === 'ArrowLeft') this.dummy.input.left = false;
+        if (code === 'ArrowRight') this.dummy.input.right = false;
+        if (code === 'ArrowUp') {
+          this.dummy.input.up = false;
+          this.dummy.input.jump = false;
+        }
+        if (code === 'ArrowDown') this.dummy.input.down = false;
+        if (code === 'Numpad1' || code === 'KeyU' || code === 'Period') this.dummy.input.attack = false;
+        if (code === 'Numpad2' || code === 'KeyI' || code === 'Comma') this.dummy.input.special = false;
+        if (code === 'Numpad3' || code === 'KeyO' || code === 'Slash' || code === 'Minus') this.dummy.input.shield = false;
+        if (code === 'Numpad0' || code === 'KeyP' || code === 'ShiftRight' || code === 'Enter') this.dummy.input.grab = false;
+      }
+
+      // Player 1 Keyup
       const kb = this.keybinds;
-      if (code === kb.left || (kb.left === 'ArrowLeft' && (key === 'a' || code === 'KeyA'))) {
+      const isP2Human = (this.p2Type === 'HUMAN');
+
+      if (code === 'KeyA' || key === 'a' || (!isP2Human && (code === kb.left || code === 'ArrowLeft'))) {
         this.player.input.left = false;
       }
-      if (code === kb.right || (kb.right === 'ArrowRight' && (key === 'd' || code === 'KeyD'))) {
+      if (code === 'KeyD' || key === 'd' || (!isP2Human && (code === kb.right || code === 'ArrowRight'))) {
         this.player.input.right = false;
       }
-      if (code === kb.up || (kb.up === 'ArrowUp' && (key === 'w' || code === 'KeyW'))) {
+      if (code === 'KeyW' || key === 'w' || (!isP2Human && (code === kb.up || code === 'ArrowUp'))) {
         this.player.input.up = false;
       }
-      if (code === kb.down || (kb.down === 'ArrowDown' && (key === 's' || code === 'KeyS'))) {
+      if (code === 'KeyS' || key === 's' || (!isP2Human && (code === kb.down || code === 'ArrowDown'))) {
         this.player.input.down = false;
       }
-      if (code === kb.jump) {
+      if (code === kb.jump || code === 'Space') {
         this.player.input.jump = false;
       }
       if (code === kb.attack || (kb.attack === 'KeyZ' && key === 'z')) {
@@ -490,6 +597,9 @@ class PokeSmashGame {
       }
       if (code === kb.shield || (kb.shield === 'KeyC' && key === 'c')) {
         this.player.input.shield = false;
+      }
+      if (code === kb.grab || code === 'ShiftLeft' || (!isP2Human && code === 'ShiftRight')) {
+        this.player.input.grab = false;
       }
     });
   }
@@ -561,6 +671,35 @@ class PokeSmashGame {
       musicBtn.addEventListener('click', () => {
         const playing = window.soundEngine.toggleMusic();
         musicBtn.innerText = playing ? '🎵 Música: ON' : '🔇 Música: OFF';
+      });
+    }
+
+    // Hitbox Visualizer Button
+    const hitboxBtn = document.getElementById('btn-toggle-hitboxes');
+    if (hitboxBtn) {
+      hitboxBtn.addEventListener('click', () => {
+        this.showHitboxes = !this.showHitboxes;
+        hitboxBtn.innerText = this.showHitboxes ? '🎯 Hitboxes: ON' : '🎯 Hitboxes: OFF';
+        hitboxBtn.classList.toggle('active', this.showHitboxes);
+        window.soundEngine.playSfx('select');
+      });
+    }
+
+    // Lock Dummy Percent Button
+    const lockPercentBtn = document.getElementById('btn-lock-dummy-percent');
+    if (lockPercentBtn) {
+      lockPercentBtn.addEventListener('click', () => {
+        if (this.dummyController.lockedPercent === null) {
+          const p = Math.round(this.dummy.percent);
+          this.dummyController.lockedPercent = p;
+          lockPercentBtn.innerText = `🔒 Bloqueado: ${p}%`;
+          lockPercentBtn.classList.add('active');
+        } else {
+          this.dummyController.lockedPercent = null;
+          lockPercentBtn.innerText = '🔓 Fijar %: OFF';
+          lockPercentBtn.classList.remove('active');
+        }
+        window.soundEngine.playSfx('select');
       });
     }
   }
@@ -731,6 +870,23 @@ class PokeSmashGame {
       });
     });
 
+    // Modal P2 Control Toggle (CPU vs Humano Local)
+    let selectedP2Type = this.p2Type || 'CPU';
+    const p2ControlBtns = document.querySelectorAll('[data-p2-control]');
+    const cpuDiffContainer = document.getElementById('cpu-difficulty-section');
+
+    p2ControlBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        p2ControlBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        selectedP2Type = btn.getAttribute('data-p2-control');
+        if (cpuDiffContainer) {
+          cpuDiffContainer.style.display = selectedP2Type === 'CPU' ? 'block' : 'none';
+        }
+        window.soundEngine.playSfx('select');
+      });
+    });
+
     // Modal P1 CPU Level pills
     const p1LevelBtns = document.querySelectorAll('[data-p1-cpu-level]');
     p1LevelBtns.forEach(btn => {
@@ -858,6 +1014,7 @@ class PokeSmashGame {
           cpuLevel: selectedLevel,
           p1Type: selectedP1Type,
           p1CpuLevel: selectedP1CpuLevel,
+          p2Type: selectedP2Type,
           stageId: selectedStage,
           p1Item: selectedItemsEnabled === 'on' ? selectedP1Item : 'none',
           dummyItem: selectedItemsEnabled === 'on' ? selectedCPUItem : 'none'
@@ -879,6 +1036,7 @@ class PokeSmashGame {
           cpuLevel: this.cpuLevel,
           p1Type: this.p1Type,
           p1CpuLevel: this.p1CpuLevel,
+          p2Type: this.p2Type,
           stageId: this.stageId,
           p1Item: this.p1Item,
           dummyItem: this.dummyItem
@@ -1485,12 +1643,19 @@ class PokeSmashGame {
     }
 
     // 1. Inputs & AI
+    this.pollGamepads();
+
     if (this.p1Type === 'CPU' && this.p1Controller) {
       this.p1Controller.update(dt, this.dummy, this.stage);
     } else {
       this.player.handleInputs(this.stage, dt);
     }
-    this.dummyController.update(dt, this.player, this.stage);
+
+    if (this.p2Type === 'HUMAN') {
+      this.dummy.handleInputs(this.stage, dt);
+    } else {
+      this.dummyController.update(dt, this.player, this.stage);
+    }
 
     // 2. Physics & Entities update
     if (this.screenShakeTimer > 0) {
@@ -1502,6 +1667,7 @@ class PokeSmashGame {
     }
 
     this.stage.update(dt);
+    this.stage.updateHazards([this.player, this.dummy]);
     this.player.update(dt, this.dummy, this.stage);
     this.dummy.update(dt, this.player, this.stage);
     window.particleManager.update(dt);
@@ -1635,10 +1801,10 @@ class PokeSmashGame {
     // 5. Blast Zone Guide
     this.stage.drawBlastZoneGuide(this.ctx);
 
-    // 6. Fighters (Sprites, Projectiles, Shields, Smash Auras, Ditto outline & Stage lighting)
+    // 6. Fighters (Sprites, Projectiles, Shields, Smash Auras, Ditto outline, Hitboxes & Stage lighting)
     const isDittoMatch = (this.playerDex === this.dummyDex);
-    this.player.draw(this.ctx, { stage: this.stage, isDittoMatch: isDittoMatch });
-    this.dummy.draw(this.ctx, { stage: this.stage, isDittoMatch: false });
+    this.player.draw(this.ctx, { stage: this.stage, isDittoMatch: isDittoMatch, showHitboxes: this.showHitboxes });
+    this.dummy.draw(this.ctx, { stage: this.stage, isDittoMatch: false, showHitboxes: this.showHitboxes });
 
     // 7. Stage Foreground Effects (Volumetric God Rays & Ambient Spores/Petals)
     this.stage.drawForegroundEffects(this.ctx);
@@ -1660,6 +1826,201 @@ class PokeSmashGame {
     this.stage.drawPostProcessing(this.ctx);
 
     this.ctx.restore();
+  }
+
+  // 🎮 GAMEPAD API SUPPORT (Xbox, PlayStation, Switch Pro, Generic USB)
+  _initGamepadListeners() {
+    window.addEventListener('gamepadconnected', (e) => {
+      console.log('🎮 Mando detectado:', e.gamepad.id);
+      this._updateGamepadIndicator(e.gamepad);
+      if (window.particleManager) {
+        window.particleManager.spawnFloatingText(512, 100, `🎮 ${e.gamepad.id.slice(0, 18)} CONECTADO`, '#38bdf8', 16);
+      }
+    });
+
+    window.addEventListener('gamepaddisconnected', (e) => {
+      console.log('🎮 Mando desconectado:', e.gamepad.id);
+      this._updateGamepadIndicator(null);
+      if (window.particleManager) {
+        window.particleManager.spawnFloatingText(512, 100, '🎮 MANDO DESCONECTADO', '#ef4444', 16);
+      }
+    });
+  }
+
+  _updateGamepadIndicator(gamepad) {
+    const badge = document.getElementById('gamepad-indicator-badge');
+    if (!badge) return;
+    if (gamepad) {
+      badge.classList.remove('hidden');
+      badge.classList.add('connected');
+      const name = gamepad.id.toLowerCase().includes('xbox') ? 'Xbox' :
+                   (gamepad.id.toLowerCase().includes('playstation') || gamepad.id.toLowerCase().includes('dualshock') || gamepad.id.toLowerCase().includes('dualsense') || gamepad.id.toLowerCase().includes('sony')) ? 'PlayStation' :
+                   gamepad.id.toLowerCase().includes('pro controller') ? 'Switch Pro' : 'Mando';
+      badge.innerHTML = `<span class="gp-dot active"></span> 🎮 ${name} Listo`;
+      badge.title = gamepad.id;
+    } else {
+      badge.classList.remove('connected');
+      badge.innerHTML = `<span class="gp-dot"></span> 🎮 Mando: Desconectado`;
+      badge.title = 'Conecta un mando USB o Bluetooth para jugar con mando';
+    }
+  }
+
+  pollGamepads() {
+    if (!navigator.getGamepads) return;
+    const gamepads = navigator.getGamepads();
+    if (!gamepads) return;
+
+    let gp1 = null;
+    let gp2 = null;
+
+    for (let i = 0; i < gamepads.length; i++) {
+      if (gamepads[i] && gamepads[i].connected) {
+        if (!gp1) {
+          gp1 = gamepads[i];
+        } else if (!gp2) {
+          gp2 = gamepads[i];
+          break;
+        }
+      }
+    }
+
+    if (gp1 && this.p1Type !== 'CPU') {
+      this._applyGamepadInput(gp1, this.player, 'p1');
+    }
+
+    if (gp2 && this.p2Type === 'HUMAN') {
+      this._applyGamepadInput(gp2, this.dummy, 'p2');
+    }
+
+    const hasAnyGamepad = !!(gp1 || gp2);
+    if (this.gamepadConnected !== hasAnyGamepad) {
+      this.gamepadConnected = hasAnyGamepad;
+      this._updateGamepadIndicator(gp1 || gp2);
+    }
+  }
+
+  _applyGamepadInput(gamepad, fighter, playerKey) {
+    if (!gamepad || !fighter || !fighter.input) return;
+
+    if (!this.gamepadPrevButtons) {
+      this.gamepadPrevButtons = { p1: {}, p2: {} };
+    }
+    const prev = this.gamepadPrevButtons[playerKey] || {};
+
+    const axes = gamepad.axes || [];
+    const buttons = gamepad.buttons || [];
+
+    const isBtn = (idx) => {
+      const b = buttons[idx];
+      return b ? (typeof b === 'object' ? b.pressed || b.value > 0.4 : b > 0.4) : false;
+    };
+
+    // Analog Stick & D-Pad directions
+    const stickX = axes[0] !== undefined ? axes[0] : 0;
+    const stickY = axes[1] !== undefined ? axes[1] : 0;
+    const dpadUp = isBtn(12);
+    const dpadDown = isBtn(13);
+    const dpadLeft = isBtn(14);
+    const dpadRight = isBtn(15);
+
+    const gpLeft = (stickX < -0.32) || dpadLeft;
+    const gpRight = (stickX > 0.32) || dpadRight;
+    const gpUp = (stickY < -0.45) || dpadUp;
+    const gpDown = (stickY > 0.45) || dpadDown;
+
+    // Movement axes update
+    if (gpLeft) {
+      if (!prev.left) fighter.input.leftPressed = true;
+      fighter.input.left = true;
+    }
+    if (gpRight) {
+      if (!prev.right) fighter.input.rightPressed = true;
+      fighter.input.right = true;
+    }
+    if (gpUp) {
+      if (!prev.up) fighter.input.upPressed = true;
+      fighter.input.up = true;
+    }
+    if (gpDown) {
+      if (!prev.down) fighter.input.downPressed = true;
+      fighter.input.down = true;
+    }
+
+    // Action buttons:
+    // Jump: Button 0 (A/Cross) or Button 3 (Y/Triangle)
+    const gpJump = isBtn(0) || isBtn(3);
+    // Attack: Button 2 (X/Square)
+    const gpAttack = isBtn(2);
+    // Special: Button 1 (B/Circle)
+    const gpSpecial = isBtn(1);
+    // Shield: Button 4 (L1/LB) or Button 6 (L2/LT)
+    const gpShield = isBtn(4) || isBtn(6);
+    // Grab: Button 5 (R1/RB) or Button 7 (R2/RT)
+    const gpGrab = isBtn(5) || isBtn(7);
+    // Item: Button 8 (Select/Share)
+    const gpItem = isBtn(8);
+
+    if (gpJump) {
+      if (!prev.jump) fighter.input.jumpPressed = true;
+      fighter.input.jump = true;
+    }
+    if (gpAttack) {
+      if (!prev.attack) fighter.input.attackPressed = true;
+      fighter.input.attack = true;
+    }
+    if (gpSpecial) {
+      if (!prev.special) fighter.input.specialPressed = true;
+      fighter.input.special = true;
+    }
+    if (gpShield) {
+      if (!prev.shield) fighter.input.shieldPressed = true;
+      fighter.input.shield = true;
+    }
+    if (gpGrab) {
+      if (!prev.grab) fighter.input.grabPressed = true;
+      fighter.input.grab = true;
+    }
+    if (gpItem) {
+      if (!prev.item) fighter.input.itemPressed = true;
+      fighter.input.item = true;
+    }
+
+    // Release handling (if released on gamepad and not held on keyboard)
+    if (!gpLeft && prev.left && !this._isKeyHeld(playerKey, 'left')) fighter.input.left = false;
+    if (!gpRight && prev.right && !this._isKeyHeld(playerKey, 'right')) fighter.input.right = false;
+    if (!gpUp && prev.up && !this._isKeyHeld(playerKey, 'up')) fighter.input.up = false;
+    if (!gpDown && prev.down && !this._isKeyHeld(playerKey, 'down')) fighter.input.down = false;
+    if (!gpJump && prev.jump && !this._isKeyHeld(playerKey, 'jump')) fighter.input.jump = false;
+    if (!gpAttack && prev.attack && !this._isKeyHeld(playerKey, 'attack')) fighter.input.attack = false;
+    if (!gpSpecial && prev.special && !this._isKeyHeld(playerKey, 'special')) fighter.input.special = false;
+    if (!gpShield && prev.shield && !this._isKeyHeld(playerKey, 'shield')) fighter.input.shield = false;
+    if (!gpGrab && prev.grab && !this._isKeyHeld(playerKey, 'grab')) fighter.input.grab = false;
+    if (!gpItem && prev.item && !this._isKeyHeld(playerKey, 'item')) fighter.input.item = false;
+
+    // Save previous state for edge detection
+    this.gamepadPrevButtons[playerKey] = {
+      left: gpLeft,
+      right: gpRight,
+      up: gpUp,
+      down: gpDown,
+      jump: gpJump,
+      attack: gpAttack,
+      special: gpSpecial,
+      shield: gpShield,
+      grab: gpGrab,
+      item: gpItem
+    };
+  }
+
+  _isKeyHeld(playerKey, action) {
+    if (!this.keys) return false;
+    if (playerKey === 'p1') {
+      const code = this.keybinds ? this.keybinds[action] : null;
+      return code ? !!this.keys[code] : false;
+    } else {
+      const p2Codes = (this.p2Keybinds && this.p2Keybinds[action]) || [];
+      return p2Codes.some(c => !!this.keys[c]);
+    }
   }
 }
 

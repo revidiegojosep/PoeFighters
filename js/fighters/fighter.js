@@ -87,8 +87,21 @@ class Fighter {
       special: false,
       specialPressed: false,
       shield: false,
-      shieldPressed: false
+      shieldPressed: false,
+      grab: false,
+      grabPressed: false
     };
+
+    // 🤼 Grab & Throw Mechanics (Smash Bros style)
+    this.grabbedOpponent = null;
+    this.grabber = null;
+    this.grabStartupTimer = 0;
+    this.grabHoldTimer = 0;
+    this.grabEscapeTimer = 0;
+    this.pummelCooldown = 0;
+    this.isThrowing = false;
+    this.throwTimer = 0;
+    this.lavaBurnCooldown = 0;
 
     // Charged Smash Attacks (Double-tap direction on ground + hold Z. Released on keyup)
     this.lastDirTap = {
@@ -162,6 +175,12 @@ class Fighter {
     this.grabbedLedgePlat = null;
     this.ledgeTimer = 0;
     this.ledgeCooldown = 0;
+    this.ledgeHangLockTimer = 0; // Tiempo mínimo colgado visible antes de reaccionar
+    this.climbTimer = 0;
+    this.climbStartX = 0;
+    this.climbStartY = 0;
+    this.climbTargetX = 0;
+    this.climbTargetY = 0;
 
     // Perfect Shield / Parry (Ultimate style: release within 3 frames of attack)
     this.parryWindowTimer = 0;
@@ -184,6 +203,10 @@ class Fighter {
       this.state !== 'ATTACK' &&
       this.state !== 'SPECIAL' &&
       this.state !== 'LEDGE' &&
+      this.state !== 'LEDGE_CLIMB' &&
+      this.state !== 'GRAB_START' &&
+      this.state !== 'GRABBING' &&
+      this.state !== 'GRABBED' &&
       this.shieldBreakTimer <= 0 &&
       this.hitstun <= 0 &&
       this.hitstop <= 0 &&
@@ -274,16 +297,54 @@ class Fighter {
     this.parryFlashTimer = Math.max(0, this.parryFlashTimer - dt);
     this.ledgeCooldown = Math.max(0, this.ledgeCooldown - dt);
 
+    // Ledge Climb State (Subir de borde suavemente SIN teleport)
+    if (this.state === 'LEDGE_CLIMB') {
+      this.climbTimer -= dt;
+      const progress = Math.min(1.0, Math.max(0, 1.0 - (this.climbTimer / 0.22)));
+      // Cubic ease-out curve
+      const t = 1 - Math.pow(1 - progress, 3);
+      this.x = this.climbStartX + (this.climbTargetX - this.climbStartX) * t;
+      this.y = this.climbStartY + (this.climbTargetY - this.climbStartY) * t;
+      this.vx = 0;
+      this.vy = 0;
+
+      if (this.climbTimer <= 0) {
+        this.x = this.climbTargetX;
+        this.y = this.climbTargetY;
+        this.state = 'IDLE';
+        this.isGrounded = true;
+        this.grabbedLedgePlat = null;
+        this.ledgeCooldown = 0.8;
+        this.anim.loop('Idle', 1.0);
+      }
+      this.anim.setFacing(this.facing);
+      this.anim.update(dt);
+      return;
+    }
+
     // Ledge Hang State handling
     if (this.state === 'LEDGE') {
       this.vx = 0;
       this.vy = 0;
       this.isGrounded = false;
+      if (this.ledgeHangLockTimer > 0) {
+        this.ledgeHangLockTimer -= dt;
+      }
       this.ledgeTimer -= dt;
       if (this.ledgeTimer <= 0) {
         this.performLedgeClimb();
       }
+      // Anclar firmemente la posición en la esquina del borde
+      if (this.grabbedLedgePlat) {
+        if (this.ledgeSide === 'left') {
+          this.x = this.grabbedLedgePlat.x - 8;
+        } else {
+          this.x = this.grabbedLedgePlat.x + this.grabbedLedgePlat.width + 8;
+        }
+        this.y = this.grabbedLedgePlat.y + 22;
+      }
       this.anim.setFacing(this.facing);
+      this.anim.loop('Idle', 0.4);
       this.anim.update(dt);
       return;
     }
@@ -542,6 +603,23 @@ class Fighter {
       this._updateAttack(dt, opponent);
     }
 
+    // 🤼 Grab State Management
+    if (this.lavaBurnCooldown > 0) this.lavaBurnCooldown -= dt;
+
+    if (this.state === 'GRAB_START') {
+      this.grabStartupTimer -= dt;
+      if (this.grabStartupTimer > 0.03 && this.grabStartupTimer < 0.18 && opponent) {
+        this._checkGrabConnection(opponent);
+      }
+      if (this.actionLockTimer <= 0) {
+        this.state = 'IDLE';
+      }
+    } else if (this.state === 'GRABBING') {
+      this._updateGrabbing(dt, opponent);
+    } else if (this.state === 'GRABBED') {
+      this._updateGrabbed(dt);
+    }
+
     // Update Physics
     window.physicsEngine.updateFighter(this, stage, dt);
 
@@ -607,33 +685,82 @@ class Fighter {
     stage = stage || (window.game ? window.game.stage : null);
     dt = (typeof dt === 'number' && dt > 0) ? dt : (1 / 60);
 
+    // 🤼 INMOVILIZACIÓN TOTAL SI NOS TIENEN AGARRADOS:
+    if (this.state === 'GRABBED') {
+      // El rival nos tiene agarrados; el jugador solo puede machear teclas para intentar liberarse
+      if (
+        this.input.leftPressed || this.input.rightPressed ||
+        this.input.upPressed || this.input.downPressed ||
+        this.input.jumpPressed || this.input.attackPressed ||
+        this.input.specialPressed || this.input.shieldPressed
+      ) {
+        this.grabEscapeTimer -= 0.08;
+        if (window.particleManager) {
+          window.particleManager.spawnHitSparks(this.x, this.y - this.height * 0.5, 2, 'impact');
+        }
+      }
+      // Limpiar todas las teclas para no realizar saltos ni ataques al salir
+      this.input.leftPressed = false;
+      this.input.rightPressed = false;
+      this.input.upPressed = false;
+      this.input.downPressed = false;
+      this.input.jumpPressed = false;
+      this.input.attackPressed = false;
+      this.input.specialPressed = false;
+      this.input.shieldPressed = false;
+      return; // ¡NO PUEDE MOVERSE, ATACAR, SALTAR NI ESQUIVAR!
+    }
+
+    // 🤼 Si estamos agarrando al oponente, la selección direccional se gestiona en _updateGrabbing
+    if (this.state === 'GRABBING') {
+      return;
+    }
+
+    // 🧗 Si estamos subiendo del borde, esperar a que termine la animación suave
+    if (this.state === 'LEDGE_CLIMB') {
+      return;
+    }
+
     // 🧗 Handle LEDGE state recovery options:
-    // Salto de borde: [Espacio]
-    // Ataque de borde: [Z]
-    // Subir normal: [Arriba] o inclinación hacia el escenario
-    // Soltar borde: [Abajo] o inclinación hacia afuera
     if (this.state === 'LEDGE') {
-      if (this.input.jump || this.input.jumpPressed) {
+      // Si aún no ha transcurrido el tiempo mínimo de agarre, consumir inputs de recuperación acumulados
+      if (this.ledgeHangLockTimer > 0) {
+        this.input.jumpPressed = false;
+        this.input.attackPressed = false;
+        this.input.upPressed = false;
+        this.input.downPressed = false;
+        return;
+      }
+
+      // Salto de borde: [Espacio]
+      if (this.input.jumpPressed) {
         this.input.jumpPressed = false;
         this.performLedgeJump();
         return;
       }
-      if (this.input.attack || this.input.attackPressed) {
+      // Ataque de borde: [Z]
+      if (this.input.attackPressed) {
         this.input.attackPressed = false;
         this.performLedgeAttack();
         return;
       }
-      const isClimbDir = (this.ledgeSide === 'left' && (this.input.right || this.input.rightPressed)) ||
-                         (this.ledgeSide === 'right' && (this.input.left || this.input.leftPressed));
-      if (this.input.up || this.input.upPressed || isClimbDir) {
+      // Subir normal: [Arriba] o inclinación intencional hacia el escenario
+      const isClimbDirPressed = (this.ledgeSide === 'left' && this.input.rightPressed) ||
+                                (this.ledgeSide === 'right' && this.input.leftPressed);
+      if (this.input.upPressed || isClimbDirPressed) {
         this.input.upPressed = false;
+        this.input.rightPressed = false;
+        this.input.leftPressed = false;
         this.performLedgeClimb();
         return;
       }
-      const isDropDir = (this.ledgeSide === 'left' && (this.input.left || this.input.leftPressed)) ||
-                        (this.ledgeSide === 'right' && (this.input.right || this.input.rightPressed));
-      if (this.input.down || this.input.downPressed || isDropDir) {
+      // Soltar borde: [Abajo] o inclinación intencional hacia afuera
+      const isDropDirPressed = (this.ledgeSide === 'left' && this.input.leftPressed) ||
+                               (this.ledgeSide === 'right' && this.input.rightPressed);
+      if (this.input.downPressed || isDropDirPressed) {
         this.input.downPressed = false;
+        this.input.leftPressed = false;
+        this.input.rightPressed = false;
         this.dropLedge();
         return;
       }
@@ -702,6 +829,13 @@ class Fighter {
     // Shield is held rather than buffered: it cannot be used during attack recovery.
     if (this.input.shield && this.canAct()) return;
     if (!this.canAct()) return;
+
+    // 🤼 Grab Trigger: Pressing Shift (input.grabPressed)
+    if (this.input.grabPressed && this.canAct() && this.isGrounded) {
+      this.input.grabPressed = false;
+      this.attemptGrab();
+      return;
+    }
 
     // Direction Double-Tap Detection for Running (Dash) & Charged Smash Attacks (on ground only)
     if (this.isGrounded && this.canAct()) {
@@ -943,11 +1077,12 @@ class Fighter {
   // 🧗 AGARRE AL BORDE & RECUPERACIÓN (Ledge Grab & Recovery)
   // =========================================================================
   grabLedge(plat, side) {
-    if (this.state === 'RESPAWN' || this.state === 'LEDGE' || this.invulnTimer > 0) return;
+    if (this.state === 'RESPAWN' || this.state === 'LEDGE' || this.state === 'LEDGE_CLIMB' || this.invulnTimer > 0) return;
     this.state = 'LEDGE';
     this.ledgeSide = side;
     this.grabbedLedgePlat = plat;
-    this.ledgeTimer = 1.6; // Tiempo máximo colgado antes de subir automáticamente
+    this.ledgeTimer = 2.5; // Hasta 2.5s colgado antes de subir automáticamente
+    this.ledgeHangLockTimer = 0.35; // 350ms de agarre visible obligatorio (no teleport)
     this.invulnTimer = 1.0; // 1 segundo de invulnerabilidad
     this.actionLockTimer = 0.08;
     this.hitstun = 0;
@@ -960,18 +1095,34 @@ class Fighter {
     this.upSpecialUsed = false;
     this.airDodgeUsed = false;
 
-    // Posicionamiento preciso en el borde mirando hacia el interior del escenario
+    // Limpiar inputs residuales de la recuperación en el aire
+    this.input.up = false;
+    this.input.down = false;
+    this.input.left = false;
+    this.input.right = false;
+    this.input.jump = false;
+    this.input.attack = false;
+    this.input.special = false;
+    this.input.upPressed = false;
+    this.input.downPressed = false;
+    this.input.leftPressed = false;
+    this.input.rightPressed = false;
+    this.input.jumpPressed = false;
+    this.input.attackPressed = false;
+    this.input.specialPressed = false;
+
+    // Posicionamiento preciso: manos sujetando la esquina del borde
     if (side === 'left') {
-      this.x = plat.x - 6;
+      this.x = plat.x - 8;
       this.facing = 1;
     } else {
-      this.x = plat.x + plat.width + 6;
+      this.x = plat.x + plat.width + 8;
       this.facing = -1;
     }
-    this.y = plat.y + 24;
+    this.y = plat.y + 22;
 
     this.anim.setFacing(this.facing);
-    this.anim.loop('Walk', 0.4);
+    this.anim.loop('Idle', 0.4);
 
     if (window.soundEngine) {
       window.soundEngine.playSfx('ledge_grab');
@@ -988,7 +1139,7 @@ class Fighter {
     this.vx = this.facing * 4.2;
     this.isGrounded = false;
     this.invulnTimer = 0.22;
-    this.ledgeCooldown = 1.0; // Evita re-agarrarse inmediatamente
+    this.ledgeCooldown = 1.0;
     this.jumpsLeft = Math.max(0, this.maxJumps - 1);
     this.grabbedLedgePlat = null;
 
@@ -1004,28 +1155,30 @@ class Fighter {
   performLedgeAttack() {
     const plat = this.grabbedLedgePlat;
     if (plat) {
+      this.x = this.ledgeSide === 'left' ? plat.x + 18 : plat.x + plat.width - 18;
       this.y = plat.y;
+    } else {
+      this.x += this.facing * 24;
     }
-    this.x += this.facing * 24;
     this.isGrounded = true;
-    this.vx = 0;
+    this.vx = this.facing * 2.8;
     this.vy = 0;
-    this.invulnTimer = 0.25;
+    this.invulnTimer = 0.28;
     this.ledgeCooldown = 1.2;
     this.grabbedLedgePlat = null;
 
     const ledgeAtk = {
       name: 'Ataque de Borde (Ledge Attack)',
       anim: 'Attack',
-      animSpeed: 1.4,
+      animSpeed: 1.45,
       hitboxStart: 2,
       hitboxEnd: 9,
       offsetX: 24,
       offsetY: 20,
-      radius: 32,
-      damage: 8,
-      baseKnockback: 20,
-      knockbackScaling: 0.9,
+      radius: 34,
+      damage: 8.5,
+      baseKnockback: 22,
+      knockbackScaling: 0.95,
       angle: 40,
       type: 'normal',
       hitlag: 6
@@ -1037,7 +1190,7 @@ class Fighter {
     this.hasHitOpponent = false;
     this.attackCooldown = 0.25;
     this.anim.setAim('center');
-    this.anim.play('Attack', { speed: 1.4 }, () => {
+    this.anim.play('Attack', { speed: 1.45 }, () => {
       this.state = 'IDLE';
       this.currentAttack = null;
     });
@@ -1052,34 +1205,42 @@ class Fighter {
   }
 
   performLedgeClimb() {
+    this.state = 'LEDGE_CLIMB';
+    this.climbTimer = 0.22;
+    this.climbStartX = this.x;
+    this.climbStartY = this.y;
     const plat = this.grabbedLedgePlat;
     if (plat) {
-      this.y = plat.y;
+      this.climbTargetX = this.ledgeSide === 'left' ? plat.x + 22 : plat.x + plat.width - 22;
+      this.climbTargetY = plat.y;
+    } else {
+      this.climbTargetX = this.x + this.facing * 30;
+      this.climbTargetY = this.y - 22;
     }
-    this.x += this.facing * 28;
-    this.isGrounded = true;
-    this.vx = 0;
-    this.vy = 0;
-    this.state = 'IDLE';
-    this.invulnTimer = 0.35; // Frames de invulnerabilidad al subir
-    this.actionLockTimer = 0.12;
-    this.ledgeCooldown = 1.0;
-    this.grabbedLedgePlat = null;
-    this.anim.play('Walk', { speed: 1.8 });
+    this.invulnTimer = 0.35;
+    this.actionLockTimer = 0.22;
+    this.anim.play('Walk', { speed: 1.6 });
 
+    if (window.soundEngine) {
+      window.soundEngine.playSfx('dash');
+    }
     if (window.particleManager) {
-      window.particleManager.spawnSmoke(this.x, this.y, '#ffffff', 4);
+      window.particleManager.spawnSmoke(this.x, this.y, '#ffffff', 5);
       window.particleManager.spawnFloatingText(this.x, this.y - this.height - 10, 'Subir Borde [Arriba]', '#10b981', 13);
     }
   }
 
   dropLedge() {
     this.state = 'IDLE';
-    this.vy = 2.0;
-    this.vx = -this.facing * 1.5;
+    this.isGrounded = false;
+    this.vy = 2.5;
+    this.vx = -this.facing * 2.0;
     this.invulnTimer = 0;
-    this.ledgeCooldown = 0.6;
+    this.ledgeCooldown = 0.7;
     this.grabbedLedgePlat = null;
+    if (window.particleManager) {
+      window.particleManager.spawnSmoke(this.x, this.y, '#94a3b8', 4);
+    }
   }
 
   useActiveItem() {
@@ -1213,6 +1374,12 @@ class Fighter {
       isBasic,
       isProjectile
     };
+
+    // Aumento MUY ligero del pushback/baseKnockback en ataques básicos [Z] no-Smash (+15%)
+    // para que en porcentajes bajos no sea tan fácil spamearlos en bucle de combo infinito
+    if (isBasic && !finalHitbox.isSmash) {
+      finalHitbox.baseKnockback = Math.round((finalHitbox.baseKnockback || 10) * 1.15);
+    }
 
     // 1. Choice Band: +50% de daño y +25% knockback en ataques básicos [Z] y Smash
     if (this.heldItem === 'choice-band' && isBasic) {
@@ -1911,6 +2078,119 @@ class Fighter {
 
       ctx.restore();
     }
+
+    // 🤼 Grab Visual FX (Hand reach & Energetic Grip)
+    if (this.state === 'GRAB_START') {
+      ctx.save();
+      ctx.strokeStyle = '#facc15';
+      ctx.lineWidth = 2.5;
+      ctx.shadowColor = '#facc15';
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.arc(this.x + this.facing * (this.width * 0.45 + 14), this.y - this.height * 0.45, 18, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    } else if (this.state === 'GRABBING' && this.grabbedOpponent) {
+      ctx.save();
+      const opp = this.grabbedOpponent;
+      const timeLeft = Math.max(0, 2.0 - this.grabHoldTimer).toFixed(1);
+
+      // Energetic binding rings around opponent
+      const pulse = Math.sin(performance.now() * 0.015) * 3;
+      ctx.strokeStyle = '#facc15';
+      ctx.lineWidth = 2.5;
+      ctx.shadowColor = '#facc15';
+      ctx.shadowBlur = 12;
+      ctx.beginPath();
+      ctx.ellipse(opp.x, opp.y - opp.height * 0.5, 24 + pulse, 12, 0, 0, Math.PI * 2);
+      ctx.ellipse(opp.x, opp.y - opp.height * 0.35, 22 - pulse, 10, 0, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Grip beam connecting grabber to opponent
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 3;
+      ctx.shadowColor = '#38bdf8';
+      ctx.shadowBlur = 10;
+      ctx.beginPath();
+      ctx.moveTo(this.x, this.y - this.height * 0.5);
+      ctx.lineTo(opp.x, opp.y - opp.height * 0.5);
+      ctx.stroke();
+
+      // Directional Throw prompt & 2-second timer badge
+      ctx.font = 'bold 12px "Outfit", monospace, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = '#000000';
+      ctx.shadowBlur = 6;
+      ctx.fillText(`🤼 LANZAR: ⬆️ ⬇️ ⬅️ ➡️ (${timeLeft}s)`, this.x, this.y - this.height - 18);
+      ctx.restore();
+    }
+
+    // 🧗 Ledge Hang Visual Indicator
+    if (this.state === 'LEDGE') {
+      ctx.save();
+      const p = this.grabbedLedgePlat;
+      if (p) {
+        const edgeX = this.ledgeSide === 'left' ? p.x : p.x + p.width;
+        ctx.fillStyle = '#facc15';
+        ctx.shadowColor = '#facc15';
+        ctx.shadowBlur = 12;
+        ctx.beginPath();
+        ctx.arc(edgeX, p.y, 4 + Math.sin(performance.now() * 0.02) * 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.font = 'bold 11px "Outfit", monospace, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#38bdf8';
+      ctx.shadowColor = '#000000';
+      ctx.shadowBlur = 5;
+      ctx.fillText(`[Espacio] Salto · [Z] Ataque · [Arriba] Subir · [Abajo] Soltar`, this.x, this.y - this.height - 14);
+      ctx.restore();
+    }
+
+    // 🎯 Hitbox / Hurtbox Visualizer (Modo Entrenamiento Avanzado)
+    if (window.game && window.game.showHitboxes) {
+      ctx.save();
+
+      // 1. Hurtbox (Green)
+      const hurtboxes = this.getHurtboxes
+        ? this.getHurtboxes()
+        : [{ x: this.x, y: this.y - this.height * 0.5, radius: this.hurtboxRadius }];
+      for (const hb of hurtboxes) {
+        ctx.strokeStyle = '#22c55e';
+        ctx.fillStyle = 'rgba(34, 197, 94, 0.28)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(hb.x, hb.y, hb.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      // 2. Active Attack Hitbox (Red)
+      if (this.activeHitbox && (this.state === 'ATTACK' || this.state === 'SPECIAL')) {
+        ctx.strokeStyle = '#ef4444';
+        ctx.fillStyle = 'rgba(239, 68, 68, 0.42)';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(this.activeHitbox.x, this.activeHitbox.y, this.activeHitbox.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      // 3. Grab Hitbox (Yellow)
+      if (this.state === 'GRAB_START') {
+        ctx.strokeStyle = '#eab308';
+        ctx.fillStyle = 'rgba(234, 179, 8, 0.45)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(this.x + this.facing * (this.width * 0.45 + 14), this.y - this.height * 0.45, 28, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
   }
 
   breakShield() {
@@ -2154,6 +2434,254 @@ class Fighter {
           hitlag: 8,
           slashColor: '#facc15'
         };
+    }
+  }
+
+  // =========================================================================
+  // 🤼 SISTEMA DE AGARRES Y LANZAMIENTOS (Grabs & Directional Throws)
+  // =========================================================================
+  attemptGrab() {
+    if (!this.canAct() || this.state === 'GRAB_START' || this.state === 'GRABBING' || this.state === 'GRABBED') return;
+    this.state = 'GRAB_START';
+    this.grabStartupTimer = 0.22; // ~13 frames
+    this.actionLockTimer = 0.36;  // Whiff recovery time
+    this.vx *= 0.35;
+    this.anim.setAim('center');
+    this.anim.loop('Walk', 0.5);
+
+    if (window.soundEngine) {
+      window.soundEngine.playSfx('grab');
+    }
+    if (window.particleManager) {
+      window.particleManager.spawnHitSparks(this.x + this.facing * 20, this.y - this.height * 0.45, 4, 'impact');
+    }
+  }
+
+  _checkGrabConnection(opponent) {
+    if (!opponent || opponent.state === 'RESPAWN' || opponent.state === 'AIR_DODGE' || opponent.state === 'ROLL' || opponent.state === 'GRABBED' || opponent.invulnTimer > 0) return;
+
+    // Grab hitbox reaches in front of the fighter
+    const grabBox = {
+      x: this.x + this.facing * (this.width * 0.45 + 14),
+      y: this.y - this.height * 0.45,
+      radius: 28
+    };
+
+    const hurtboxes = opponent.getHurtboxes
+      ? opponent.getHurtboxes()
+      : [{ x: opponent.x, y: opponent.y - opponent.height * 0.5, radius: opponent.hurtboxRadius }];
+
+    for (const hb of hurtboxes) {
+      if (window.physicsEngine.checkHitboxCollision(grabBox, hb)) {
+        // Connected! Grab pierces shield completely!
+        this.state = 'GRABBING';
+        this.grabbedOpponent = opponent;
+        this.grabHoldTimer = 0;
+        this.actionLockTimer = 0;
+        this.vx = 0;
+
+        opponent.getGrabbedBy(this);
+
+        if (window.soundEngine) {
+          window.soundEngine.playSfx('grab');
+        }
+        if (window.particleManager) {
+          window.particleManager.spawnRadialBurst(opponent.x, opponent.y - opponent.height * 0.5, '#facc15', 'electric', 28);
+          window.particleManager.spawnFloatingText(opponent.x, opponent.y - opponent.height - 18, '¡AGARRE!', '#facc15', 18);
+        }
+        break;
+      }
+    }
+  }
+
+  getGrabbedBy(grabber) {
+    this.state = 'GRABBED';
+    this.grabber = grabber;
+    // El que agarra tiene 2 segundos completos para elegir la dirección del lanzamiento
+    this.grabEscapeTimer = 2.0 + (this.percent * 0.012);
+    this.vx = 0;
+    this.vy = 0;
+    this.hitstun = 0;
+    this.hitstop = 0;
+    this.actionLockTimer = 0;
+    this.anim.loop('Idle', 0.4);
+  }
+
+  _updateGrabbed(dt) {
+    if (!this.grabber || this.grabber.state !== 'GRABBING' || this.grabber.grabbedOpponent !== this) {
+      this.state = 'IDLE';
+      this.grabber = null;
+      return;
+    }
+
+    // Inmovilización total frente al luchador que nos agarra
+    this.x = this.grabber.x + this.grabber.facing * 28;
+    this.y = this.grabber.y;
+    this.vx = 0;
+    this.vy = 0;
+    this.facing = -this.grabber.facing;
+
+    this.grabEscapeTimer -= dt;
+    if (this.grabEscapeTimer <= 0) {
+      this.breakFreeFromGrab();
+    }
+  }
+
+  breakFreeFromGrab() {
+    const g = this.grabber;
+    this.state = 'IDLE';
+    this.grabber = null;
+    this.vx = (g ? g.facing : 1) * 4.5;
+    this.vy = -3;
+    this.invulnTimer = 0.25;
+
+    if (g) {
+      g.state = 'IDLE';
+      g.grabbedOpponent = null;
+      g.vx = -g.facing * 4.5;
+      g.actionLockTimer = 0.25;
+    }
+
+    if (window.soundEngine) window.soundEngine.playSfx('select');
+    if (window.particleManager) {
+      window.particleManager.spawnFloatingText(this.x, this.y - this.height - 12, '¡ESCAPE!', '#38bdf8', 15);
+    }
+  }
+
+  _updateGrabbing(dt, opponent) {
+    if (!this.grabbedOpponent || this.grabbedOpponent.state !== 'GRABBED') {
+      this.state = 'IDLE';
+      this.grabbedOpponent = null;
+      return;
+    }
+
+    this.grabHoldTimer += dt;
+    this.vx = 0;
+    this.vy = 0;
+
+    // 4 Lanzamientos direccionales (El jugador tiene 2 segundos para elegir)
+    // 1. Lanzamiento Arriba (⬆️)
+    if (this.input.upPressed || this.input.up) {
+      this.input.upPressed = false;
+      this.performThrow('up');
+      return;
+    }
+    // 2. Lanzamiento Abajo (⬇️)
+    if (this.input.downPressed || this.input.down) {
+      this.input.downPressed = false;
+      this.performThrow('down');
+      return;
+    }
+    // 3. Lanzamiento Adelante (Dirección hacia la que mira)
+    const isForward = (this.facing === 1 && (this.input.rightPressed || this.input.right)) ||
+                      (this.facing === -1 && (this.input.leftPressed || this.input.left));
+    if (isForward) {
+      this.input.rightPressed = false;
+      this.input.leftPressed = false;
+      this.performThrow('forward');
+      return;
+    }
+    // 4. Lanzamiento Atrás (Dirección opuesta a la que mira)
+    const isBack = (this.facing === 1 && (this.input.leftPressed || this.input.left)) ||
+                   (this.facing === -1 && (this.input.rightPressed || this.input.right));
+    if (isBack) {
+      this.input.leftPressed = false;
+      this.input.rightPressed = false;
+      this.performThrow('back');
+      return;
+    }
+
+    // 5. Pummel (Ataque Z mientras sostiene al oponente)
+    if (this.input.attackPressed) {
+      this.input.attackPressed = false;
+      if (this.pummelCooldown <= 0) {
+        this.pummelCooldown = 0.28;
+        this.grabbedOpponent.percent += 2.5;
+        this.hitstop = 4;
+        this.grabbedOpponent.hitstop = 4;
+        if (window.soundEngine) window.soundEngine.playSfx('hit_light');
+        if (window.particleManager) {
+          window.particleManager.spawnHitSparks(this.grabbedOpponent.x, this.grabbedOpponent.y - this.grabbedOpponent.height * 0.5, 5, 'impact');
+          window.particleManager.spawnFloatingText(this.grabbedOpponent.x, this.grabbedOpponent.y - this.grabbedOpponent.height - 10, '+2.5%', '#ef4444', 13);
+        }
+      }
+    }
+    if (this.pummelCooldown > 0) this.pummelCooldown -= dt;
+
+    // Timeout: Si pasan los 2 segundos completos sin pulsar dirección, ejecuta lanzamiento automático adelante
+    if (this.grabHoldTimer >= 2.0) {
+      this.performThrow('forward');
+    }
+  }
+
+  performThrow(direction) {
+    const opp = this.grabbedOpponent;
+    if (!opp) return;
+
+    this.state = 'ATTACK';
+    this.actionLockTimer = 0.28;
+    this.grabbedOpponent = null;
+    opp.grabber = null;
+
+    let dmg = 8;
+    let baseKb = 28;
+    let kbScale = 1.0;
+    let angle = 45;
+    let throwName = 'Forward Throw';
+
+    if (direction === 'up') {
+      dmg = 8.5;
+      baseKb = 28;
+      kbScale = 0.95;
+      angle = 88; // Launches almost straight up for aerial combos!
+      throwName = 'Up Throw ⬆️';
+      if (window.particleManager) {
+        window.particleManager.spawnRadialBurst(this.x, this.y - this.height * 0.5, '#38bdf8', 'electric', 35);
+      }
+    } else if (direction === 'down') {
+      dmg = 7.5;
+      baseKb = 20;
+      kbScale = 0.75;
+      angle = 70; // Bounces off floor diagonally for tech-chases and ground tilts
+      throwName = 'Down Throw ⬇️';
+      if (window.particleManager) {
+        window.particleManager.spawnSmoke(this.x, this.y, '#94a3b8', 12);
+      }
+    } else if (direction === 'back') {
+      this.facing = -this.facing; // Turn around!
+      this.anim.setFacing(this.facing);
+      dmg = 11.0;
+      baseKb = 34; // Lethal high knockback back-throw!
+      kbScale = 1.15;
+      angle = 42;
+      throwName = 'Back Throw ⬅️';
+      if (window.particleManager) {
+        window.particleManager.spawnRadialBurst(this.x, this.y - this.height * 0.5, '#f43f5e', 'slash', 40);
+      }
+    } else { // forward
+      dmg = 9.0;
+      baseKb = 29;
+      kbScale = 1.05;
+      angle = 40;
+      throwName = 'Forward Throw ➡️';
+      if (window.particleManager) {
+        window.particleManager.spawnRadialBurst(this.x, this.y - this.height * 0.5, '#f59e0b', 'impact', 35);
+      }
+    }
+
+    const throwHitbox = {
+      damage: dmg,
+      baseKnockback: baseKb,
+      knockbackScaling: kbScale,
+      angle: angle,
+      type: 'normal',
+      hitlag: 7
+    };
+
+    opp.takeHit(throwHitbox, this);
+    if (window.soundEngine) window.soundEngine.playSfx('throw');
+    if (window.particleManager) {
+      window.particleManager.spawnFloatingText(opp.x, opp.y - opp.height - 20, throwName, '#facc15', 18);
     }
   }
 
