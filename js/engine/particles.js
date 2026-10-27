@@ -7,6 +7,15 @@ class ParticleManager {
   constructor() {
     this.particles = [];
     this.lightningBolts = [];
+    this.screenFlashTimer = 0;
+    this.screenFlashDuration = 0;
+    this.screenFlashColor = '#ffffff';
+  }
+
+  triggerScreenFlash(color = '#ffffff', duration = 0.28) {
+    this.screenFlashColor = color;
+    this.screenFlashDuration = duration;
+    this.screenFlashTimer = duration;
   }
 
   update(dt) {
@@ -31,6 +40,14 @@ class ParticleManager {
       bolt.life -= dt;
       if (bolt.life <= 0) {
         this.lightningBolts.splice(i, 1);
+      }
+    }
+
+    // Update screen flash
+    if (this.screenFlashTimer > 0) {
+      this.screenFlashTimer -= dt;
+      if (this.screenFlashTimer <= 0) {
+        this.screenFlashTimer = 0;
       }
     }
   }
@@ -139,8 +156,115 @@ class ParticleManager {
         ctx.beginPath();
         ctx.arc(0, 0, r * 0.9, 0, Math.PI * 2);
         ctx.fill();
+      } else if (p.type === 'smash_blast_cross') {
+        const t = 1 - (p.life / p.maxLife);
+        const beamLen = p.size * (0.35 + t * 0.85);
+        const coreThick = (1 - t) * (p.thickness || 24);
+
+        ctx.shadowColor = p.glowColor || p.color;
+        ctx.shadowBlur = 28;
+
+        // 4 Cardinal energy beams
+        const cardinalAngles = [0, Math.PI * 0.5, Math.PI, Math.PI * 1.5];
+        for (const a of cardinalAngles) {
+          ctx.save();
+          ctx.rotate(a);
+
+          // Colored outer energy flare
+          ctx.fillStyle = p.color;
+          ctx.beginPath();
+          ctx.moveTo(0, -coreThick * 0.5);
+          ctx.lineTo(beamLen, 0);
+          ctx.lineTo(0, coreThick * 0.5);
+          ctx.closePath();
+          ctx.fill();
+
+          // White-hot inner core
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.moveTo(0, -coreThick * 0.22);
+          ctx.lineTo(beamLen * 0.88, 0);
+          ctx.lineTo(0, coreThick * 0.22);
+          ctx.closePath();
+          ctx.fill();
+
+          ctx.restore();
+        }
+
+        // 4 Diagonal secondary beams (45 deg)
+        const diagAngles = [Math.PI * 0.25, Math.PI * 0.75, Math.PI * 1.25, Math.PI * 1.75];
+        for (const a of diagAngles) {
+          ctx.save();
+          ctx.rotate(a);
+          ctx.fillStyle = p.color;
+          ctx.beginPath();
+          ctx.moveTo(0, -coreThick * 0.26);
+          ctx.lineTo(beamLen * 0.58, 0);
+          ctx.lineTo(0, coreThick * 0.26);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
+
+        // Blinding core sphere
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(0, 0, coreThick * 1.35, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (p.type === 'vine_whip') {
+        const t = 1 - (p.life / p.maxLife);
+        const wave = Math.sin(t * Math.PI) * 16 * p.facing;
+        const currentLen = p.length * Math.min(1.0, t * 1.6);
+        let angle = 0;
+        if (p.dir === 'up') angle = -Math.PI * 0.45;
+        else if (p.dir === 'down') angle = Math.PI * 0.42;
+        else angle = (p.facing === 1 ? -0.1 : Math.PI + 0.1);
+
+        ctx.strokeStyle = '#15803d'; // Verde oscuro de tallo
+        ctx.lineWidth = Math.max(2.5, 6.5 * (1 - t * 0.4));
+        ctx.lineCap = 'round';
+        ctx.shadowColor = '#22c55e';
+        ctx.shadowBlur = 12;
+
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        const midX = Math.cos(angle) * (currentLen * 0.5) - Math.sin(angle) * wave;
+        const midY = Math.sin(angle) * (currentLen * 0.5) + Math.cos(angle) * wave;
+        const tipX = Math.cos(angle) * currentLen;
+        const tipY = Math.sin(angle) * currentLen;
+        ctx.quadraticCurveTo(midX, midY, tipX, tipY);
+        ctx.stroke();
+
+        // Núcleo brillante esmeralda
+        ctx.strokeStyle = '#4ade80';
+        ctx.lineWidth = Math.max(1.2, 3.0 * (1 - t * 0.5));
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.quadraticCurveTo(midX, midY, tipX, tipY);
+        ctx.stroke();
+
+        // Hojas y espinas orgánicas a lo largo del látigo
+        const leafPositions = [0.3, 0.65, 0.98];
+        for (const lp of leafPositions) {
+          const lx = Math.cos(angle) * (currentLen * lp);
+          const ly = Math.sin(angle) * (currentLen * lp);
+          ctx.fillStyle = '#22c55e';
+          ctx.beginPath();
+          ctx.arc(lx, ly, 3.8 * (1 - t * 0.3), 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
 
+      ctx.restore();
+    }
+
+    // Full screen comic flash overlay
+    if (this.screenFlashTimer > 0 && this.screenFlashDuration > 0) {
+      const alpha = (this.screenFlashTimer / this.screenFlashDuration) * 0.55;
+      ctx.save();
+      ctx.fillStyle = this.screenFlashColor || '#ffffff';
+      ctx.globalAlpha = alpha;
+      ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
       ctx.restore();
     }
   }
@@ -258,53 +382,97 @@ class ParticleManager {
   }
 
   spawnBlastKO(x, y, color = '#ff3366') {
-    // Massive blast ring
+    const canvasW = (window.game && window.game.width) ? window.game.width : 1024;
+    const canvasH = (window.game && window.game.height) ? window.game.height : 576;
+
+    // Clamping coordinates to screen border: The Smash explosion is ALWAYS in full view!
+    const bx = Math.max(34, Math.min(canvasW - 34, x));
+    const by = Math.max(34, Math.min(canvasH - 34, y));
+
+    // Screen Shake & Screen Flash (Smash Bros impact)
+    if (window.game && typeof window.game.triggerScreenShake === 'function') {
+      window.game.triggerScreenShake(24, 0.48);
+    }
+    this.triggerScreenFlash(color, 0.28);
+
+    // Giant Smash Cross Energy Beam Star
+    this.particles.push({
+      type: 'smash_blast_cross',
+      x: bx,
+      y: by,
+      vx: 0,
+      vy: 0,
+      size: 420,
+      thickness: 26,
+      color: color,
+      glowColor: '#ffffff',
+      life: 0.65,
+      maxLife: 0.65
+    });
+
+    // Massive Expanding Shock Rings
     this.particles.push({
       type: 'ring',
-      x: x,
-      y: y,
+      x: bx,
+      y: by,
+      vx: 0,
+      vy: 0,
+      size: 70,
+      lineWidth: 12,
+      color: '#ffffff',
+      life: 0.70,
+      maxLife: 0.70
+    });
+
+    this.particles.push({
+      type: 'ring',
+      x: bx,
+      y: by,
       vx: 0,
       vy: 0,
       size: 45,
       lineWidth: 8,
-      color: '#ffffff',
-      life: 0.6,
-      maxLife: 0.6
+      color: color,
+      life: 0.60,
+      maxLife: 0.60
     });
 
     this.particles.push({
       type: 'ring',
-      x: x,
-      y: y,
+      x: bx,
+      y: by,
       vx: 0,
       vy: 0,
-      size: 25,
+      size: 30,
       lineWidth: 6,
-      color: color,
-      life: 0.5,
-      maxLife: 0.5
+      color: '#facc15',
+      life: 0.50,
+      maxLife: 0.50
     });
 
-    // 40 radiant sparks
-    for (let i = 0; i < 40; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = 5 + Math.random() * 16;
+    // 55 radiant high-velocity sparks directed into/across the arena
+    const inAngle = Math.atan2((canvasH * 0.5) - by, (canvasW * 0.5) - bx);
+    for (let i = 0; i < 55; i++) {
+      const angle = inAngle + (Math.random() - 0.5) * Math.PI * 1.5;
+      const speed = 7 + Math.random() * 22;
       this.particles.push({
         type: 'spark',
-        x: x,
-        y: y,
+        x: bx,
+        y: by,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
         rot: angle,
-        rotSpeed: (Math.random() - 0.5) * 0.5,
-        size: 5 + Math.random() * 6,
-        color: Math.random() < 0.5 ? '#ffffff' : color,
-        life: 0.5 + Math.random() * 0.4,
-        maxLife: 0.9,
-        friction: 0.95
+        rotSpeed: (Math.random() - 0.5) * 0.6,
+        size: 5 + Math.random() * 7,
+        color: Math.random() < 0.4 ? '#ffffff' : (Math.random() < 0.5 ? '#facc15' : color),
+        life: 0.55 + Math.random() * 0.4,
+        maxLife: 0.95,
+        friction: 0.94
       });
     }
 
+    // Comic "¡FUERA!" floating impact badge at the blast edge
+    this.spawnFloatingText(bx, by > canvasH * 0.5 ? by - 36 : by + 24, '💥 ¡FUERA!', '#ffffff', 30);
   }
 
   spawnFloatingText(x, y, text, color = '#ffffff', fontSize = 18) {
@@ -433,6 +601,24 @@ class ParticleManager {
     }
   }
 
+  spawnVineWhip(x, y, dir, facing, length = 68) {
+    let spawnX = x + (dir === 'up' ? 6 * facing : dir === 'down' ? 10 * facing : 22 * facing);
+    let spawnY = y - (dir === 'up' ? 36 : dir === 'down' ? 6 : 20);
+
+    this.particles.push({
+      type: 'vine_whip',
+      x: spawnX,
+      y: spawnY,
+      dir: dir,
+      facing: facing,
+      length: length,
+      life: 0.20,
+      maxLife: 0.20
+    });
+
+    this.spawnMeleeSlash(x, y, dir, facing, '#22c55e', 'grass', length * 0.65, dir === 'down');
+  }
+
   spawnRadialBurst(x, y, color = '#ffd700', type = 'electric', radius = 48) {
     this.particles.push({
       type: 'radial_dome',
@@ -440,7 +626,11 @@ class ParticleManager {
       y: y,
       radius: radius,
       color: color,
-      fillColor: type === 'electric' ? 'rgba(0, 229, 255, 0.18)' : 'rgba(52, 211, 153, 0.2)',
+      fillColor: type === 'electric' 
+        ? 'rgba(0, 229, 255, 0.18)' 
+        : type === 'poison'
+        ? 'rgba(168, 85, 247, 0.28)'
+        : 'rgba(52, 211, 153, 0.2)',
       life: 0.28,
       maxLife: 0.28
     });
@@ -455,6 +645,13 @@ class ParticleManager {
       for (let i = 0; i < 8; i++) {
         const ang = (i / 8) * Math.PI * 2;
         this.spawnRazorLeaves(x, y, Math.cos(ang) * 4, Math.sin(ang) * 4, 1);
+      }
+    } else if (type === 'poison') {
+      for (let i = 0; i < 8; i++) {
+        const ang = (i / 8) * Math.PI * 2;
+        const dist = radius * (0.35 + Math.random() * 0.5);
+        this.spawnSmoke(x + Math.cos(ang) * dist, y + Math.sin(ang) * dist, '#a855f7', 6);
+        this.spawnHitSparks(x + Math.cos(ang) * dist, y + Math.sin(ang) * dist, 1, 'poison');
       }
     }
   }

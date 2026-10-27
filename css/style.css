@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&family=Pixelify+Sans:wght@500;700&family=Inter:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Outfit:wght@400;600;800;900&family=Pixelify+Sans:wght@500;700&family=Inter:wght@400;500;700&display=swap');
 
 :root {
   --bg-dark: #0a0e17;
@@ -842,6 +842,28 @@ body {
   font-weight: 700;
 }
 
+.roster-card-weight {
+  font-size: 10px;
+  font-weight: 700;
+  color: #94a3b8;
+  margin-top: 3px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(15, 23, 42, 0.7);
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.fighter-weight-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+  letter-spacing: 0.3px;
+  margin-top: 1px;
+}
+
 /* Difficulty Selector Cards */
 .diff-select-row {
   display: grid;
@@ -1462,14 +1484,15 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  background: rgba(15, 23, 42, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 6px;
   padding: 2px 7px;
   margin-top: 4px;
   font-size: 10.5px;
   font-weight: 700;
   color: #f8fafc;
+  transition: all 0.2s ease;
 }
 
 .item-hud-badge img {
@@ -1478,4 +1501,783 @@ body {
   object-fit: contain;
   image-rendering: pixelated;
 }
+
+.item-hud-badge.item-ready {
+  background: rgba(16, 185, 129, 0.25);
+  border-color: #10b981;
+  color: #a7f3d0;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.35);
+  animation: pulseItemReady 1.6s infinite ease-in-out;
+}
+
+@keyframes pulseItemReady {
+  0%, 100% { box-shadow: 0 0 8px rgba(16, 185, 129, 0.3); }
+  50% { box-shadow: 0 0 14px rgba(16, 185, 129, 0.65); transform: scale(1.02); }
+}
+
+.item-hud-badge.item-cooldown {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #fca5a5;
+}
+
+.item-hud-badge.item-exhausted {
+  opacity: 0.55;
+  filter: grayscale(60%);
+  border-color: rgba(148, 163, 184, 0.25);
+  color: #94a3b8;
+}
+
+.item-hud-badge.item-active {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: #38bdf8;
+  color: #bae6fd;
+}
+
+/* Mochila Pokémon Categories UI */
+.item-category-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.item-tab-pill {
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9999px;
+  padding: 4px 11px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.item-tab-pill:hover {
+  background: rgba(51, 65, 85, 0.9);
+  color: #fff;
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+.item-tab-pill.active {
+  background: linear-gradient(135deg, rgba(2, 132, 199, 0.5), rgba(15, 23, 42, 0.9));
+  border-color: #38bdf8;
+  color: #38bdf8;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.35);
+}
+
+.items-category-container {
+  max-height: 290px;
+  overflow-y: auto;
+  padding-right: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.items-category-container::-webkit-scrollbar {
+  width: 5px;
+}
+.items-category-container::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.item-category-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.item-category-group.hidden {
+  display: none !important;
+}
+
+.item-category-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  border-left: 3px solid #38bdf8;
+}
+
+.cat-icon {
+  font-size: 13px;
+}
+
+.cat-name {
+  font-size: 11px;
+  font-weight: 800;
+  color: #f1f5f9;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.cat-badge {
+  margin-left: auto;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+}
+
+.active-item-hint {
+  font-size: 11px;
+  font-weight: 700;
+  color: #38bdf8;
+  text-transform: none;
+  margin-left: auto;
+}
+
+/* --- Real-Time FPS Counter Badge --- */
+.fps-counter-badge {
+  position: absolute;
+  top: 14px;
+  left: 16px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-family: 'Outfit', monospace, sans-serif;
+  font-size: 13px;
+  font-weight: 800;
+  color: #38bdf8;
+  pointer-events: none;
+  z-index: 25;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  letter-spacing: 0.5px;
+  transition: opacity 0.25s ease;
+}
+
+.fps-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+  animation: pulseDot 2s infinite ease-in-out;
+}
+
+@keyframes pulseDot {
+  0%, 100% { opacity: 0.8; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+/* --- Graphics & FPS Presets Layout --- */
+.graphics-presets-row,
+.fps-presets-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.graphics-presets-row .btn-deck,
+.fps-presets-row .btn-deck {
+  flex: 1 1 calc(50% - 8px);
+  min-width: 140px;
+  font-size: 12px;
+  padding: 8px 12px;
+  text-align: center;
+}
+
+/* ==========================================================================
+   UPDATE 1: RETRO ARCADE STYLES, START SCREEN & DIFFICULTY SLIDER
+   ========================================================================== */
+
+.retro-font {
+  font-family: 'Press Start 2P', monospace, sans-serif !important;
+  letter-spacing: 0.5px;
+}
+
+/* --- Start Screen Overlay (Menú de Inicio) --- */
+.start-screen-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: radial-gradient(circle at center, rgba(15, 23, 42, 0.94) 0%, rgba(3, 7, 18, 0.98) 100%);
+  backdrop-filter: blur(20px);
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.35s ease, visibility 0.35s ease;
+}
+
+.start-screen-overlay.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.start-screen-content {
+  max-width: 820px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  background: rgba(18, 26, 44, 0.85);
+  border: 2px solid rgba(56, 189, 248, 0.4);
+  border-radius: 20px;
+  padding: 36px 32px 28px;
+  box-shadow: 0 0 50px rgba(56, 189, 248, 0.2), 0 20px 40px rgba(0, 0, 0, 0.75);
+  position: relative;
+  overflow: hidden;
+}
+
+.start-screen-content::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #facc15, #f43f5e, #38bdf8, #a855f7, #10b981);
+}
+
+.start-screen-badge {
+  font-size: 10px;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.14);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  padding: 6px 14px;
+  border-radius: 20px;
+  margin-bottom: 16px;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.25);
+}
+
+.start-screen-title {
+  font-size: 46px;
+  font-weight: 900;
+  letter-spacing: -1px;
+  margin-bottom: 8px;
+  line-height: 1.1;
+}
+
+.poke-glow {
+  color: #facc15;
+  text-shadow: 0 0 25px rgba(250, 204, 21, 0.6), 0 0 50px rgba(250, 204, 21, 0.3);
+}
+
+.fighters-glow {
+  color: #38bdf8;
+  text-shadow: 0 0 25px rgba(56, 189, 248, 0.6), 0 0 50px rgba(56, 189, 248, 0.3);
+}
+
+.start-screen-subtitle {
+  font-size: 15px;
+  color: #94a3b8;
+  margin-bottom: 24px;
+  font-weight: 500;
+}
+
+/* Roster Showcase on Start Screen */
+.start-screen-roster {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 28px;
+  flex-wrap: wrap;
+  padding: 12px 18px;
+  background: rgba(10, 15, 29, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+}
+
+.start-roster-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.start-roster-item:hover {
+  transform: translateY(-4px) scale(1.05);
+  border-color: rgba(56, 189, 248, 0.5);
+  background: rgba(56, 189, 248, 0.08);
+}
+
+.start-roster-sprite {
+  width: 52px;
+  height: 52px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.5));
+}
+
+.start-roster-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: #cbd5e1;
+}
+
+.new-fighter-showcase {
+  border-color: rgba(244, 114, 182, 0.6) !important;
+  background: rgba(244, 114, 182, 0.1) !important;
+  box-shadow: 0 0 16px rgba(244, 114, 182, 0.3);
+}
+
+.new-pill {
+  position: absolute;
+  top: -8px;
+  right: -6px;
+  background: linear-gradient(135deg, #f43f5e, #ec4899);
+  color: #fff;
+  font-size: 7px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  box-shadow: 0 0 8px #f43f5e;
+  animation: pulseDot 1.5s infinite;
+}
+
+/* Start Screen Menu Buttons */
+.start-screen-menu {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+  width: 100%;
+  max-width: 680px;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 650px) {
+  .start-screen-menu {
+    grid-template-columns: 1fr;
+  }
+}
+
+.start-menu-btn {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  background: rgba(24, 34, 58, 0.7);
+  border: 1.5px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  color: #fff;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.start-menu-btn:hover {
+  transform: translateY(-2px);
+  border-color: rgba(56, 189, 248, 0.6);
+  background: rgba(30, 45, 80, 0.85);
+  box-shadow: 0 6px 20px rgba(56, 189, 248, 0.25);
+}
+
+.start-menu-btn .btn-icon {
+  font-size: 24px;
+}
+
+.start-menu-btn .btn-text-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.start-menu-btn .btn-main-title {
+  font-size: 11px;
+  color: #f8fafc;
+  line-height: 1.2;
+}
+
+.start-menu-btn .btn-sub-desc {
+  font-size: 11px;
+  color: #94a3b8;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 500;
+}
+
+.start-btn-primary {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.25), rgba(245, 158, 11, 0.25)) !important;
+  border-color: #f59e0b !important;
+  box-shadow: 0 0 20px rgba(245, 158, 11, 0.3) !important;
+}
+
+.start-btn-primary:hover {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.45), rgba(245, 158, 11, 0.45)) !important;
+  box-shadow: 0 0 30px rgba(245, 158, 11, 0.5) !important;
+}
+
+.start-btn-primary .btn-main-title {
+  color: #facc15 !important;
+}
+
+.start-btn-changelog {
+  border-color: rgba(244, 114, 182, 0.5);
+}
+
+.start-btn-changelog .btn-main-title {
+  color: #f472b6;
+}
+
+.start-screen-footer {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 8px;
+}
+
+/* --- Compact Retro Match Setup Modal --- */
+.retro-setup-modal {
+  max-width: 860px !important;
+  padding: 20px 24px !important;
+  background: #0d1322 !important;
+  border: 2px solid #38bdf8 !important;
+  box-shadow: 0 0 35px rgba(56, 189, 248, 0.25), 0 20px 50px rgba(0, 0, 0, 0.8) !important;
+}
+
+.btn-compact-retro {
+  background: rgba(30, 41, 59, 0.9);
+  color: #facc15;
+  border: 1px solid rgba(250, 204, 21, 0.4);
+  font-family: 'Press Start 2P', monospace, sans-serif;
+  font-size: 9px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-compact-retro:hover {
+  background: rgba(250, 204, 21, 0.2);
+  border-color: #facc15;
+}
+
+/* Difficulty 1 to 9 Slider */
+.difficulty-slider-container {
+  background: rgba(15, 23, 42, 0.7);
+  padding: 14px 18px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.difficulty-live-badge {
+  font-size: 11px;
+  color: #facc15;
+  background: rgba(250, 204, 21, 0.12);
+  border: 1px solid rgba(250, 204, 21, 0.35);
+  padding: 4px 10px;
+  border-radius: 6px;
+  box-shadow: 0 0 10px rgba(250, 204, 21, 0.2);
+}
+
+.difficulty-slider {
+  width: 100%;
+  accent-color: #38bdf8;
+  height: 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.slider-ticks-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #64748b;
+  font-weight: 700;
+  padding: 0 2px;
+}
+
+.difficulty-guide-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.diff-chip {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+}
+
+.chip-green {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.chip-yellow {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+.chip-orange {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.chip-red {
+  background: rgba(168, 85, 247, 0.2);
+  color: #c084fc;
+  border-color: rgba(168, 85, 247, 0.4);
+  box-shadow: 0 0 8px rgba(168, 85, 247, 0.3);
+}
+
+/* --- Changelog Modal Styling --- */
+.changelog-modal-content {
+  max-width: 760px !important;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.changelog-badge-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.cl-ver {
+  font-size: 11px;
+  color: #38bdf8;
+}
+
+.cl-badge {
+  background: #f43f5e;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 900;
+  padding: 3px 8px;
+  border-radius: 4px;
+  letter-spacing: 1px;
+}
+
+.changelog-section {
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin-bottom: 14px;
+}
+
+.cl-sec-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: #f8fafc;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cl-list {
+  list-style: disc inside;
+  font-size: 13px;
+  color: #94a3b8;
+  line-height: 1.6;
+}
+
+.cl-list li {
+  margin-bottom: 6px;
+}
+
+.cl-list ul {
+  list-style: circle inside;
+  margin-left: 18px;
+  margin-top: 4px;
+}
+
+/* =========================================================================
+ * SMASH BROS MULTI-STEP MENU SYSTEM (Rules -> Stage -> Fighters)
+ * ========================================================================= */
+.setup-steps-breadcrumbs {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 8px 16px;
+  margin-bottom: 16px;
+}
+
+.step-crumb {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.step-crumb .crumb-num {
+  background: rgba(255, 255, 255, 0.1);
+  color: #94a3b8;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+}
+
+.step-crumb:hover {
+  color: #e2e8f0;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.step-crumb.active {
+  color: #facc15;
+  background: rgba(250, 204, 21, 0.12);
+  border: 1px solid rgba(250, 204, 21, 0.35);
+  box-shadow: 0 0 12px rgba(250, 204, 21, 0.2);
+}
+
+.step-crumb.active .crumb-num {
+  background: #facc15;
+  color: #0f172a;
+  font-weight: 900;
+}
+
+.step-crumb-sep {
+  color: #475569;
+  font-size: 10px;
+}
+
+.setup-step-screen {
+  display: none;
+  animation: fadeInStep 0.22s ease-out;
+}
+
+.setup-step-screen.active {
+  display: block;
+}
+
+@keyframes fadeInStep {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.step-screen-title {
+  font-size: 12px;
+  color: #38bdf8;
+  margin-bottom: 4px;
+}
+
+.step-screen-desc {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-bottom: 14px;
+}
+
+/* Rule chips */
+.rule-chips-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rule-chip {
+  background: rgba(30, 41, 59, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.rule-chip:hover {
+  background: rgba(51, 65, 85, 0.95);
+  border-color: #38bdf8;
+  color: #ffffff;
+}
+
+.rule-chip.active {
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.25), rgba(99, 102, 241, 0.25));
+  border-color: #38bdf8;
+  color: #38bdf8;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.25);
+}
+
+.step-nav-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.btn-step-prev {
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #cbd5e1;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-step-prev:hover {
+  background: rgba(51, 65, 85, 0.95);
+  color: #ffffff;
+}
+
+.btn-step-next {
+  background: linear-gradient(135deg, #38bdf8, #6366f1);
+  border: none;
+  color: #ffffff;
+  padding: 10px 22px;
+  border-radius: 8px;
+  font-size: 11px;
+  cursor: pointer;
+  font-weight: 800;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.35);
+  transition: all 0.2s ease;
+}
+
+.btn-step-next:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.55);
+}
+
+
 

@@ -37,6 +37,33 @@ class GameHUD {
     this.victoryDamageEl = document.getElementById('victory-damage-val');
   }
 
+  updateFPS(fps, target, showCounter = true) {
+    const badge = document.getElementById('fps-counter-badge');
+    const valEl = document.getElementById('fps-val');
+    const dotEl = document.getElementById('fps-dot');
+    if (!badge || !valEl) return;
+
+    if (!showCounter) {
+      badge.style.display = 'none';
+      return;
+    }
+    badge.style.display = 'flex';
+    valEl.innerText = `${fps}`;
+
+    if (dotEl) {
+      if (fps >= 120) {
+        dotEl.style.background = '#38bdf8';
+        dotEl.style.boxShadow = '0 0 8px #38bdf8';
+      } else if (fps >= 55) {
+        dotEl.style.background = '#10b981';
+        dotEl.style.boxShadow = '0 0 8px #10b981';
+      } else {
+        dotEl.style.background = '#f59e0b';
+        dotEl.style.boxShadow = '0 0 8px #f59e0b';
+      }
+    }
+  }
+
   showMoveBanner(moveName, type = 'normal') {
     if (!this.moveBannerEl || !this.moveBannerTextEl) return;
     this.moveBannerTextEl.innerText = moveName;
@@ -103,6 +130,26 @@ class GameHUD {
       } else if (pBadge) {
         pBadge.style.display = 'none';
       }
+
+      // Plusle KO respawn badge for Player
+      let pPlusleBadge = document.getElementById('player-plusle-ko-badge');
+      if (player.partner && player.partner.respawnTimer > 0) {
+        if (!pPlusleBadge && this.playerCardEl) {
+          pPlusleBadge = document.createElement('div');
+          pPlusleBadge.id = 'player-plusle-ko-badge';
+          pPlusleBadge.className = 'status-hud-badge';
+          pPlusleBadge.style.background = 'rgba(244, 63, 94, 0.25)';
+          pPlusleBadge.style.borderColor = '#f43f5e';
+          pPlusleBadge.style.color = '#f43f5e';
+          this.playerCardEl.appendChild(pPlusleBadge);
+        }
+        if (pPlusleBadge) {
+          pPlusleBadge.innerText = `⏳ Plusle KO (${player.partner.respawnTimer.toFixed(1)}s)`;
+          pPlusleBadge.style.display = 'block';
+        }
+      } else if (pPlusleBadge) {
+        pPlusleBadge.style.display = 'none';
+      }
     }
 
     // 2. Update Dummy / CPU %
@@ -159,6 +206,26 @@ class GameHUD {
       } else if (dBadge) {
         dBadge.style.display = 'none';
       }
+
+      // Plusle KO respawn badge for Dummy
+      let dPlusleBadge = document.getElementById('dummy-plusle-ko-badge');
+      if (dummy.partner && dummy.partner.respawnTimer > 0) {
+        if (!dPlusleBadge && this.dummyCardEl) {
+          dPlusleBadge = document.createElement('div');
+          dPlusleBadge.id = 'dummy-plusle-ko-badge';
+          dPlusleBadge.className = 'status-hud-badge';
+          dPlusleBadge.style.background = 'rgba(244, 63, 94, 0.25)';
+          dPlusleBadge.style.borderColor = '#f43f5e';
+          dPlusleBadge.style.color = '#f43f5e';
+          this.dummyCardEl.appendChild(dPlusleBadge);
+        }
+        if (dPlusleBadge) {
+          dPlusleBadge.innerText = `⏳ Plusle KO (${dummy.partner.respawnTimer.toFixed(1)}s)`;
+          dPlusleBadge.style.display = 'block';
+        }
+      } else if (dPlusleBadge) {
+        dPlusleBadge.style.display = 'none';
+      }
     }
 
     // 3. Update Stocks
@@ -198,6 +265,10 @@ class GameHUD {
         this.comboDisplayEl.classList.remove('visible');
       }
     }
+
+    // 5. Update Held Items (potions charges, cooldown, balloons, etc.)
+    this._updateItemHUD(player, 'player');
+    this._updateItemHUD(dummy, 'dummy');
   }
 
   setGameModeUI(gameMode) {
@@ -297,23 +368,20 @@ class GameHUD {
       }
 
       // Player Item Badge
-      let pItemBadge = document.getElementById('player-item-badge');
-      if (player.heldItem && player.heldItem !== 'none' && window.POKEMON_ITEMS) {
-        const itemDef = window.POKEMON_ITEMS[player.heldItem];
-        if (itemDef) {
-          if (!pItemBadge && this.playerCardEl) {
-            pItemBadge = document.createElement('div');
-            pItemBadge.id = 'player-item-badge';
-            pItemBadge.className = 'item-hud-badge';
-            this.playerCardEl.appendChild(pItemBadge);
-          }
-          if (pItemBadge) {
-            pItemBadge.innerHTML = `<img src="${itemDef.icon}" alt="${itemDef.name}"><span>${itemDef.name}</span>`;
-            pItemBadge.style.display = 'inline-flex';
-          }
-        }
-      } else if (pItemBadge) {
-        pItemBadge.style.display = 'none';
+      this._updateItemHUD(player, 'player');
+
+      // Player Weight Badge
+      let pWeightTag = document.getElementById('player-weight-tag');
+      const pKg = player.pokedexWeight || player.weight || 6.0;
+      const pCat = player.weightCategory || 'Medio';
+      if (!pWeightTag && this.playerNameEl && this.playerNameEl.parentElement) {
+        pWeightTag = document.createElement('div');
+        pWeightTag.id = 'player-weight-tag';
+        pWeightTag.className = 'fighter-weight-badge';
+        this.playerNameEl.parentElement.appendChild(pWeightTag);
+      }
+      if (pWeightTag) {
+        pWeightTag.innerText = `⚖️ ${pKg} kg · ${pCat}`;
       }
     }
     if (this.dummyNameEl && dummy) {
@@ -336,25 +404,106 @@ class GameHUD {
       }
 
       // Dummy Item Badge
-      let dItemBadge = document.getElementById('dummy-item-badge');
-      if (dummy.heldItem && dummy.heldItem !== 'none' && window.POKEMON_ITEMS) {
-        const itemDef = window.POKEMON_ITEMS[dummy.heldItem];
-        if (itemDef) {
-          if (!dItemBadge && this.dummyCardEl) {
-            dItemBadge = document.createElement('div');
-            dItemBadge.id = 'dummy-item-badge';
-            dItemBadge.className = 'item-hud-badge';
-            this.dummyCardEl.appendChild(dItemBadge);
-          }
-          if (dItemBadge) {
-            dItemBadge.innerHTML = `<img src="${itemDef.icon}" alt="${itemDef.name}"><span>${itemDef.name}</span>`;
-            dItemBadge.style.display = 'inline-flex';
+      this._updateItemHUD(dummy, 'dummy');
+
+      // Dummy Weight Badge
+      let dWeightTag = document.getElementById('dummy-weight-tag');
+      const dKg = dummy.pokedexWeight || dummy.weight || 6.0;
+      const dCat = dummy.weightCategory || 'Medio';
+      if (!dWeightTag && this.dummyNameEl && this.dummyNameEl.parentElement) {
+        dWeightTag = document.createElement('div');
+        dWeightTag.id = 'dummy-weight-tag';
+        dWeightTag.className = 'fighter-weight-badge';
+        this.dummyNameEl.parentElement.appendChild(dWeightTag);
+      }
+      if (dWeightTag) {
+        dWeightTag.innerText = `⚖️ ${dKg} kg · ${dCat}`;
+      }
+
+      // Rebuild Stock Pills dynamically according to configured stocks
+      if (this.dummyStocksEl && dummy.stocks !== undefined) {
+        this.dummyStocksEl.innerHTML = '';
+        if (dummy.stocks <= 10) {
+          for (let i = 0; i < dummy.stocks; i++) {
+            const pill = document.createElement('div');
+            pill.className = 'stock-pill stock-pill-cpu';
+            this.dummyStocksEl.appendChild(pill);
           }
         }
-      } else if (dItemBadge) {
-        dItemBadge.style.display = 'none';
       }
     }
+
+    // Rebuild Stock Pills for Player
+    if (this.playerStocksEl && player && player.stocks !== undefined) {
+      this.playerStocksEl.innerHTML = '';
+      if (player.stocks <= 10) {
+        for (let i = 0; i < player.stocks; i++) {
+          const pill = document.createElement('div');
+          pill.className = 'stock-pill';
+          this.playerStocksEl.appendChild(pill);
+        }
+      }
+    }
+  }
+
+  _updateItemHUD(fighter, prefix) {
+    if (!fighter) return;
+    const badgeId = `${prefix}-item-badge`;
+    let badge = document.getElementById(badgeId);
+    const cardEl = prefix === 'player' ? this.playerCardEl : this.dummyCardEl;
+
+    if (!fighter.heldItem || fighter.heldItem === 'none') {
+      if (badge) badge.style.display = 'none';
+      return;
+    }
+
+    const itemDef = window.POKEMON_ITEMS ? window.POKEMON_ITEMS[fighter.heldItem] : null;
+    if (!itemDef) {
+      if (badge) badge.style.display = 'none';
+      return;
+    }
+
+    if (!badge && cardEl) {
+      badge = document.createElement('div');
+      badge.id = badgeId;
+      badge.className = 'item-hud-badge';
+      cardEl.appendChild(badge);
+    }
+    if (!badge) return;
+
+    badge.style.display = 'inline-flex';
+
+    let statusText = itemDef.name;
+    let extraClass = '';
+
+    if (fighter.heldItem === 'potion' || fighter.heldItem === 'super-potion' || fighter.heldItem === 'hyper-potion') {
+      if (fighter.itemCharges <= 0) {
+        statusText = `${itemDef.name} (0)`;
+        extraClass = 'item-exhausted';
+      } else if (fighter.itemCooldown > 0) {
+        statusText = `${itemDef.name} (${fighter.itemCharges}) ⏳${Math.ceil(fighter.itemCooldown)}s`;
+        extraClass = 'item-cooldown';
+      } else {
+        const keyHint = prefix === 'player' ? ' [1]' : '';
+        statusText = `${itemDef.name} (${fighter.itemCharges})${keyHint}`;
+        extraClass = 'item-ready';
+      }
+    } else if (fighter.heldItem === 'oran-berry') {
+      const uses = fighter.oranBerryUsesLeft !== undefined ? fighter.oranBerryUsesLeft : 2;
+      statusText = uses > 0 ? `${itemDef.name} (${uses})` : `${itemDef.name} (0)`;
+      if (uses <= 0) extraClass = 'item-exhausted';
+    } else if (fighter.heldItem === 'air-balloon') {
+      if (fighter.balloonPopped || fighter.percent >= 50) {
+        statusText = '🎈 Explotado';
+        extraClass = 'item-exhausted';
+      } else {
+        statusText = '🎈 Globo (<50%)';
+        extraClass = 'item-active';
+      }
+    }
+
+    badge.className = `item-hud-badge ${extraClass}`.trim();
+    badge.innerHTML = `<img src="${itemDef.icon}" alt="${itemDef.name}"><span>${statusText}</span>`;
   }
 
   _setAvatarImage(imgEl, dex, isBadge = false) {

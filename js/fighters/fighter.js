@@ -20,11 +20,15 @@ class Fighter {
     this.width = 36;
     this.height = 48;
     this.hurtboxRadius = 22;
-    this.weight = config.weight || 90;
+    this.pokedexWeight = config.pokedexWeight !== undefined ? config.pokedexWeight : (config.weight || 6.0);
+    this.weight = this.pokedexWeight;
+    this.weightCategory = config.weightCategory || (this.pokedexWeight <= 4.5 ? 'Pluma' : this.pokedexWeight <= 6.5 ? 'Ligero' : this.pokedexWeight <= 10.0 ? 'Medio' : 'Pesado');
 
-    // Movement attributes
-    this.walkSpeed = config.walkSpeed || 3.8;
-    this.dashSpeed = config.dashSpeed || 6.5;
+    // Movement attributes (+20% base speeds)
+    this.walkSpeed = config.walkSpeed || 4.6;
+    this.dashSpeed = config.dashSpeed || 7.2;
+    this.isRunning = false;
+    this.runDirection = 0;
     this.jumpForce = config.jumpForce || 13.5;
     this.doubleJumpForce = config.doubleJumpForce || 12.0;
     this.maxJumps = 2;
@@ -72,6 +76,10 @@ class Fighter {
       right: false,
       up: false,
       down: false,
+      leftPressed: false,
+      rightPressed: false,
+      upPressed: false,
+      downPressed: false,
       jump: false,
       jumpPressed: false,
       attack: false,
@@ -79,9 +87,23 @@ class Fighter {
       special: false,
       specialPressed: false,
       shield: false,
-      shieldPressed: false,
-      downPressed: false
+      shieldPressed: false
     };
+
+    // Charged Smash Attacks (Double-tap direction on ground + hold Z. Released on keyup)
+    this.lastDirTap = {
+      left: 0,
+      right: 0,
+      up: 0,
+      down: 0
+    };
+    this.smashWindowTimer = 0;
+    this.smashPendingDir = null;
+    this.smashChargeTimer = 0;
+    this.smashTimeToMaxCharge = 0.55; // 0.55s para alcanzar el 100% de carga
+    this.smashMaxHoldTime = 3.0;      // Límite de seguridad mientras se mantenga Z
+    this.smashChargeDir = 'side';
+    this.smashMaxNotified = false;
 
     // Jump & Platform dynamics
     this.isJumping = false;
@@ -94,8 +116,26 @@ class Fighter {
 
     // Choice Scarf speed multiplier
     if (this.heldItem === 'choice-scarf') {
-      this.walkSpeed = (this.walkSpeed || 3.8) * 1.25;
-      this.dashSpeed = (this.dashSpeed || 6.0) * 1.25;
+      this.walkSpeed = (this.walkSpeed || 4.6) * 1.25;
+      this.dashSpeed = (this.dashSpeed || 7.2) * 1.25;
+    }
+
+    // Active Consumables (Tecla [1]), Berry and Balloon tracking
+    this.itemCooldown = 0;
+    this.itemCharges = 0;
+    this.maxItemCharges = 0;
+    this.oranBerryUsesLeft = 2;
+    this.balloonPopped = false;
+
+    if (this.heldItem === 'potion') {
+      this.itemCharges = 3;
+      this.maxItemCharges = 3;
+    } else if (this.heldItem === 'super-potion') {
+      this.itemCharges = 2;
+      this.maxItemCharges = 2;
+    } else if (this.heldItem === 'hyper-potion') {
+      this.itemCharges = 1;
+      this.maxItemCharges = 1;
     }
 
     // Status System (Veneno / Poison is the primary status)
@@ -106,6 +146,26 @@ class Fighter {
         tickTimer: 0
       }
     };
+
+    // Air Dodge & Ground Roll (i-frames / Eframes)
+    this.airDodgeUsed = false;
+    this.rollCooldown = 0;
+    this.specialChargeTimer = 0;
+    this.specialIsCharging = false;
+    this.specialChargeNotified = false;
+    this.specialChargeMaxNotified = false;
+    this.shadowBallStored = false;
+    this.shadowBallStoreTimer = 0;
+
+    // Ledge Grab & Recovery (Super Smash Bros style)
+    this.ledgeSide = null;
+    this.grabbedLedgePlat = null;
+    this.ledgeTimer = 0;
+    this.ledgeCooldown = 0;
+
+    // Perfect Shield / Parry (Ultimate style: release within 3 frames of attack)
+    this.parryWindowTimer = 0;
+    this.parryFlashTimer = 0;
 
     // Tracking
     this.lastAttacker = null;
@@ -118,6 +178,12 @@ class Fighter {
       this.state !== 'HURT' &&
       this.state !== 'RESPAWN' &&
       this.state !== 'SHIELD' &&
+      this.state !== 'SMASH_CHARGE' &&
+      this.state !== 'ROLL' &&
+      this.state !== 'AIR_DODGE' &&
+      this.state !== 'ATTACK' &&
+      this.state !== 'SPECIAL' &&
+      this.state !== 'LEDGE' &&
       this.shieldBreakTimer <= 0 &&
       this.hitstun <= 0 &&
       this.hitstop <= 0 &&
@@ -126,11 +192,108 @@ class Fighter {
     );
   }
 
+  applyStatus(statusName, duration = 5.0) {
+    if (this.invulnTimer > 0 || this.state === 'RESPAWN') return;
+
+    if (!this.statuses) {
+      this.statuses = {
+        poison: { active: false, timer: 0, tickTimer: 0 }
+      };
+    }
+
+    if (statusName === 'poison') {
+      if (!this.statuses.poison) {
+        this.statuses.poison = { active: false, timer: 0, tickTimer: 0 };
+      }
+      this.statuses.poison.active = true;
+      this.statuses.poison.timer = duration;
+      this.statuses.poison.tickTimer = 1.7;
+
+      if (window.soundEngine) {
+        window.soundEngine.playSfx('poison');
+      }
+      if (window.particleManager) {
+        window.particleManager.spawnFloatingText(
+          this.x,
+          this.y - this.height - 18,
+          '¡ENVENENADO!',
+          '#a855f7',
+          18
+        );
+        window.particleManager.spawnHitSparks(this.x, this.y - this.height * 0.5, 8, 'poison');
+      }
+    } else if (statusName === 'sleep') {
+      if (!this.statuses.sleep) {
+        this.statuses.sleep = { active: false, timer: 0 };
+      }
+      this.statuses.sleep.active = true;
+      this.statuses.sleep.timer = duration;
+      this.actionLockTimer = Math.max(this.actionLockTimer, duration);
+      this.state = 'HURT';
+      this.vx *= 0.3;
+      if (window.soundEngine) {
+        window.soundEngine.playSfx('sing');
+      }
+      if (window.particleManager) {
+        window.particleManager.spawnFloatingText(
+          this.x,
+          this.y - this.height - 18,
+          '💤 ¡DORMIDO! (Zzz)',
+          '#38bdf8',
+          18
+        );
+      }
+    }
+  }
+
+  clearStatus(statusName) {
+    if (this.statuses && this.statuses[statusName]) {
+      this.statuses[statusName].active = false;
+      this.statuses[statusName].timer = 0;
+      this.statuses[statusName].tickTimer = 0;
+    }
+  }
+
+  clearStatuses() {
+    if (this.statuses) {
+      for (const k in this.statuses) {
+        this.statuses[k].active = false;
+        this.statuses[k].timer = 0;
+        this.statuses[k].tickTimer = 0;
+      }
+    }
+  }
+
   update(dt, opponent, stage) {
     this.actionLockTimer = Math.max(0, this.actionLockTimer - dt);
     this.attackCooldown = Math.max(0, this.attackCooldown - dt);
     this.specialCooldown = Math.max(0, this.specialCooldown - dt);
+    this.itemCooldown = Math.max(0, this.itemCooldown - dt);
     this.shieldTapTimer = Math.max(0, this.shieldTapTimer - dt);
+    this.parryWindowTimer = Math.max(0, this.parryWindowTimer - dt);
+    this.parryFlashTimer = Math.max(0, this.parryFlashTimer - dt);
+    this.ledgeCooldown = Math.max(0, this.ledgeCooldown - dt);
+
+    // Ledge Hang State handling
+    if (this.state === 'LEDGE') {
+      this.vx = 0;
+      this.vy = 0;
+      this.isGrounded = false;
+      this.ledgeTimer -= dt;
+      if (this.ledgeTimer <= 0) {
+        this.performLedgeClimb();
+      }
+      this.anim.setFacing(this.facing);
+      this.anim.update(dt);
+      return;
+    }
+
+    if (this.smashWindowTimer > 0) {
+      this.smashWindowTimer -= dt;
+      if (this.smashWindowTimer <= 0) {
+        this.smashPendingDir = null;
+      }
+    }
     if (this.input.shieldPressed) {
       this.shieldTapTimer = 0.16;
       this.input.shieldPressed = false;
@@ -153,7 +316,8 @@ class Fighter {
         let hit = false;
         for (const hurtbox of hurtboxes) {
           if (window.physicsEngine.checkHitboxCollision(hitbox, hurtbox)) {
-            opponent.takeHit(proj, this, hurtbox.target);
+            const finalHitbox = this.getModifiedHitbox(proj, true);
+            opponent.takeHit(finalHitbox, this, hurtbox.target);
             if (proj.onHit) proj.onHit(opponent);
             this.projectiles.splice(i, 1);
             hit = true;
@@ -196,9 +360,35 @@ class Fighter {
       if (this.dropThroughTimer <= 0) this.isDroppingThrough = false;
     }
 
-    // Respawn handling
+    // Respawn handling (Smash-style blast KO & platform descent)
     if (this.state === 'RESPAWN') {
       this.respawnTimer -= dt;
+
+      // First 0.80s: completely off-screen ("sacado de la pantalla")
+      if (this.respawnTimer > 1.2) {
+        this.x = -9999;
+        this.y = -9999;
+        this.anim.update(dt);
+        return;
+      }
+
+      // At 1.2s: Materialize onto the floating revival platform!
+      if (!this.respawnPlatformMaterialized) {
+        this.respawnPlatformMaterialized = true;
+        this.x = this.respawnStageX || stage.respawnX;
+        this.y = this.respawnStageY || stage.respawnY;
+        this.vx = 0;
+        this.vy = 0;
+        this.isGrounded = false;
+        this.anim.setAim('center');
+        this.anim.loop('Idle', 1.0);
+        window.soundEngine && window.soundEngine.playSfx('select');
+        if (window.particleManager) {
+          window.particleManager.spawnRadialBurst(this.x, this.y - 12, '#38bdf8', 'electric', 36);
+          window.particleManager.spawnSmoke(this.x, this.y, '#ffffff', 8);
+        }
+      }
+
       if (this.respawnTimer <= 0) {
         this.state = 'IDLE';
         this.invulnTimer = 2.0; // 2 seconds flashing invulnerability
@@ -207,9 +397,13 @@ class Fighter {
         this.hitstop = 0;
         this.actionLockTimer = 0;
         this.focusSashActive = true;
+        this.balloonPopped = false;
         if (this.statuses && this.statuses.poison) this.statuses.poison.active = false;
         this.anim.setAim('center');
         this.anim.loop('Idle', 1.0);
+        if (window.particleManager) {
+          window.particleManager.spawnSmoke(this.x, this.y, '#ffffff', 10);
+        }
       }
       this.anim.update(dt);
       return;
@@ -248,7 +442,7 @@ class Fighter {
 
       if (p.tickTimer <= 0) {
         p.tickTimer = 1.7; // Ticks every 1.7 seconds
-        const poisonDmg = Math.max(1, Math.round(this.percent * 0.02));
+        const poisonDmg = Math.max(1, Math.round(this.percent * 0.03)); // Veneno aumenta un 3% el % actual
         this.percent = Math.min(999, this.percent + poisonDmg);
         window.soundEngine.playSfx('poison');
         if (window.particleManager) {
@@ -265,6 +459,49 @@ class Fighter {
 
       if (p.timer <= 0) {
         p.active = false;
+      }
+    }
+
+    // Status System: Sueño (Sleep)
+    if (this.statuses && this.statuses.sleep && this.statuses.sleep.active) {
+      this.statuses.sleep.timer -= dt;
+      this.actionLockTimer = Math.max(this.actionLockTimer, this.statuses.sleep.timer);
+      this.vx *= 0.85;
+      if (Math.random() < 0.25 && window.particleManager) {
+        window.particleManager.spawnFloatingText(this.x + (Math.random() - 0.5) * 16, this.y - this.height - 10, 'Zzz', '#38bdf8', 12);
+      }
+      if (this.statuses.sleep.timer <= 0) {
+        this.statuses.sleep.active = false;
+        if (this.state === 'HURT') this.state = 'IDLE';
+      }
+    }
+
+    // Roll cooldown decay
+    if (this.rollCooldown > 0) this.rollCooldown = Math.max(0, this.rollCooldown - dt);
+
+    // Air Dodge reset when landing
+    if (this.isGrounded) {
+      if (this.state === 'AIR_DODGE') {
+        this.state = 'IDLE';
+        this.actionLockTimer = 0.08;
+        this.anim.loop('Idle', 1.0);
+      }
+      this.airDodgeUsed = false;
+    }
+
+    // Roll State Physics (i-frames ground roll)
+    if (this.state === 'ROLL') {
+      this.vx *= 0.975; // Balance Update: Menor fricción para cubrir mayor distancia de roll over
+      if (this.actionLockTimer <= 0) {
+        this.state = this.input.shield ? 'SHIELD' : 'IDLE';
+        this.anim.loop('Idle', 1.0);
+      }
+    } else if (this.state === 'AIR_DODGE') {
+      this.vx *= 0.92;
+      this.vy *= 0.92;
+      if (this.actionLockTimer <= 0) {
+        this.state = 'IDLE';
+        this.anim.loop('Walk', 0.8);
       }
     }
 
@@ -285,7 +522,7 @@ class Fighter {
         this.shield = this.maxShield * 0.35;
         this.anim.loop('Idle', 1.0);
       }
-    } else if ((this.input.shield || this.shieldTapTimer > 0) && this.state !== 'ATTACK' && this.state !== 'SPECIAL' && this.hitstun <= 0 && this.hitstop <= 0) {
+    } else if ((this.input.shield || this.shieldTapTimer > 0) && this.state !== 'ATTACK' && this.state !== 'SPECIAL' && this.state !== 'ROLL' && this.state !== 'AIR_DODGE' && this.hitstun <= 0 && this.hitstop <= 0) {
       this.state = 'SHIELD';
       this.vx *= 0.65;
       this.shield = Math.max(0, this.shield - 22 * dt);
@@ -294,7 +531,8 @@ class Fighter {
       if (this.shield <= 0) this.breakShield();
     } else if (this.state === 'SHIELD') {
       this.state = 'IDLE';
-    } else if (this.state !== 'ATTACK' && this.state !== 'SPECIAL') {
+      this.parryWindowTimer = 3 / 60; // 3 frames parry window (~0.055s) on shield release
+    } else if (this.state !== 'ATTACK' && this.state !== 'SPECIAL' && this.state !== 'ROLL' && this.state !== 'AIR_DODGE') {
       // Slow passive regeneration only while the shield is down.
       this.shield = Math.min(this.maxShield, this.shield + 13 * dt);
     }
@@ -365,59 +603,222 @@ class Fighter {
     }
   }
 
-  handleInputs(stage = null) {
+  handleInputs(stage = null, dt = 1 / 60) {
     stage = stage || (window.game ? window.game.stage : null);
+    dt = (typeof dt === 'number' && dt > 0) ? dt : (1 / 60);
+
+    // 🧗 Handle LEDGE state recovery options:
+    // Salto de borde: [Espacio]
+    // Ataque de borde: [Z]
+    // Subir normal: [Arriba] o inclinación hacia el escenario
+    // Soltar borde: [Abajo] o inclinación hacia afuera
+    if (this.state === 'LEDGE') {
+      if (this.input.jump || this.input.jumpPressed) {
+        this.input.jumpPressed = false;
+        this.performLedgeJump();
+        return;
+      }
+      if (this.input.attack || this.input.attackPressed) {
+        this.input.attackPressed = false;
+        this.performLedgeAttack();
+        return;
+      }
+      const isClimbDir = (this.ledgeSide === 'left' && (this.input.right || this.input.rightPressed)) ||
+                         (this.ledgeSide === 'right' && (this.input.left || this.input.leftPressed));
+      if (this.input.up || this.input.upPressed || isClimbDir) {
+        this.input.upPressed = false;
+        this.performLedgeClimb();
+        return;
+      }
+      const isDropDir = (this.ledgeSide === 'left' && (this.input.left || this.input.leftPressed)) ||
+                        (this.ledgeSide === 'right' && (this.input.right || this.input.rightPressed));
+      if (this.input.down || this.input.downPressed || isDropDir) {
+        this.input.downPressed = false;
+        this.dropLedge();
+        return;
+      }
+      return;
+    }
+
+    // 0. Handle SMASH_CHARGE state (gathering energy while holding Z)
+    if (this.state === 'SMASH_CHARGE') {
+      this.vx *= 0.72; // Anchored to ground while charging
+      this.smashChargeTimer += dt;
+
+      const chargeRatio = Math.min(1.0, this.smashChargeTimer / (this.smashTimeToMaxCharge || 0.55));
+
+      // Energy charge sparks & sound effect
+      if (Math.random() < 0.45 && window.particleManager) {
+        const sparkType = chargeRatio >= 1.0 ? 'electric' : (this.accentColor ? 'shadow' : 'normal');
+        window.particleManager.spawnHitSparks(
+          this.x + (Math.random() - 0.5) * 36,
+          this.y - Math.random() * this.height,
+          chargeRatio >= 1.0 ? 2 : 1,
+          sparkType
+        );
+      }
+
+      // Max charge notification (100% full power reached!)
+      if (chargeRatio >= 1.0 && !this.smashMaxNotified) {
+        this.smashMaxNotified = true;
+        window.soundEngine && window.soundEngine.playSfx('select');
+        if (window.particleManager) {
+          window.particleManager.spawnRadialBurst(this.x, this.y - 20, '#facc15', 'electric', 38);
+          window.particleManager.spawnFloatingText(this.x, this.y - this.height - 22, '¡CARGA MÁXIMA 100%!', '#facc15', 18);
+        }
+      }
+
+      // AL SOLTAR Z: Se ejecuta el ataque cargado!
+      // (O si se alcanza el límite de retención de 3.0s)
+      if (!this.input.attack || this.smashChargeTimer >= (this.smashMaxHoldTime || 3.0)) {
+        this.releaseSmashAttack(chargeRatio);
+      }
+      return;
+    }
+
+    // 1. Ground Roll: While holding Shield on the ground + pressing Left or Right (i-frames / Eframes)
+    if (this.isGrounded && (this.input.shield || this.state === 'SHIELD' || this.shieldTapTimer > 0)) {
+      if (this.input.left || this.input.right || this.input.leftPressed || this.input.rightPressed) {
+        if ((this.rollCooldown || 0) <= 0 && this.shieldBreakTimer <= 0 && this.hitstun <= 0 && this.hitstop <= 0 && this.shield >= 18) {
+          const rollDir = (this.input.left || this.input.leftPressed) ? -1 : 1;
+          this.input.shieldPressed = false;
+          this.shieldTapTimer = 0;
+          this.performRoll(rollDir);
+          return;
+        }
+      }
+    }
+
+    // 2. Air Dodge: Pressing C (shield) while in the air (i-frames / Eframes)
+    if (!this.isGrounded && (this.input.shieldPressed || this.shieldTapTimer > 0 || this.input.shield)) {
+      if (!this.airDodgeUsed && this.canAct()) {
+        this.input.shieldPressed = false;
+        this.shieldTapTimer = 0;
+        this.performAirDodge();
+        return;
+      }
+    }
 
     // Shield is held rather than buffered: it cannot be used during attack recovery.
     if (this.input.shield && this.canAct()) return;
     if (!this.canAct()) return;
 
-    // Movement (Left / Right)
+    // Direction Double-Tap Detection for Running (Dash) & Charged Smash Attacks (on ground only)
+    if (this.isGrounded && this.canAct()) {
+      const now = performance.now() / 1000;
+
+      const checkDirTap = (dir, isPressed) => {
+        if (!isPressed) return;
+        const dtSince = now - this.lastDirTap[dir];
+        this.lastDirTap[dir] = now;
+        if (dtSince > 0.04 && dtSince < 0.44) {
+          // Double-tap confirmed!
+          if (dir === 'left' || dir === 'right') {
+            this.isRunning = true;
+            this.runDirection = dir === 'left' ? -1 : 1;
+            this.facing = this.runDirection;
+            window.soundEngine && window.soundEngine.playSfx('dash');
+            if (window.particleManager) {
+              window.particleManager.spawnSmoke(this.x, this.y, '#cbd5e1', 7);
+              window.particleManager.spawnFloatingText(this.x, this.y - this.height - 12, '¡CORRER!', '#38bdf8', 14);
+            }
+          }
+
+          const smashDir = (dir === 'left' || dir === 'right') ? 'side' : dir;
+          if (dir === 'left') this.facing = -1;
+          if (dir === 'right') this.facing = 1;
+
+          this.smashPendingDir = smashDir;
+          this.smashWindowTimer = 0.50; // 500ms window to press and hold Z
+
+          // If attack key (Z) is already held down: begin charging immediately!
+          if (this.input.attack) {
+            this.smashPendingDir = null;
+            this.smashWindowTimer = 0;
+            this.startSmashCharge(smashDir);
+          }
+        }
+      };
+
+      checkDirTap('left', this.input.leftPressed);
+      checkDirTap('right', this.input.rightPressed);
+      checkDirTap('up', this.input.upPressed);
+
+      // Down double tap
+      if (this.input.downPressed) {
+        const dtSince = now - this.lastDirTap.down;
+        this.lastDirTap.down = now;
+        if (dtSince > 0.04 && dtSince < 0.44) {
+          // Only drop through semi-solid if NOT holding Z or charging
+          if (this.isOnSemiSolidPlatform(stage) && !this.input.attack && !this.input.attackPressed) {
+            this.dropThroughPlatform();
+            this.lastDirTap.down = 0;
+            this.input.downPressed = false;
+            return;
+          }
+          this.smashPendingDir = 'down';
+          this.smashWindowTimer = 0.50;
+          if (this.input.attack) {
+            this.smashPendingDir = null;
+            this.smashWindowTimer = 0;
+            this.startSmashCharge('down');
+          }
+        }
+      }
+    }
+
+    // Clear one-frame press flags
+    this.input.leftPressed = false;
+    this.input.rightPressed = false;
+    this.input.upPressed = false;
+    this.input.downPressed = false;
+
+    // Check if Smash Attack should be initiated via holding Z during Smash Window
+    if (this.isGrounded && this.canAct() && this.smashWindowTimer > 0 && this.smashPendingDir && (this.input.attackPressed || this.input.attack)) {
+      this.input.attackPressed = false;
+      const sDir = this.smashPendingDir;
+      this.smashPendingDir = null;
+      this.smashWindowTimer = 0;
+      this.startSmashCharge(sDir);
+      return;
+    }
+
+    // Movement (Left / Right): Walking vs Running (Dash)
     if (this.input.left && !this.input.right) {
       this.facing = -1;
-      this.vx = -this.walkSpeed;
+      const isDash = this.isRunning && this.runDirection === -1;
+      this.vx = isDash ? -this.dashSpeed : -this.walkSpeed;
       if (this.isGrounded) {
-        this.state = 'WALK';
-        this.anim.loop('Walk', 1.2);
-        if (Math.random() < 0.2 && window.particleManager) {
-          window.particleManager.spawnSmoke(this.x + 8, this.y, '#cbd5e1', 5);
+        this.state = isDash ? 'DASH' : 'WALK';
+        this.anim.loop('Walk', isDash ? 1.85 : 1.25);
+        if (Math.random() < (isDash ? 0.40 : 0.18) && window.particleManager) {
+          window.particleManager.spawnSmoke(this.x + 8, this.y, '#cbd5e1', isDash ? 7 : 5);
         }
       }
     } else if (this.input.right && !this.input.left) {
       this.facing = 1;
-      this.vx = this.walkSpeed;
+      const isDash = this.isRunning && this.runDirection === 1;
+      this.vx = isDash ? this.dashSpeed : this.walkSpeed;
       if (this.isGrounded) {
-        this.state = 'WALK';
-        this.anim.loop('Walk', 1.2);
-        if (Math.random() < 0.2 && window.particleManager) {
-          window.particleManager.spawnSmoke(this.x - 8, this.y, '#cbd5e1', 5);
+        this.state = isDash ? 'DASH' : 'WALK';
+        this.anim.loop('Walk', isDash ? 1.85 : 1.25);
+        if (Math.random() < (isDash ? 0.40 : 0.18) && window.particleManager) {
+          window.particleManager.spawnSmoke(this.x - 8, this.y, '#cbd5e1', isDash ? 7 : 5);
         }
       }
-    } else if (this.isGrounded) {
-      if (this.input.down) {
-        // Crouch
-        this.state = 'CROUCH';
-        this.anim.setAim('down');
-        this.anim.loop('Idle', 0.6);
-      } else {
-        this.state = 'IDLE';
-        this.anim.setAim(this.input.up ? 'up' : 'center');
-        this.anim.loop('Idle', 1.0);
-      }
-    }
-
-    // Double tap Down to drop through semi-solid platforms
-    if (this.input.downPressed) {
-      this.input.downPressed = false;
-      const now = performance.now() / 1000;
-      if (this.isOnSemiSolidPlatform(stage)) {
-        const dtSinceLast = now - this.lastDownTapTime;
-        if (dtSinceLast > 0.04 && dtSinceLast < 0.38) {
-          this.dropThroughPlatform();
-          this.lastDownTapTime = 0;
-          return;
+    } else {
+      this.isRunning = false;
+      this.runDirection = 0;
+      if (this.isGrounded) {
+        if (this.input.down) {
+          // Crouch
+          this.state = 'CROUCH';
+          this.anim.setAim('down');
+          this.anim.loop('Idle', 0.6);
         } else {
-          this.lastDownTapTime = now;
+          this.state = 'IDLE';
+          this.anim.setAim(this.input.up ? 'up' : 'center');
+          this.anim.loop('Idle', 1.0);
         }
       }
     }
@@ -470,17 +871,395 @@ class Fighter {
     }
   }
 
-  performBasicAttack() {
-    if (this.attackCooldown > 0 || this.actionLockTimer > 0) return;
+  performAirDodge() {
+    this.isRunning = false;
+    this.runDirection = 0;
+    this.state = 'AIR_DODGE';
+    this.airDodgeUsed = true;
+    this.invulnTimer = 0.35; // ~21 frames de invencibilidad (Eframes)
+    this.actionLockTimer = 0.38;
 
-    // Choice Specs restriction: Only X moves allowed!
-    if (this.heldItem === 'choice-specs') {
-      window.soundEngine.playSfx('select');
-      if (window.particleManager) {
-        window.particleManager.spawnFloatingText(this.x, this.y - this.height - 10, '¡Gafas Elección: Solo Ataques X!', '#8b5cf6', 15);
-      }
+    // Directional drift
+    let driftX = 0;
+    let driftY = 0;
+    if (this.input.left) driftX = -4.8;
+    else if (this.input.right) driftX = 4.8;
+    if (this.input.up) driftY = -3.8;
+    else if (this.input.down) driftY = 3.8;
+
+    if (driftX !== 0 || driftY !== 0) {
+      this.vx = driftX;
+      this.vy = driftY;
+    } else {
+      this.vx *= 0.35;
+      this.vy *= 0.35;
+    }
+
+    this.anim.play('Hurt', { speed: 0.1 });
+    window.soundEngine.playSfx('dash');
+    if (window.particleManager) {
+      window.particleManager.spawnSmoke(this.x, this.y, '#93c5fd', 8);
+      window.particleManager.spawnFloatingText(this.x, this.y - this.height - 12, '¡ESQUIVE!', '#60a5fa', 14);
+    }
+  }
+
+  performRoll(dir) {
+    if (this.shield < 18) return;
+
+    this.shield = Math.max(0, this.shield - 22);
+    if (this.shield <= 0) {
+      this.breakShield();
       return;
     }
+
+    this.isRunning = false;
+    this.runDirection = 0;
+    this.state = 'ROLL';
+    this.facing = dir;
+
+    let rollSpeed = 25.5; // Balance Update: Aumentada velocidad de roll para mayor distancia física
+    let actionLock = 0.58;
+    let rollCd = 0.65;
+    if (this.heldItem === 'escape-rope') {
+      rollSpeed *= 1.30; // +30% distancia del roll con Cuerda Huida
+      actionLock *= 0.90; // -10% lag entre esquives
+      rollCd *= 0.90; // -10% cooldown entre esquives
+    }
+
+    this.vx = dir * rollSpeed;
+    this.invulnTimer = 0.38; // ~23 frames de invencibilidad (Eframes)
+    this.actionLockTimer = actionLock;
+    this.rollCooldown = rollCd;
+    this.anim.play('Walk', { speed: 2.2 });
+    window.soundEngine.playSfx('dash');
+    if (window.particleManager) {
+      window.particleManager.spawnSmoke(this.x, this.y, '#94a3b8', 8);
+      const ropeTag = this.heldItem === 'escape-rope' ? ' [Cuerda Huida +30%]' : '';
+      window.particleManager.spawnFloatingText(this.x, this.y - this.height - 12, `¡ROLL! (-22 Escudo)${ropeTag}`, '#38bdf8', 14);
+    }
+  }
+
+  // =========================================================================
+  // 🧗 AGARRE AL BORDE & RECUPERACIÓN (Ledge Grab & Recovery)
+  // =========================================================================
+  grabLedge(plat, side) {
+    if (this.state === 'RESPAWN' || this.state === 'LEDGE' || this.invulnTimer > 0) return;
+    this.state = 'LEDGE';
+    this.ledgeSide = side;
+    this.grabbedLedgePlat = plat;
+    this.ledgeTimer = 1.6; // Tiempo máximo colgado antes de subir automáticamente
+    this.invulnTimer = 1.0; // 1 segundo de invulnerabilidad
+    this.actionLockTimer = 0.08;
+    this.hitstun = 0;
+    this.hitstop = 0;
+    this.vx = 0;
+    this.vy = 0;
+    this.isGrounded = false;
+    this.isFastFalling = false;
+    this.jumpsLeft = this.maxJumps;
+    this.upSpecialUsed = false;
+    this.airDodgeUsed = false;
+
+    // Posicionamiento preciso en el borde mirando hacia el interior del escenario
+    if (side === 'left') {
+      this.x = plat.x - 6;
+      this.facing = 1;
+    } else {
+      this.x = plat.x + plat.width + 6;
+      this.facing = -1;
+    }
+    this.y = plat.y + 24;
+
+    this.anim.setFacing(this.facing);
+    this.anim.loop('Walk', 0.4);
+
+    if (window.soundEngine) {
+      window.soundEngine.playSfx('ledge_grab');
+    }
+    if (window.particleManager) {
+      window.particleManager.spawnHitSparks(this.x, plat.y, 4, 'electric');
+      window.particleManager.spawnFloatingText(this.x, this.y - this.height - 14, '¡AGARRE AL BORDE!', '#38bdf8', 16);
+    }
+  }
+
+  performLedgeJump() {
+    this.state = 'IDLE';
+    this.vy = -this.jumpForce * 0.95;
+    this.vx = this.facing * 4.2;
+    this.isGrounded = false;
+    this.invulnTimer = 0.22;
+    this.ledgeCooldown = 1.0; // Evita re-agarrarse inmediatamente
+    this.jumpsLeft = Math.max(0, this.maxJumps - 1);
+    this.grabbedLedgePlat = null;
+
+    if (window.soundEngine) {
+      window.soundEngine.playSfx('jump');
+    }
+    if (window.particleManager) {
+      window.particleManager.spawnSmoke(this.x, this.y, '#ffffff', 5);
+      window.particleManager.spawnFloatingText(this.x, this.y - this.height - 10, 'Salto de Borde [Espacio]', '#38bdf8', 13);
+    }
+  }
+
+  performLedgeAttack() {
+    const plat = this.grabbedLedgePlat;
+    if (plat) {
+      this.y = plat.y;
+    }
+    this.x += this.facing * 24;
+    this.isGrounded = true;
+    this.vx = 0;
+    this.vy = 0;
+    this.invulnTimer = 0.25;
+    this.ledgeCooldown = 1.2;
+    this.grabbedLedgePlat = null;
+
+    const ledgeAtk = {
+      name: 'Ataque de Borde (Ledge Attack)',
+      anim: 'Attack',
+      animSpeed: 1.4,
+      hitboxStart: 2,
+      hitboxEnd: 9,
+      offsetX: 24,
+      offsetY: 20,
+      radius: 32,
+      damage: 8,
+      baseKnockback: 20,
+      knockbackScaling: 0.9,
+      angle: 40,
+      type: 'normal',
+      hitlag: 6
+    };
+
+    this.state = 'ATTACK';
+    this.currentAttack = ledgeAtk;
+    this.attackFrame = 0;
+    this.hasHitOpponent = false;
+    this.attackCooldown = 0.25;
+    this.anim.setAim('center');
+    this.anim.play('Attack', { speed: 1.4 }, () => {
+      this.state = 'IDLE';
+      this.currentAttack = null;
+    });
+
+    if (window.soundEngine) {
+      window.soundEngine.playSfx('dash');
+    }
+    if (window.particleManager) {
+      window.particleManager.spawnSlash(this.x + this.facing * 18, this.y - 20, this.facing);
+      window.particleManager.spawnFloatingText(this.x, this.y - this.height - 12, 'Ataque de Borde [Z]', '#f59e0b', 14);
+    }
+  }
+
+  performLedgeClimb() {
+    const plat = this.grabbedLedgePlat;
+    if (plat) {
+      this.y = plat.y;
+    }
+    this.x += this.facing * 28;
+    this.isGrounded = true;
+    this.vx = 0;
+    this.vy = 0;
+    this.state = 'IDLE';
+    this.invulnTimer = 0.35; // Frames de invulnerabilidad al subir
+    this.actionLockTimer = 0.12;
+    this.ledgeCooldown = 1.0;
+    this.grabbedLedgePlat = null;
+    this.anim.play('Walk', { speed: 1.8 });
+
+    if (window.particleManager) {
+      window.particleManager.spawnSmoke(this.x, this.y, '#ffffff', 4);
+      window.particleManager.spawnFloatingText(this.x, this.y - this.height - 10, 'Subir Borde [Arriba]', '#10b981', 13);
+    }
+  }
+
+  dropLedge() {
+    this.state = 'IDLE';
+    this.vy = 2.0;
+    this.vx = -this.facing * 1.5;
+    this.invulnTimer = 0;
+    this.ledgeCooldown = 0.6;
+    this.grabbedLedgePlat = null;
+  }
+
+  useActiveItem() {
+    if (this.state === 'RESPAWN' || this.state === 'HURT') return false;
+    if (this.itemCooldown > 0) {
+      if (window.particleManager) {
+        window.particleManager.spawnFloatingText(this.x, this.y - this.height - 14, `¡En CD! (${Math.ceil(this.itemCooldown)}s)`, '#f87171', 13);
+      }
+      return false;
+    }
+    if (this.itemCharges <= 0) {
+      if (window.particleManager) {
+        window.particleManager.spawnFloatingText(this.x, this.y - this.height - 14, '¡Sin cargas de poción!', '#94a3b8', 13);
+      }
+      return false;
+    }
+
+    let heal = 0;
+    let cd = 0;
+    let itemName = '';
+    const curPercent = this.percent;
+
+    // Nerf de Pociones: Cura % del daño actual acumulado (salvo HiperPoción que cura 100 fijo)
+    if (this.heldItem === 'potion') {
+      heal = Math.max(0.1, parseFloat((curPercent * 0.20).toFixed(1)));
+      cd = 15.0;
+      itemName = 'Poción (20% actual)';
+    } else if (this.heldItem === 'super-potion') {
+      heal = Math.max(0.1, parseFloat((curPercent * 0.50).toFixed(1)));
+      cd = 40.0;
+      itemName = 'SuperPoción (50% actual)';
+    } else if (this.heldItem === 'hyper-potion') {
+      heal = 100;
+      cd = 0;
+      itemName = 'HiperPoción';
+    } else {
+      return false;
+    }
+
+    this.itemCharges--;
+    this.itemCooldown = cd;
+
+    if (this.minunDead && this.partner) {
+      this.partner.percent = Math.max(0, parseFloat((this.partner.percent - heal).toFixed(1)));
+    } else {
+      this.percent = Math.max(0, parseFloat((this.percent - heal).toFixed(1)));
+      if (this.partner) {
+        this.partner.percent = Math.max(0, parseFloat((this.partner.percent - heal).toFixed(1)));
+      }
+    }
+
+    window.soundEngine && window.soundEngine.playSfx('select');
+    if (window.particleManager) {
+      window.particleManager.spawnRadialBurst(this.x, this.y - 20, '#10b981', 'normal', 36);
+      window.particleManager.spawnFloatingText(
+        this.x,
+        this.y - this.height - 20,
+        `-${heal}% [${itemName}] (${this.itemCharges} rest.)`,
+        '#10b981',
+        17
+      );
+    }
+    return true;
+  }
+
+  onElimination() {
+    if (this.heldItem === 'oran-berry' && this.oranBerryUsesLeft > 0) {
+      this.oranBerryUsesLeft--;
+      const heal = 20;
+      this.percent = Math.max(0, parseFloat((this.percent - heal).toFixed(1)));
+      if (this.partner) {
+        this.partner.percent = Math.max(0, parseFloat((this.partner.percent - heal).toFixed(1)));
+      }
+      window.soundEngine && window.soundEngine.playSfx('select');
+      if (window.particleManager) {
+        window.particleManager.spawnRadialBurst(this.x, this.y - 20, '#fb923c', 'normal', 36);
+        window.particleManager.spawnFloatingText(
+          this.x,
+          this.y - this.height - 24,
+          `-20% [Baya Aranja] (${this.oranBerryUsesLeft} rest.)`,
+          '#fb923c',
+          18
+        );
+      }
+    }
+  }
+
+  /**
+   * Universal item attack restriction validator
+   * Validates Choice Specs (blocks Z/Smash) and Choice Band (blocks X).
+   */
+  checkItemCanUseAttack(type = 'basic') {
+    if (type === 'basic' || type === 'smash') {
+      if (this.heldItem === 'choice-specs') {
+        window.soundEngine && window.soundEngine.playSfx('select');
+        if (window.particleManager) {
+          window.particleManager.spawnFloatingText(this.x, this.y - this.height - 10, '¡Gafas Elección: Solo Ataques X!', '#8b5cf6', 15);
+        }
+        return false;
+      }
+    } else if (type === 'special') {
+      if (this.heldItem === 'choice-band') {
+        window.soundEngine && window.soundEngine.playSfx('select');
+        if (window.particleManager) {
+          window.particleManager.spawnFloatingText(this.x, this.y - this.height - 10, '¡Cinta Elección: Solo Ataques Z!', '#3b82f6', 15);
+        }
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Universal item offensive modifier calculator
+   * Correctly scales melee, smash, special and projectile hits for all current and future Pokémon.
+   */
+  getModifiedHitbox(hitbox, isProjectile = false) {
+    if (!hitbox) return hitbox;
+
+    const isSpecial = hitbox.isSpecial !== undefined
+      ? hitbox.isSpecial
+      : (this.state === 'SPECIAL' || isProjectile);
+
+    const isBasic = hitbox.isBasic !== undefined
+      ? hitbox.isBasic
+      : (this.state === 'ATTACK' || hitbox.isSmash || !isSpecial);
+
+    let finalHitbox = {
+      ...hitbox,
+      isSpecial,
+      isBasic,
+      isProjectile
+    };
+
+    // 1. Choice Band: +50% de daño y +25% knockback en ataques básicos [Z] y Smash
+    if (this.heldItem === 'choice-band' && isBasic) {
+      finalHitbox.damage = Math.round(finalHitbox.damage * 1.50);
+      finalHitbox.baseKnockback = Math.round((finalHitbox.baseKnockback || 12) * 1.25);
+    }
+
+    // 2. Choice Specs: +50% de daño y +25% knockback en movimientos especiales [X] (cuerpo a cuerpo Y proyectiles!)
+    if (this.heldItem === 'choice-specs' && isSpecial) {
+      finalHitbox.damage = Math.round(finalHitbox.damage * 1.50);
+      finalHitbox.baseKnockback = Math.round((finalHitbox.baseKnockback || 12) * 1.25);
+    }
+
+    // 3. Life Orb: +25% de daño en TODOS los ataques, con 1.5% de retroceso al golpear
+    if (this.heldItem === 'life-orb') {
+      finalHitbox.damage = Math.round(finalHitbox.damage * 1.25);
+      if (this.minunDead && this.partner) {
+        this.partner.percent = Math.min(999, parseFloat((this.partner.percent + 1.5).toFixed(1)));
+      } else {
+        this.percent = Math.min(999, parseFloat((this.percent + 1.5).toFixed(1)));
+      }
+      if (window.particleManager) {
+        window.particleManager.spawnFloatingText(this.x, this.y - this.height - 10, '+1.5% [Vida Esfera]', '#ef4444', 12);
+      }
+    }
+
+    // 4. Shell Bell: Recupera 1.5% de daño SOLO con ataques básicos [Z]
+    if (this.heldItem === 'shell-bell' && isBasic) {
+      if (this.minunDead && this.partner) {
+        this.partner.percent = Math.max(0, parseFloat((this.partner.percent - 1.5).toFixed(1)));
+      } else {
+        this.percent = Math.max(0, parseFloat((this.percent - 1.5).toFixed(1)));
+      }
+      if (window.particleManager) {
+        window.particleManager.spawnFloatingText(this.x, this.y - this.height - 10, '-1.5% [Cascabel Concha]', '#0284c7', 12);
+      }
+    }
+
+    return finalHitbox;
+  }
+
+  performBasicAttack() {
+    if (this.attackCooldown > 0 || this.actionLockTimer > 0) return;
+    if (!this.checkItemCanUseAttack('basic')) return;
+
+    this.isRunning = false;
+    this.runDirection = 0;
 
     let dir = 'neutral';
     if (this.input.up) dir = 'up';
@@ -497,7 +1276,7 @@ class Fighter {
     this.currentAttack = attackDef;
     this.attackFrame = 0;
     this.hasHitOpponent = false;
-    this.attackCooldown = attackDef.cooldown ?? 0.22;
+    this.attackCooldown = 0.20; // Nerf a ataques Z: 0.20s de lag/cooldown entre ataques
 
     // Aim direction for sprite (Row 4 for Up, Row 0 for Down, Row 2/6 for side/neutral)
     if (dir === 'up') this.anim.setAim('up');
@@ -512,11 +1291,15 @@ class Fighter {
       window.particleManager.spawnMeleeSlash(this.x, this.y, dir, this.facing, slashColor, slashType, slashRadius, isAir);
     }
 
-    // Trigger animation
-    this.anim.play(attackDef.anim || 'Attack', { speed: attackDef.animSpeed || 1.2 }, () => {
+    // Snappy animation speed with 0.20s end lag between attacks
+    const animSpd = (attackDef.animSpeed || 1.25) * 1.30;
+    const endLag = 0.20; // Nerf: pequeño lag de 0.2 segundos entre ataque
+
+    this.anim.play(attackDef.anim || 'Attack', { speed: animSpd }, () => {
       this.state = 'IDLE';
       this.currentAttack = null;
-      this.actionLockTimer = Math.max(this.actionLockTimer, attackDef.endLag ?? 0.14);
+      this.actionLockTimer = Math.max(this.actionLockTimer, endLag);
+      this.attackCooldown = Math.max(this.attackCooldown, 0.20);
       this.anim.setAim('center');
     });
 
@@ -525,15 +1308,7 @@ class Fighter {
 
   performSpecialMove() {
     if (this.specialCooldown > 0 || this.actionLockTimer > 0) return;
-
-    // Choice Band restriction: Only Z attacks allowed!
-    if (this.heldItem === 'choice-band') {
-      window.soundEngine.playSfx('select');
-      if (window.particleManager) {
-        window.particleManager.spawnFloatingText(this.x, this.y - this.height - 10, '¡Cinta Elección: Solo Ataques Z!', '#3b82f6', 15);
-      }
-      return;
-    }
+    if (!this.checkItemCanUseAttack('special')) return;
 
     // 4 distinct moves for X: Up, Down, Side (Left/Right), and Neutral (NO direction)
     let dir = 'neutral';
@@ -546,33 +1321,161 @@ class Fighter {
     if (dir === 'up' && this.upSpecialUsed) return;
 
     const moveDef = this.getSpecialMoveDef(dir);
-    if (!moveDef) return;
-
+    const wasRunning = this.isRunning || (Math.abs(this.vx) > this.walkSpeed * 1.05);
+    const wasWalking = !wasRunning && ((this.input.left || this.input.right) || Math.abs(this.vx) > 0.4);
+    this.wasRunningOnAttack = wasRunning;
+    this.wasWalkingOnAttack = wasWalking;
+    this.isRunning = false;
+    this.runDirection = 0;
     this.state = 'SPECIAL';
     this.currentAttack = moveDef;
     this.attackFrame = 0;
     this.hasHitOpponent = false;
     this.specialCooldown = moveDef.cooldown ?? 0.55;
+    this.specialChargeTimer = 0;
     if (dir === 'up') this.upSpecialUsed = true;
 
     if (dir === 'up') this.anim.setAim('up');
     else if (dir === 'down') this.anim.setAim('down');
     else this.anim.setAim('center');
 
-    this.anim.play(moveDef.anim || 'Shoot', { speed: moveDef.animSpeed || 1.1 }, () => {
+    if (moveDef.canCharge || moveDef.holdToCharge) {
+      this.specialChargeTimer = 0;
+      this.specialChargeNotified = false;
+      this.specialIsCharging = true;
+      if (moveDef.onStart) moveDef.onStart(this);
+    } else if (moveDef.quickRecover) {
+      this.anim.play(moveDef.anim || 'Shoot', { speed: moveDef.animSpeed || 3.0 });
       this.state = 'IDLE';
       this.currentAttack = null;
-      this.actionLockTimer = Math.max(this.actionLockTimer, moveDef.endLag ?? 0.24);
+      this.actionLockTimer = Math.max(this.actionLockTimer, moveDef.endLag ?? 0.02);
+      if (moveDef.cooldown !== undefined) {
+        this.specialCooldown = Math.max(this.specialCooldown, moveDef.cooldown);
+      }
       this.anim.setAim('center');
-    });
-
-    if (moveDef.onStart) moveDef.onStart(this);
+      if (moveDef.onStart) moveDef.onStart(this);
+    } else {
+      this.anim.play(moveDef.anim || 'Shoot', { speed: moveDef.animSpeed || 1.1 }, () => {
+        this.state = 'IDLE';
+        this.currentAttack = null;
+        this.actionLockTimer = Math.max(this.actionLockTimer, moveDef.endLag ?? 0.24);
+        if (moveDef.cooldown !== undefined) {
+          this.specialCooldown = Math.max(this.specialCooldown, moveDef.cooldown);
+        }
+        this.anim.setAim('center');
+      });
+      if (moveDef.onStart) moveDef.onStart(this);
+    }
   }
 
   _updateAttack(dt, opponent) {
     if (!this.currentAttack) return;
     this.attackFrame += dt * 60;
     const atk = this.currentAttack;
+
+    // Hold-to-charge specials (e.g., Bulbasaur Down+X, Gengar Neutral+X)
+    if ((atk.canCharge || atk.holdToCharge) && this.specialIsCharging) {
+      const maxCharge = atk.maxCharge || 0.85;
+
+      // Check if move supports storing charge at maximum by pressing Left or Right (Gengar Bola Sombra)
+      if (atk.canStoreCharge && this.specialChargeTimer >= maxCharge) {
+        if (this.input.leftPressed || this.input.rightPressed || this.input.left || this.input.right) {
+          if (atk.onStoreCharge) {
+            atk.onStoreCharge(this);
+          }
+          this.specialIsCharging = false;
+          this.specialChargeTimer = 0;
+          this.specialChargeNotified = false;
+          this.specialChargeMaxNotified = false;
+          this.state = 'IDLE';
+          this.currentAttack = null;
+          this.anim.play('Idle', { speed: 1.0 });
+          this.actionLockTimer = 0.08;
+          return;
+        }
+      }
+
+      // Allow aiming Left / Right while holding (unless canStoreCharge handles it)
+      if (!atk.canStoreCharge) {
+        if (this.input.left && !this.input.right) this.facing = -1;
+        else if (this.input.right && !this.input.left) this.facing = 1;
+      }
+
+      // While X is held
+      const allowHoldBeyondMax = atk.allowHoldBeyondMax || atk.canStoreCharge;
+      const keepHolding = this.input.special && (allowHoldBeyondMax ? true : this.specialChargeTimer < maxCharge);
+
+      if (keepHolding) {
+        if (this.specialChargeTimer < maxCharge) {
+          this.specialChargeTimer = Math.min(maxCharge, this.specialChargeTimer + dt);
+        }
+        this.vx *= 0.72; // Anchored to ground while charging
+
+        // Once held longer than 0.10s (confirmed hold, not a quick tap):
+        if (this.specialChargeTimer >= 0.10) {
+          if (!this.specialChargeNotified) {
+            this.specialChargeNotified = true;
+            this.anim.loop(atk.chargeAnim || 'Charge', 1.0);
+            window.soundEngine && window.soundEngine.playSfx('charge');
+            if (atk.chargeBannerText && window.particleManager) {
+              window.particleManager.spawnFloatingText(
+                this.x,
+                this.y - this.height - 18,
+                atk.chargeBannerText,
+                atk.chargeBannerColor || '#10b981',
+                15
+              );
+            }
+          }
+
+          if (this.specialChargeTimer >= maxCharge && !this.specialChargeMaxNotified) {
+            this.specialChargeMaxNotified = true;
+            if (atk.onMaxCharge) atk.onMaxCharge(this);
+          }
+
+          if (atk.onCharge) atk.onCharge(this, this.specialChargeTimer, maxCharge);
+        }
+        return;
+      }
+
+      // X was released (AL SOLTAR X) OR maxCharge reached!
+      this.specialIsCharging = false;
+
+      // If released very quickly (< 0.10s), it was a quick tap -> normal attack with chargeRatio = 0!
+      const chargeRatio = this.specialChargeTimer < 0.10
+        ? 0
+        : Math.min(1.0, (this.specialChargeTimer - 0.10) / (maxCharge - 0.10));
+
+      this.specialChargeTimer = 0;
+      this.specialChargeNotified = false;
+      this.specialChargeMaxNotified = false;
+
+      const fireHandler = atk.onFire || atk.onRelease;
+      if (fireHandler) fireHandler(this, chargeRatio);
+
+      if (atk.quickRecover) {
+        this.anim.play(atk.anim || 'Shoot', { speed: atk.animSpeed || 3.2 });
+        this.state = 'IDLE';
+        this.currentAttack = null;
+        this.actionLockTimer = Math.max(this.actionLockTimer, atk.endLag ?? 0.02);
+        if (atk.cooldown !== undefined) {
+          this.specialCooldown = Math.max(this.specialCooldown, atk.cooldown);
+        }
+        this.anim.setAim('center');
+        return;
+      }
+
+      this.anim.play(atk.anim || 'Shoot', { speed: atk.animSpeed || 1.25 }, () => {
+        this.state = 'IDLE';
+        this.currentAttack = null;
+        this.actionLockTimer = Math.max(this.actionLockTimer, atk.endLag ?? 0.18);
+        if (atk.cooldown !== undefined) {
+          this.specialCooldown = Math.max(this.specialCooldown, atk.cooldown);
+        }
+        this.anim.setAim('center');
+      });
+      return;
+    }
 
     // Execute move frame events
     if (atk.onUpdate) atk.onUpdate(this, this.attackFrame);
@@ -606,30 +1509,17 @@ class Fighter {
 
         for (const hurtbox of hurtboxes) {
           if (window.physicsEngine.checkHitboxCollision(hitbox, hurtbox)) {
-            // Apply attacker item modifiers
-            let finalHitbox = { ...hitbox };
-            if (this.heldItem === 'choice-band') {
-              finalHitbox.damage = Math.round(finalHitbox.damage * 1.35);
-              finalHitbox.baseKnockback = Math.round(finalHitbox.baseKnockback * 1.20);
-            } else if (this.heldItem === 'choice-specs') {
-              finalHitbox.damage = Math.round(finalHitbox.damage * 1.35);
-              finalHitbox.baseKnockback = Math.round(finalHitbox.baseKnockback * 1.20);
-            } else if (this.heldItem === 'life-orb') {
-              finalHitbox.damage = Math.round(finalHitbox.damage * 1.25);
-              this.percent = Math.min(999, this.percent + 1.5);
-              if (window.particleManager) {
-                window.particleManager.spawnFloatingText(this.x, this.y - this.height - 10, '+1.5% [Vida Esfera]', '#ef4444', 12);
-              }
-            } else if (this.heldItem === 'shell-bell') {
-              this.percent = Math.max(0, this.percent - 1.5);
-              if (window.particleManager) {
-                window.particleManager.spawnFloatingText(this.x, this.y - this.height - 10, '-1.5% [Cascabel Concha]', '#0284c7', 12);
-              }
-            }
-
+            const finalHitbox = this.getModifiedHitbox(hitbox, false);
             opponent.takeHit(finalHitbox, this, hurtbox.target);
             this.hasHitOpponent = true;
             this.hitstop = finalHitbox.hitlag; // Attacker hitfreeze
+
+            // Combo hit cancel: connecting a Z attack eliminates action lock and minimizes cooldown!
+            if (this.state === 'ATTACK') {
+              this.attackCooldown = 0.05;
+              this.actionLockTimer = 0;
+            }
+
             if (atk.onHit) atk.onHit(this, opponent);
             break;
           }
@@ -639,10 +1529,42 @@ class Fighter {
   }
 
   takeHit(hitbox, attacker, target = null) {
-    if (this.invulnTimer > 0 || this.state === 'RESPAWN') return;
+    if (this.invulnTimer > 0 || this.state === 'RESPAWN' || this.state === 'ROLL' || this.state === 'AIR_DODGE') return;
+
+    // 🛡️ Parry Perfecto (Perfect Shield - Super Smash Bros Ultimate)
+    // Si sueltas el escudo en los primeros 3 frames de recibir un ataque:
+    // sonido de campana metálica, ojos brillantes, 0 daño de escudo y el rival sufre 5 frames de congelación.
+    if (this.parryWindowTimer > 0) {
+      this.parryWindowTimer = 0;
+      this.parryFlashTimer = 0.50; // Duración del destello dorado y ojos brillantes
+      this.invulnTimer = 0.20;
+      this.hitstop = 0;
+      this.hitstun = 0;
+      this.state = 'IDLE';
+      this.actionLockTimer = 0;
+
+      // El rival atacante sufre 5 frames de congelación (freeze / stun) permitiendo contraataque inmediato
+      if (attacker) {
+        attacker.hitstop = Math.max(attacker.hitstop || 0, 5);
+      }
+
+      if (window.soundEngine) {
+        window.soundEngine.playSfx('parry_shield');
+      }
+
+      if (window.particleManager) {
+        window.particleManager.spawnRadialBurst(this.x, this.y - this.height * 0.5, '#fef08a', 'electric', 42);
+        window.particleManager.spawnHitSparks(this.x, this.y - this.height * 0.5, 8, 'electric');
+        window.particleManager.spawnFloatingText(this.x, this.y - this.height - 24, '¡PERFECT SHIELD!', '#facc15', 20);
+      }
+      return;
+    }
 
     if (this.state === 'SHIELD') {
-      const shieldDamage = (hitbox.damage || 5) * 5.5 + (hitbox.baseKnockback || 0) * 0.45;
+      let shieldDamage = (hitbox.damage || 5) * 5.5 + (hitbox.baseKnockback || 0) * 0.45;
+      if (this.heldItem === 'escape-rope') {
+        shieldDamage *= 1.30; // Cuerda Huida: Reduce la eficacia del escudo un 30%
+      }
       this.shield = Math.max(0, this.shield - shieldDamage);
       this.hitstop = Math.max(2, Math.floor((hitbox.hitlag || 6) * 0.55));
       this.vx += attacker ? attacker.facing * 0.55 : 0;
@@ -657,9 +1579,12 @@ class Fighter {
     // Apply defensive item modifiers
     let dmg = hitbox.damage || 5;
 
-    // Assault Vest: reduces special damage by 25%
-    if (this.heldItem === 'assault-vest' && (hitbox.isSpecial || hitbox.type !== 'normal')) {
-      dmg = Math.max(1, Math.round(dmg * 0.75));
+    // Assault Vest: reduces special / projectile damage by 25%
+    if (this.heldItem === 'assault-vest') {
+      const isSpecialOrProj = hitbox.isSpecial || hitbox.isProjectile || (attacker && attacker.state === 'SPECIAL') || (hitbox.type && hitbox.type !== 'normal');
+      if (isSpecialOrProj) {
+        dmg = Math.max(1, Math.round(dmg * 0.75));
+      }
     }
 
     // Focus Band: 20% chance to endure hit and reduce 75% damage & knockback
@@ -668,7 +1593,7 @@ class Fighter {
       focusBandTriggered = true;
       dmg = Math.max(1, Math.round(dmg * 0.25));
       if (window.particleManager) {
-        window.particleManager.spawnFloatingText(this.x, this.y - this.height - 18, '¡Cinta Focus aguantó!', '#d97706', 16);
+        window.particleManager.spawnFloatingText(this.x, this.y - this.height - 18, '¡Cinta Focus aguantó! (-75%)', '#d97706', 16);
       }
     }
 
@@ -688,6 +1613,15 @@ class Fighter {
     this.percent = Math.min(this.percent + dmg, 999);
     this.lastAttacker = attacker;
 
+    // Wakes up from sleep on taking damage!
+    if (this.statuses && this.statuses.sleep && this.statuses.sleep.active) {
+      this.statuses.sleep.active = false;
+      this.statuses.sleep.timer = 0;
+      if (window.particleManager) {
+        window.particleManager.spawnFloatingText(this.x, this.y - this.height - 16, '¡DESPERTÓ!', '#fbbf24', 15);
+      }
+    }
+
     // Play impact sound & particles
     const sfxName = dmg > 10 ? 'hit_heavy' : dmg > 6 ? 'hit_medium' : 'hit_light';
     window.soundEngine.playSfx(sfxName);
@@ -700,9 +1634,22 @@ class Fighter {
       window.particleManager.spawnFloatingText(this.x, this.y - this.height - 10, `+${dmg}%`, '#ff4444', 18);
     }
 
+    // Status effect infliction on successful unshielded hit
+    if (hitbox.type === 'poison') {
+      this.applyStatus('poison', hitbox.poisonDuration || 5.0);
+    }
+
     // Freeze frames (hitlag)
     this.hitstop = hitbox.hitlag || 6;
     this.state = 'HURT';
+    this.isRunning = false;
+    this.runDirection = 0;
+    this.smashChargeTimer = 0;
+    this.smashPendingDir = null;
+    this.specialChargeTimer = 0;
+    this.specialIsCharging = false;
+    this.specialChargeNotified = false;
+    this.currentAttack = null;
 
     // Calculate launch knockback
     let kbSpeed = window.physicsEngine.calculateKnockback(
@@ -762,45 +1709,137 @@ class Fighter {
     this.upSpecialUsed = false;
     this.currentAttack = null;
     this.attackFrame = 0;
-    this.state = 'RESPAWN';
-    this.respawnTimer = 1.4; // 1.4s respawn wait
+    this.smashChargeTimer = 0;
+    this.smashPendingDir = null;
+    this.specialChargeTimer = 0;
+    this.specialIsCharging = false;
+    this.specialChargeNotified = false;
+    this.specialChargeMaxNotified = false;
+    this.shadowBallStored = false;
+    this.shadowBallStoreTimer = 0;
+    this.clearStatuses();
+    this.focusSashActive = true;
+    this.balloonPopped = false;
 
-    // Reposition to respawn platform
-    this.x = stage.respawnX;
-    this.y = stage.respawnY;
+    // SMASH BLAST ZONE KO: Sacar de la pantalla completamente durante la explosión
+    this.state = 'RESPAWN';
+    this.respawnTimer = 2.0; // 0.8s fuera de pantalla + 1.2s en la plataforma de reaparición
+    this.respawnPlatformMaterialized = false;
+    this.respawnStageX = stage.respawnX;
+    this.respawnStageY = stage.respawnY;
+
+    // Off-screen during initial blast
+    this.x = -9999;
+    this.y = -9999;
     this.isGrounded = false;
-    this.anim.setAim('center');
-    this.anim.loop('Idle', 1.0);
 
     if (window.game) {
       window.game.onFighterKO(this);
     }
   }
 
-  draw(ctx) {
+  draw(ctx, opts = {}) {
     // Flickering invulnerability effect after respawn
     if (this.invulnTimer > 0 && Math.floor(performance.now() / 60) % 2 === 0) {
       return;
     }
 
-    // Shadow under feet if close to stage
-    if (this.isGrounded) {
+    // Floating Smash Revival Platform
+    if (this.state === 'RESPAWN' && this.x > -500) {
       ctx.save();
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+      const pPulse = Math.sin(performance.now() * 0.008) * 3;
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.38)';
+      ctx.shadowColor = '#38bdf8';
+      ctx.shadowBlur = 14;
       ctx.beginPath();
-      ctx.ellipse(this.x, this.y, this.width * 0.55, 6, 0, 0, Math.PI * 2);
+      ctx.ellipse(this.x, this.y + 4, 38 + pPulse, 10, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = '#facc15';
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.ellipse(this.x, this.y + 4, 14, 4, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
+
 
     // Draw active projectiles
     for (const proj of this.projectiles) {
       if (proj.draw) proj.draw(ctx);
     }
 
-    // Draw sprite using SpriteAnimator
-    const isHitFlashing = this.hitstop > 0 || (this.state === 'HURT' && this.hitstun > 15);
+    // Ditto Match (Mismo Pokémon): Dibujar outline luminoso y tag P1 distintivo para el jugador
+    const isDittoMatch = (opts && opts.isDittoMatch !== undefined)
+      ? opts.isDittoMatch
+      : (window.game && window.game.playerDex === window.game.dummyDex);
+
+    if (this.isPlayer && isDittoMatch) {
+      ctx.save();
+      // P1 Inverted Triangle Indicator above character
+      const bounce = Math.sin(performance.now() * 0.008) * 3;
+      const tagY = this.y - this.height - 24 + bounce;
+      ctx.fillStyle = '#38bdf8';
+      ctx.shadowColor = '#38bdf8';
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.moveTo(this.x, tagY);
+      ctx.lineTo(this.x - 6, tagY - 8);
+      ctx.lineTo(this.x + 6, tagY - 8);
+      ctx.closePath();
+      ctx.fill();
+
+      // "P1" Badge
+      ctx.font = 'bold 11px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText('P1', this.x, tagY - 10);
+      ctx.restore();
+    }
+
+    // Draw sprite using SpriteAnimator (efecto blanco durante el hitstun alto)
+    const isHitFlashing = this.hitstop > 0 || (this.state === 'HURT' && this.hitstun > 7);
+
+    // If Ditto Match: Draw a luminous cyan outline around P1 sprite
+    if (this.isPlayer && isDittoMatch && !isHitFlashing) {
+      ctx.save();
+      ctx.globalAlpha = 0.75;
+      this.anim.draw(ctx, this.x - 1.5, this.y, { flash: true });
+      this.anim.draw(ctx, this.x + 1.5, this.y, { flash: true });
+      this.anim.draw(ctx, this.x, this.y - 1.5, { flash: true });
+      this.anim.draw(ctx, this.x, this.y + 1.5, { flash: true });
+      ctx.restore();
+    }
+
     this.anim.draw(ctx, this.x, this.y, { flash: isHitFlashing });
+
+    // Dynamic Environmental Lighting on Characters (Luz ambiental y focos reflejados)
+    const currentStage = (opts && opts.stage) || (window.game && window.game.stage);
+    if (currentStage && typeof currentStage.getLightingAt === 'function') {
+      const light = currentStage.getLightingAt(this.x, this.y);
+      if (light && (light.intensity > 0 || light.alpha > 0)) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const lightGrad = ctx.createRadialGradient(
+          this.x,
+          this.y - this.height * 0.5,
+          4,
+          this.x,
+          this.y - this.height * 0.5,
+          this.height * 0.85
+        );
+        lightGrad.addColorStop(0, light.color);
+        lightGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = lightGrad;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y - this.height * 0.5, this.height * 0.85, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
 
     if (this.state === 'SHIELD') {
       const ratio = this.shield / this.maxShield;
@@ -811,6 +1850,65 @@ class Fighter {
       ctx.beginPath();
       ctx.arc(this.x, this.y - this.height * 0.5, 31 + ratio * 7, 0, Math.PI * 2);
       ctx.stroke();
+      ctx.restore();
+    }
+
+    // Visual Charging Aura during SMASH_CHARGE
+    if (this.state === 'SMASH_CHARGE') {
+      const ratio = Math.min(1.0, this.smashChargeTimer / (this.smashTimeToMaxCharge || 0.55));
+      ctx.save();
+      const pulse = Math.sin(performance.now() * 0.02) * 3;
+      const auraRadius = 26 + ratio * 14 + pulse;
+      ctx.strokeStyle = this.accentColor || '#facc15';
+      ctx.lineWidth = 2.5 + ratio * 3.5;
+      ctx.shadowColor = this.accentColor || '#facc15';
+      ctx.shadowBlur = 12 + ratio * 18;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y - this.height * 0.45, auraRadius, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Energy percentage badge above character
+      ctx.fillStyle = ratio > 0.8 ? '#facc15' : '#ffffff';
+      ctx.font = 'bold 12px monospace';
+      ctx.textAlign = 'center';
+      ctx.shadowColor = '#000000';
+      ctx.shadowBlur = 4;
+      ctx.fillText(`⚡ ${Math.round(ratio * 100)}%`, this.x, this.y - this.height - 14);
+      ctx.restore();
+    }
+
+    // 🛡️ Ojos Brillantes & Destello Celestial durante Parry Perfecto (Perfect Shield)
+    if (this.parryFlashTimer > 0) {
+      ctx.save();
+      const pRatio = this.parryFlashTimer / 0.50;
+      const eyeY = this.y - this.height * 0.65;
+      const eyeX = this.x + this.facing * 8;
+
+      // Ojo brillante central
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = '#facc15';
+      ctx.shadowBlur = 20 * pRatio;
+      ctx.beginPath();
+      ctx.arc(eyeX, eyeY, 5 * pRatio, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Destello en cruz (Cross star flare)
+      ctx.strokeStyle = '#fef08a';
+      ctx.lineWidth = 2.5 * pRatio;
+      ctx.beginPath();
+      ctx.moveTo(eyeX - 18 * pRatio, eyeY);
+      ctx.lineTo(eyeX + 18 * pRatio, eyeY);
+      ctx.moveTo(eyeX, eyeY - 18 * pRatio);
+      ctx.lineTo(eyeX, eyeY + 18 * pRatio);
+      ctx.stroke();
+
+      // Anillo expansivo celestial
+      ctx.strokeStyle = `rgba(250, 204, 21, ${pRatio * 0.85})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y - this.height * 0.5, 30 + (1 - pRatio) * 20, 0, Math.PI * 2);
+      ctx.stroke();
+
       ctx.restore();
     }
   }
@@ -896,6 +1994,172 @@ class Fighter {
     return universalMoves[dir] || universalMoves.neutral;
   }
   getSpecialMoveDef(dir) { return null; }
+
+  startSmashCharge(dir) {
+    if (this.actionLockTimer > 0 || this.attackCooldown > 0) return;
+    if (!this.checkItemCanUseAttack('smash')) return;
+
+    this.state = 'SMASH_CHARGE';
+    this.smashChargeDir = dir;
+    this.smashChargeTimer = 0;
+    this.smashMaxNotified = false;
+    this.actionLockTimer = 0;
+
+    if (dir === 'up') this.anim.setAim('up');
+    else if (dir === 'down') this.anim.setAim('down');
+    else this.anim.setAim('center');
+
+    this.anim.loop('Charge', 1.0);
+    window.soundEngine && window.soundEngine.playSfx('charge');
+
+    if (window.particleManager) {
+      window.particleManager.spawnRadialBurst(this.x, this.y - 20, this.accentColor || '#facc15', 'normal', 30);
+      window.particleManager.spawnFloatingText(this.x, this.y - this.height - 18, '¡CARGANDO! (Suelta Z para golpear)', '#fbbf24', 16);
+    }
+  }
+
+  releaseSmashAttack(ratio = 0) {
+    const dir = this.smashChargeDir || 'side';
+    const smashDef = this.getSmashAttackDef(dir) || this.getUniversalSmashAttackDef(dir);
+    if (!smashDef) {
+      this.state = 'IDLE';
+      return;
+    }
+
+    this.state = 'ATTACK';
+
+    // Massive impulse & damage scaling:
+    // Base knockback is huge (32-38), scaling up by another +75% when fully charged!
+    const dmgMultiplier = 1.0 + ratio * 0.65;
+    let kbMultiplier = 1.0 + ratio * 0.75;
+
+    // Nuevo item: Lupa
+    // El knockback de los ataques cargados al 100% aumenta en un 30%. En cambio, reduce un 30% si no se ha cargado al 100%.
+    if (this.heldItem === 'wide-lens') {
+      if (ratio >= 1.0) {
+        kbMultiplier *= 1.30;
+      } else {
+        kbMultiplier *= 0.70;
+      }
+    }
+
+    const chargedAttack = {
+      ...smashDef,
+      damage: Math.round(smashDef.damage * dmgMultiplier),
+      baseKnockback: Math.round(smashDef.baseKnockback * kbMultiplier),
+      knockbackScaling: parseFloat((smashDef.knockbackScaling * kbMultiplier).toFixed(2)),
+      hitlag: Math.round((smashDef.hitlag || 8) * (1 + ratio * 0.5)),
+      isSmash: true,
+      chargeRatio: ratio
+    };
+
+    this.currentAttack = chargedAttack;
+    this.attackFrame = 0;
+    this.hasHitOpponent = false;
+    this.attackCooldown = 0.26;
+
+    // Aim direction for sprite
+    if (dir === 'up') this.anim.setAim('up');
+    else if (dir === 'down') this.anim.setAim('down');
+    else this.anim.setAim('center');
+
+    // Visual melee slash & explosion
+    if (window.particleManager) {
+      const sColor = chargedAttack.slashColor || this.accentColor || '#facc15';
+      const sType = chargedAttack.type || 'normal';
+      const sRad = (chargedAttack.radius || 38) * (1.2 + ratio * 0.35);
+      window.particleManager.spawnMeleeSlash(this.x, this.y, dir, this.facing, sColor, sType, sRad, false);
+      window.particleManager.spawnRadialBurst(this.x + this.facing * 20, this.y - 22, sColor, sType, 42 + ratio * 28);
+
+      if (ratio >= 0.8) {
+        window.particleManager.spawnFloatingText(this.x, this.y - this.height - 24, '¡SUPER SMASH 100%!', '#facc15', 22);
+      } else if (ratio > 0.25) {
+        window.particleManager.spawnFloatingText(this.x, this.y - this.height - 20, `¡SMASH +${Math.round(ratio * 100)}%!`, '#fbbf24', 18);
+      } else {
+        window.particleManager.spawnFloatingText(this.x, this.y - this.height - 18, '¡ATAQUE SMASH!', '#fbbf24', 16);
+      }
+    }
+
+    window.soundEngine && window.soundEngine.playSfx('smash');
+
+    // Lunge forward impulse on side smash
+    if (dir === 'side') {
+      this.vx = this.facing * (4.2 + ratio * 4.2);
+    }
+
+    this.anim.play(chargedAttack.anim || 'Attack', { speed: chargedAttack.animSpeed || 1.45 }, () => {
+      this.state = 'IDLE';
+      this.currentAttack = null;
+      this.actionLockTimer = Math.max(this.actionLockTimer, chargedAttack.endLag ?? 0.16);
+      this.anim.setAim('center');
+    });
+
+    if (chargedAttack.onStart) chargedAttack.onStart(this, ratio);
+  }
+
+  getUniversalSmashAttackDef(dir) {
+    switch (dir) {
+      case 'up':
+        return {
+          name: 'Golpe Smash Ascendente',
+          anim: 'Attack',
+          animSpeed: 1.45,
+          hitboxStart: 2,
+          hitboxEnd: 10,
+          offsetX: 16,
+          offsetY: 42,
+          radius: 38,
+          damage: 17,
+          baseKnockback: 34,
+          knockbackScaling: 1.55,
+          angle: 85,
+          type: 'normal',
+          hitlag: 8,
+          slashColor: '#facc15'
+        };
+      case 'down':
+        return {
+          name: 'Golpe Smash Terrestre',
+          anim: 'Attack',
+          animSpeed: 1.4,
+          hitboxStart: 2,
+          hitboxEnd: 11,
+          offsetX: 0,
+          offsetY: 15,
+          radius: 46,
+          damage: 15,
+          baseKnockback: 31,
+          knockbackScaling: 1.40,
+          angle: 55,
+          type: 'normal',
+          hitlag: 8,
+          slashColor: '#fbbf24'
+        };
+      case 'side':
+      default:
+        return {
+          name: 'Golpe Smash Lateral',
+          anim: 'Attack',
+          animSpeed: 1.45,
+          hitboxStart: 2,
+          hitboxEnd: 10,
+          offsetX: 35,
+          offsetY: 22,
+          radius: 40,
+          damage: 16,
+          baseKnockback: 33,
+          knockbackScaling: 1.50,
+          angle: 38,
+          type: 'normal',
+          hitlag: 8,
+          slashColor: '#facc15'
+        };
+    }
+  }
+
+  getSmashAttackDef(dir) {
+    return this.getUniversalSmashAttackDef(dir);
+  }
 }
 
 window.Fighter = Fighter;

@@ -14,38 +14,57 @@ class PhysicsEngine {
 
   /**
    * Super Smash Bros Knockback Formula:
-   * Considerably reduced knockback at low & medium %, scaling into lethal launch at high %.
+   * Incremented overall by +20% in general.
+   * Modulated by official Pokédex weight (clamped strictly between -10% and +10% max variation).
+   * Lighter Pokémon (e.g. Minun/Plusle 4.2kg) are launched earlier (+10%),
+   * while heavier Pokémon (e.g. Gengar 40.5kg) reduce knockback by at most -10%.
    * Returns launch speed in pixels per 60Hz frame.
    */
   calculateKnockback(targetPercent, moveDamage, targetWeight, scaling = 1.0, baseKnockback = 12) {
     const p = Math.max(0, targetPercent);
     const d = moveDamage;
-    const w = targetWeight || 100;
-
-    // Weight factor: lighter Pokemon fly slightly farther than heavier Pokemon
-    const weightFactor = 100 / (w + 40);
+    const w = targetWeight || 6.0;
 
     // Minimal base knockback so attacks at 0% don't blast opponents away
     const base = (baseKnockback || 10) * 0.19;
 
-    // Power curve of 1.42 ensures:
-    //  - 0% - 40%: low knockback (1.5 - 4.5 px/frame), true combos and tight juggles!
-    //  - 50% - 80%: medium knockback (5 - 9 px/frame), edgeguard setups
-    //  - 100%+: lethal launch velocity (14 - 28+ px/frame), blast zone KOs!
+    // Growth power curve ensuring combos at low % and blast zone KOs at high %
     const percentRatio = p / 100;
     const growth = Math.pow(percentRatio, 1.38) * (d * 1.6 + 10) * (scaling || 1.0) * 0.43;
 
-    const totalSpeed = (base + growth) * weightFactor;
+    // 1. Aumento general de todo el knockback en un 20%
+    const baseKnockbackTotal = (base + growth) * 1.20;
 
-    // Clamp between comfortable minimum and maximum speed
-    return Math.min(Math.max(totalSpeed, 1.45), 28);
+    // 2. Modificador de Peso Oficial de la Pokédex:
+    // Restringido estrictamente: El peso solo puede reducir como MÁXIMO y como MÍNIMO hasta un 10% (0.90 a 1.10)
+    let kg = typeof w === 'number' ? w : 6.0;
+    if (kg > 50) {
+      if (kg === 75 || kg === 70) kg = 4.2;
+      else if (kg === 85) kg = 6.0;
+      else if (kg === 105) kg = 6.9;
+      else if (kg === 80) kg = 40.5;
+      else kg = kg * 0.1;
+    }
+
+    // Roster de pesos Pokédex: Minun/Plusle (4.2 kg) a Gengar (40.5 kg)
+    const t = Math.max(0, Math.min(1, (kg - 4.2) / (40.5 - 4.2)));
+    const calculatedFactor = 1.10 - t * 0.20;
+
+    // Clamp riguroso entre 0.90 (-10% reducción máxima) y 1.10 (+10% aumento máximo)
+    const weightFactor = Math.min(1.10, Math.max(0.90, calculatedFactor));
+
+    const totalSpeed = baseKnockbackTotal * weightFactor;
+
+    // Límite de velocidad máxima ajustado un 20% (de 28 a 34 px/frame)
+    return Math.min(Math.max(totalSpeed, 1.75), 34);
   }
 
   /**
    * Calculate hitstun duration (in 60fps frames) based on knockback
+   * Reducido un 50% para que el jugador pueda reaccionar y recuperarse (recover)
    */
   calculateHitstun(knockbackSpeed) {
-    return Math.floor(knockbackSpeed * 2.45) + 8;
+    return Math.max(1, Math.floor((knockbackSpeed * 2.45 + 8) * 0.5));
   }
 
   /**
@@ -86,6 +105,12 @@ class PhysicsEngine {
    * Updates fighter kinematics and handles stage/platform collisions
    */
   updateFighter(fighter, stage, dt) {
+    if (fighter.state === 'LEDGE') {
+      fighter.vx = 0;
+      fighter.vy = 0;
+      return;
+    }
+
     if (fighter.hitstop > 0) {
       fighter.hitstop--;
       return;
@@ -101,17 +126,44 @@ class PhysicsEngine {
       }
     }
 
-    // Apply gravity if airborne
+    // Apply gravity if airborne (supporting Floaty Pokémon & Air Balloon)
     if (!fighter.isGrounded) {
-      const maxFall = fighter.isFastFalling ? this.fastFallSpeed : this.terminalVelocity;
-      fighter.vy += this.gravity;
+      let gMult = fighter.gravityMult !== undefined ? fighter.gravityMult : (fighter.isFloaty ? 0.62 : 1.0);
+      let termVelMult = fighter.terminalVelocityMult !== undefined ? fighter.terminalVelocityMult : (fighter.isFloaty ? 0.68 : 1.0);
+      let airFric = fighter.airFriction !== undefined ? fighter.airFriction : this.airFriction;
+
+      // Air Balloon (Globo Helio) effect:
+      // Floaty until reaching 50% damage. If fighter is already floaty, effect is reduced by 80%.
+      if (fighter.heldItem === 'air-balloon') {
+        if (fighter.percent < 50 && !fighter.balloonPopped) {
+          if (fighter.isFloaty) {
+            gMult *= 0.93; // 80% reduced effect on naturally floaty Pokemon
+            termVelMult *= 0.94;
+          } else {
+            gMult *= 0.62;
+            termVelMult *= 0.68;
+            airFric = Math.max(airFric, 0.985);
+          }
+        } else if (fighter.percent >= 50 && !fighter.balloonPopped) {
+          fighter.balloonPopped = true;
+          window.soundEngine && window.soundEngine.playSfx('blast_ko', 0.2);
+          if (window.particleManager) {
+            window.particleManager.spawnRadialBurst(fighter.x, fighter.y - 20, '#38bdf8', 'normal', 30);
+            window.particleManager.spawnFloatingText(fighter.x, fighter.y - fighter.height - 18, '¡GLOBO REVENTÓ! (>50%)', '#f87171', 16);
+          }
+        }
+      }
+
+      const maxFall = (fighter.isFastFalling ? this.fastFallSpeed : this.terminalVelocity) * termVelMult;
+      fighter.vy += this.gravity * gMult;
       if (fighter.vy > maxFall) {
         fighter.vy = maxFall;
       }
-      fighter.vx *= this.airFriction;
+      fighter.vx *= airFric;
     } else {
-      // Ground friction
-      fighter.vx *= this.friction;
+      // Ground friction: balance update - allow longer roll over distance with shield
+      const groundFriction = fighter.state === 'ROLL' ? 0.80 : this.friction;
+      fighter.vx *= groundFriction;
       if (Math.abs(fighter.vx) < 0.05) fighter.vx = 0;
     }
 
@@ -153,6 +205,34 @@ class PhysicsEngine {
         fighter.isAirDodging = false;
         fighter.hitstun = 0;
         return;
+      }
+
+      // 🧗 Ledge Grab: Si caes cerca del borde del escenario principal,
+      // el personaje se agarra automáticamente al borde con 1s de invulnerabilidad
+      if (
+        !fighter.isGrounded &&
+        fighter.state !== 'LEDGE' &&
+        fighter.state !== 'RESPAWN' &&
+        fighter.state !== 'HURT' &&
+        (fighter.ledgeCooldown || 0) <= 0 &&
+        fighter.vy >= -4.5 &&
+        typeof fighter.grabLedge === 'function'
+      ) {
+        // Borde izquierdo de la plataforma sólida
+        const leftDistX = Math.abs(fighter.x - plat.x);
+        const leftDistY = fighter.y - plat.y;
+        if (leftDistX <= 26 && leftDistY >= -14 && leftDistY <= 48) {
+          fighter.grabLedge(plat, 'left');
+          return;
+        }
+
+        // Borde derecho de la plataforma sólida
+        const rightDistX = Math.abs(fighter.x - (plat.x + plat.width));
+        const rightDistY = fighter.y - plat.y;
+        if (rightDistX <= 26 && rightDistY >= -14 && rightDistY <= 48) {
+          fighter.grabLedge(plat, 'right');
+          return;
+        }
       }
 
       // Walls / ceiling of solid stage

@@ -16,11 +16,13 @@ class Pikachu extends window.Fighter {
     super({
       name: 'Pikachu',
       dex: 25,
-      weight: 85,
+      pokedexWeight: 6.0,
+      weight: 6.0,
+      weightCategory: 'Ligero',
       color: '#ffd700',
       accentColor: '#00e5ff',
-      walkSpeed: 4.2,
-      dashSpeed: 6.8,
+      walkSpeed: 4.8,
+      dashSpeed: 8.2,
       jumpForce: 13.8,
       doubleJumpForce: 12.2,
       scale: 2.3,
@@ -408,6 +410,86 @@ class Pikachu extends window.Fighter {
                 window.particleManager.spawnHitSparks(p.x, p.y - 24, 12, 'electric');
               }
             }, 120);
+          }
+        };
+    }
+  }
+
+  getSmashAttackDef(dir) {
+    switch (dir) {
+      case 'up':
+        return {
+          name: '¡Cola Férrea Eléctrica! (Up Smash)',
+          anim: 'Attack',
+          animSpeed: 1.45,
+          hitboxStart: 2,
+          hitboxEnd: 10,
+          offsetX: 14,
+          offsetY: 44,
+          radius: 40,
+          damage: 18,
+          baseKnockback: 36,
+          knockbackScaling: 1.60,
+          angle: 88, // Giant vertical launch
+          type: 'electric',
+          hitlag: 9,
+          slashColor: '#ffff00',
+          onStart: (p) => {
+            window.soundEngine.playSfx('shock');
+            if (window.particleManager) {
+              window.particleManager.spawnHitSparks(p.x + p.facing * 10, p.y - 35, 8, 'electric');
+            }
+          }
+        };
+
+      case 'down':
+        return {
+          name: '¡Descarga Terrestre! (Down Smash)',
+          anim: 'Attack',
+          animSpeed: 1.4,
+          hitboxStart: 2,
+          hitboxEnd: 11,
+          offsetX: 0,
+          offsetY: 15,
+          radius: 48, // 360° around Pikachu
+          damage: 16,
+          baseKnockback: 32,
+          knockbackScaling: 1.45,
+          angle: 50,
+          type: 'electric',
+          hitlag: 8,
+          slashColor: '#00e5ff',
+          onStart: (p) => {
+            window.soundEngine.playSfx('shock');
+            if (window.particleManager) {
+              window.particleManager.spawnRadialBurst(p.x, p.y - 15, '#00e5ff', 'electric', 46);
+            }
+          }
+        };
+
+      case 'side':
+      default:
+        return {
+          name: '¡Placaje Eléctrico Smash! (Side Smash)',
+          anim: 'Attack',
+          animSpeed: 1.45,
+          hitboxStart: 2,
+          hitboxEnd: 10,
+          offsetX: 35,
+          offsetY: 22,
+          radius: 42,
+          damage: 17,
+          baseKnockback: 35,
+          knockbackScaling: 1.55,
+          angle: 35, // Horizontal rocket launch
+          type: 'electric',
+          hitlag: 9,
+          slashColor: '#ffd700',
+          onStart: (p) => {
+            window.soundEngine.playSfx('shock');
+            if (window.particleManager) {
+              window.particleManager.spawnLightningBolt(p.x, p.y - 20, p.x + p.facing * 50, p.y - 20, '#ffffff', '#ffd700', 5);
+            }
           }
         };
     }

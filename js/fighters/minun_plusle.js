@@ -15,13 +15,15 @@ class MinunPlusle extends window.Fighter {
     super({
       name: 'Minun y Plusle',
       dex: 312,
-      weight: 75,
+      pokedexWeight: 4.2,
+      weight: 4.2,
+      weightCategory: 'Pluma',
       color: '#38bdf8', // Minun Electric Blue
       accentColor: '#f43f5e', // Plusle Ruby Red
-      walkSpeed: 3.6, // Nerfed from 4.1
-      dashSpeed: 5.6, // Nerfed from 6.5
-      jumpForce: 13.6,
-      doubleJumpForce: 12.0,
+      walkSpeed: 5.0, // Rápido y ágil por ser peso pluma (+20% base)
+      dashSpeed: 8.6,
+      jumpForce: 13.8,
+      doubleJumpForce: 12.2,
       scale: 2.5,
       ...config
     });
@@ -30,6 +32,7 @@ class MinunPlusle extends window.Fighter {
     this.minunDead = false;
     this.minunRespawnTimer = 0;
     this.refuerzoTimer = 0;
+    this.partnerPendingJumps = [];
 
     // Partner entity: Plusle (Dex 311)
     this.partner = {
@@ -42,7 +45,9 @@ class MinunPlusle extends window.Fighter {
       width: 32,
       height: 44,
       hurtboxRadius: 20,
-      weight: 75,
+      pokedexWeight: 4.2,
+      weight: 4.2,
+      weightCategory: 'Pluma',
       percent: 0, // Independent damage accumulation for Plusle!
       facing: this.facing,
       isGrounded: true,
@@ -67,20 +72,22 @@ class MinunPlusle extends window.Fighter {
       shield: 100,
       maxShield: 100,
       onBlastZoneKO: (stage) => {
+        if (this.partner.respawnTimer > 0) return;
         window.soundEngine.playSfx('blast_ko');
         if (window.particleManager) {
           window.particleManager.spawnBlastKO(this.partner.x, this.partner.y, '#f43f5e');
+          window.particleManager.spawnFloatingText(this.x, this.y - this.height - 20, '¡Plusle KO! Vuelve en 10s', '#f43f5e', 18);
         }
-        if (this.minunDead) {
-          this._fullKO(stage);
-          return;
-        }
-        this.partner.respawnTimer = 1.5;
+        this.partner.respawnTimer = 10.0; // Aparece dentro de 10 segundos
         this.partner.vx = 0;
         this.partner.vy = 0;
         this.partner.hitstun = 0;
         this.partner.hitstop = 0;
+        this.partner.actionLockTimer = 0;
+        this.partner.state = 'RESPAWN';
         this.partner.currentAttack = null;
+        this.partner.x = -9999;
+        this.partner.y = -9999;
       }
     };
   }
@@ -88,7 +95,20 @@ class MinunPlusle extends window.Fighter {
   canAct() {
     if (this.minunDead) {
       const p = this.partner;
-      return p && p.respawnTimer <= 0 && p.state !== 'HURT' && p.hitstop <= 0 && p.hitstun <= 0 && (!p.actionLockTimer || p.actionLockTimer <= 0);
+      return (
+        p &&
+        p.respawnTimer <= 0 &&
+        p.state !== 'HURT' &&
+        p.state !== 'ROLL' &&
+        p.state !== 'AIR_DODGE' &&
+        p.state !== 'SHIELD' &&
+        p.state !== 'SMASH_CHARGE' &&
+        p.state !== 'ATTACK' &&
+        p.state !== 'SPECIAL' &&
+        p.hitstop <= 0 &&
+        p.hitstun <= 0 &&
+        (!p.actionLockTimer || p.actionLockTimer <= 0)
+      );
     }
     return super.canAct();
   }
@@ -138,7 +158,10 @@ class MinunPlusle extends window.Fighter {
 
     // If Minun or Plusle is currently shielding
     if (this.state === 'SHIELD' || (this.minunDead && this.partner.state === 'SHIELD')) {
-      const shieldDamage = (hitbox.damage || 5) * 5.0;
+      let shieldDamage = (hitbox.damage || 5) * 5.0;
+      if (this.heldItem === 'escape-rope') {
+        shieldDamage *= 1.30;
+      }
       this.shield = Math.max(0, this.shield - shieldDamage);
       this.partner.hitstop = Math.max(2, Math.floor((hitbox.hitlag || 6) * 0.5));
       window.soundEngine.playSfx('hit_light');
@@ -149,7 +172,38 @@ class MinunPlusle extends window.Fighter {
       return;
     }
 
-    const dmg = hitbox.damage || 5;
+    let dmg = hitbox.damage || 5;
+
+    // Assault Vest: reduces special / projectile damage by 25%
+    if (this.heldItem === 'assault-vest') {
+      const isSpecialOrProj = hitbox.isSpecial || hitbox.isProjectile || (attacker && attacker.state === 'SPECIAL') || (hitbox.type && hitbox.type !== 'normal');
+      if (isSpecialOrProj) {
+        dmg = Math.max(1, Math.round(dmg * 0.75));
+      }
+    }
+
+    // Focus Band: 20% chance to endure hit and reduce 75% damage & knockback
+    let focusBandTriggered = false;
+    if (this.heldItem === 'focus-band' && Math.random() < 0.20) {
+      focusBandTriggered = true;
+      dmg = Math.max(1, Math.round(dmg * 0.25));
+      if (window.particleManager) {
+        window.particleManager.spawnFloatingText(this.partner.x, this.partner.y - this.partner.height - 18, '¡Cinta Focus aguantó! (-75%)', '#d97706', 16);
+      }
+    }
+
+    // Rocky Helmet: reflect 4% damage back to close-range melee attacker
+    if (this.heldItem === 'rocky-helmet' && attacker && !hitbox.isProjectile) {
+      const distToAttacker = Math.hypot(attacker.x - this.partner.x, attacker.y - this.partner.y);
+      if (distToAttacker < 75) {
+        attacker.percent = Math.min(999, attacker.percent + 4);
+        window.soundEngine.playSfx('hit_light');
+        if (window.particleManager) {
+          window.particleManager.spawnFloatingText(attacker.x, attacker.y - attacker.height - 10, '+4% [Casco Dentado]', '#ea580c', 15);
+          window.particleManager.spawnHitSparks(attacker.x, attacker.y - attacker.height * 0.5, 4, 'normal');
+        }
+      }
+    }
 
     // CRITICAL: Accumulate damage ONLY on Plusle! Minun's % (and HUD %) is untouched!
     this.partner.percent = Math.min(this.partner.percent + dmg, 999);
@@ -173,13 +227,27 @@ class MinunPlusle extends window.Fighter {
     this.partner.isSeparated = true;
 
     // Launch knockback calculated with Plusle's own accumulated %!
-    const kbSpeed = window.physicsEngine.calculateKnockback(
+    let kbSpeed = window.physicsEngine.calculateKnockback(
       this.partner.percent,
       dmg,
       this.partner.weight,
       hitbox.knockbackScaling,
       hitbox.baseKnockback
     );
+
+    if (focusBandTriggered) {
+      kbSpeed *= 0.25;
+    }
+
+    // Focus Sash for Plusle
+    if (this.heldItem === 'focus-sash' && this.focusSashActive && kbSpeed > 28) {
+      this.focusSashActive = false;
+      kbSpeed = 12;
+      if (window.particleManager) {
+        window.particleManager.spawnFloatingText(this.partner.x, this.partner.y - this.partner.height - 20, '¡Banda Focus salvó!', '#f59e0b', 18);
+        window.particleManager.spawnHitSparks(this.partner.x, this.partner.y - this.partner.height * 0.5, 10, 'normal');
+      }
+    }
 
     window.physicsEngine.launch(
       this.partner,
@@ -197,74 +265,37 @@ class MinunPlusle extends window.Fighter {
 
   /**
    * Blast zone KO override:
-   * If Minun dies but Plusle is alive, Minun respawns after 7 seconds without stock loss!
+   * Si muere Minun, mueren ambos inmediatamente (pierden 1 vida).
+   * La condición anterior de supervivencia de 7s queda totalmente eliminada.
    */
   onBlastZoneKO(stage) {
     if (this.state === 'RESPAWN') return;
-
-    const isPlusleAlive = this.partner && this.partner.respawnTimer <= 0 && !stage.isOutsideBlastZone(this.partner.x, this.partner.y);
-
-    if (isPlusleAlive && !this.minunDead) {
-      // Minun dies, but Plusle is alive: 7-second survival mode begins!
-      this.minunDead = true;
-      this.minunRespawnTimer = 7.0;
-      this.refuerzoTimer = 0; // Refuerzo cannot work without Minun
-
-      window.soundEngine.playSfx('blast_ko');
-      if (window.particleManager) {
-        window.particleManager.spawnBlastKO(this.x, this.y, '#38bdf8');
-        window.particleManager.spawnFloatingText(
-          this.partner.x,
-          this.partner.y - this.partner.height - 18,
-          '¡MINUN DERROTADO! SOBREVIVE 7s',
-          '#38bdf8',
-          18
-        );
-      }
-
-      // Move Minun safely off-screen so physics and blast zones don't re-trigger
-      this.x = -9999;
-      this.y = -9999;
-      this.vx = 0;
-      this.vy = 0;
-      this.hitstun = 0;
-      this.hitstop = 0;
-      this.actionLockTimer = 0;
-      this.currentAttack = null;
-      this.state = 'IDLE';
-
-      // Grant Plusle autonomous control
-      this.partner.isSeparated = true;
-      this.partner.jumpsLeft = 2;
-      return;
-    }
-
-    // Both died or Plusle was already dead -> Full KO!
     this._fullKO(stage);
   }
 
   _fullKO(stage) {
+    this.partnerPendingJumps = [];
     this.minunDead = false;
     this.minunRespawnTimer = 0;
     this.refuerzoTimer = 0;
+    this.focusSashActive = true;
+    this.balloonPopped = false;
     super.onBlastZoneKO(stage);
 
     if (this.partner) {
-      this.partner.x = stage.respawnX - 26;
-      this.partner.y = stage.respawnY;
+      this.partner.x = -9999;
+      this.partner.y = -9999;
       this.partner.vx = 0;
       this.partner.vy = 0;
       this.partner.hitstun = 0;
       this.partner.hitstop = 0;
       this.partner.percent = 0;
-      this.partner.state = 'IDLE';
+      this.partner.state = 'RESPAWN';
       this.partner.isSeparated = false;
       this.partner.respawnTimer = 0;
       this.partner.invulnTimer = 2.0;
       this.partner.jumpsLeft = 2;
       this.partner.currentAttack = null;
-      this.partner.anim.setAim('center');
-      this.partner.anim.loop('Idle', 1.0);
     }
   }
 
@@ -321,16 +352,28 @@ class MinunPlusle extends window.Fighter {
     }
   }
 
-  handleInputs(stage = null) {
+  handleInputs(stage = null, dt = 1 / 60) {
     stage = stage || (window.game ? window.game.stage : null);
     if (this.minunDead) {
-      this._handlePlusleInputs(stage);
+      this._handlePlusleInputs(stage, dt);
       return;
     }
-    super.handleInputs(stage);
+
+    // Guardar si se pulsa salto antes de que super.handleInputs limpie el flag jumpPressed
+    const willJump = this.input.jumpPressed;
+    const canMinunAct = this.canAct();
+    const minunCanJump = canMinunAct && (this.isGrounded || this.jumpsLeft > 0);
+
+    super.handleInputs(stage, dt);
+
+    // Salto sincronizado en tándem: Plusle salta 0.4 segundos después de Minun
+    if (willJump && minunCanJump && this.partner && this.partner.respawnTimer <= 0) {
+      if (!this.partnerPendingJumps) this.partnerPendingJumps = [];
+      this.partnerPendingJumps.push({ timer: 0.40 });
+    }
   }
 
-  _handlePlusleInputs(stage = null) {
+  _handlePlusleInputs(stage = null, dt = 1 / 60) {
     const p = this.partner;
     if (!p || p.respawnTimer > 0) return;
     if (p.hitstop > 0 || p.hitstun > 0 || (p.actionLockTimer && p.actionLockTimer > 0)) return;
@@ -353,6 +396,50 @@ class MinunPlusle extends window.Fighter {
             this.lastPlusleDownTap = now;
           }
         }
+      }
+    }
+
+    // Ground Roll for Plusle (i-frames / Eframes)
+    if (p.isGrounded && (this.input.shield || p.state === 'SHIELD' || this.shieldTapTimer > 0)) {
+      if (this.input.left || this.input.right || this.input.leftPressed || this.input.rightPressed) {
+        if ((this.rollCooldown || 0) <= 0 && this.shieldBreakTimer <= 0 && p.hitstun <= 0 && p.hitstop <= 0 && this.shield >= 18) {
+          const rollDir = (this.input.left || this.input.leftPressed) ? -1 : 1;
+          this.input.shieldPressed = false;
+          this.shieldTapTimer = 0;
+          this.shield = Math.max(0, this.shield - 22);
+          if (this.shield <= 0) {
+            this.breakShield();
+            return;
+          }
+          this.rollCooldown = 0.65;
+          this.actionLockTimer = 0.60;
+          p.state = 'ROLL';
+          p.vx = rollDir * 25.5; // Balance Update: mayor distancia de roll over
+          p.facing = rollDir;
+          p.invulnTimer = 0.38; // ~23 frames de invencibilidad (Eframes)
+          p.actionLockTimer = 0.60;
+          p.anim.play('Walk', { speed: 2.2 });
+          window.soundEngine.playSfx('dash');
+          if (window.particleManager) {
+            window.particleManager.spawnSmoke(p.x, p.y, '#94a3b8', 7);
+            window.particleManager.spawnFloatingText(p.x, p.y - p.height - 12, '¡ROLL! (-22 Escudo)', '#38bdf8', 14);
+          }
+          return;
+        }
+      }
+    }
+
+    // Air Dodge for Plusle (i-frames / Eframes)
+    if (!p.isGrounded && (this.input.shieldPressed || this.shieldTapTimer > 0 || this.input.shield)) {
+      if (!this.airDodgeUsed && p.hitstun <= 0 && p.hitstop <= 0 && (!p.actionLockTimer || p.actionLockTimer <= 0)) {
+        this.input.shieldPressed = false;
+        this.shieldTapTimer = 0;
+        this.performAirDodge();
+        p.state = 'AIR_DODGE';
+        p.invulnTimer = 0.35;
+        p.vx = (this.input.left ? -4.8 : this.input.right ? 4.8 : p.vx * 0.35);
+        p.vy = (this.input.up ? -3.8 : this.input.down ? 3.8 : p.vy * 0.35);
+        return;
       }
     }
 
@@ -444,6 +531,7 @@ class MinunPlusle extends window.Fighter {
     if (!p || p.respawnTimer > 0) return;
     if (p.attackCooldown && p.attackCooldown > 0) return;
     if (p.actionLockTimer && p.actionLockTimer > 0) return;
+    if (!this.checkItemCanUseAttack('basic')) return;
 
     let dir = 'neutral';
     if (this.input.up) dir = 'up';
@@ -464,7 +552,7 @@ class MinunPlusle extends window.Fighter {
       offsetX: dir === 'neutral' ? 24 : dir === 'side' ? 32 : dir === 'up' ? 12 : 24,
       offsetY: dir === 'up' ? 36 : dir === 'down' ? (isAir ? -4 : 8) : 22,
       radius: 34,
-      damage: dir === 'down' && isAir ? 9 : 7,
+      damage: dir === 'down' && isAir ? 8 : 6,
       baseKnockback: dir === 'down' && isAir ? 14 : 11,
       knockbackScaling: dir === 'down' && isAir ? 1.1 : 0.85,
       angle: dir === 'down' && isAir ? 280 : dir === 'up' ? 85 : 45,
@@ -484,7 +572,8 @@ class MinunPlusle extends window.Fighter {
     p.anim.play('Attack', { speed: 1.35 }, () => {
       p.state = 'IDLE';
       p.currentAttack = null;
-      p.actionLockTimer = 0.12;
+      p.actionLockTimer = 0.20; // Nerf: 0.2s de lag entre ataques
+      p.attackCooldown = Math.max(p.attackCooldown || 0, 0.20);
       p.anim.setAim('center');
     });
   }
@@ -494,6 +583,7 @@ class MinunPlusle extends window.Fighter {
     if (!p || p.respawnTimer > 0) return;
     if (p.specialCooldown && p.specialCooldown > 0) return;
     if (p.actionLockTimer && p.actionLockTimer > 0) return;
+    if (!this.checkItemCanUseAttack('special')) return;
 
     let dir = 'neutral';
     if (this.input.up) dir = 'up';
@@ -501,7 +591,7 @@ class MinunPlusle extends window.Fighter {
     else if (this.input.left) { dir = 'side'; p.facing = -1; }
     else if (this.input.right) { dir = 'side'; p.facing = 1; }
 
-    p.specialCooldown = 0.55;
+    p.specialCooldown = (dir === 'side' ? 0.95 : 0.55); // CD de X+lados aumentada en 0.4s (0.55s -> 0.95s)
 
     if (dir === 'down') {
       // "NO funciona si no esta minun presente"
@@ -630,11 +720,12 @@ class MinunPlusle extends window.Fighter {
 
   _updateAttack(dt, opponent) {
     const boostActive = this.refuerzoTimer > 0 && !this.minunDead;
-    const dmgMultiplier = boostActive ? 1.10 : 1.0;
+    // Nerf de todo el daño en un 15% (factor 0.85)
+    const dmgMultiplier = (boostActive ? 1.10 : 1.0) * 0.85;
 
-    if (this.currentAttack && boostActive) {
+    if (this.currentAttack) {
       const origDmg = this.currentAttack.damage;
-      this.currentAttack.damage = Math.round(origDmg * dmgMultiplier);
+      this.currentAttack.damage = Math.max(1, Math.round(origDmg * dmgMultiplier));
       super._updateAttack(dt, opponent);
       this.currentAttack.damage = origDmg;
     } else {
@@ -669,9 +760,10 @@ class MinunPlusle extends window.Fighter {
 
           for (const hurtbox of hurtboxes) {
             if (window.physicsEngine.checkHitboxCollision(hitbox, hurtbox)) {
-              opponent.takeHit(hitbox, this, hurtbox.target);
+              const finalHitbox = this.getModifiedHitbox(hitbox, false);
+              opponent.takeHit(finalHitbox, this, hurtbox.target);
               this.partnerHasHit = true;
-              p.hitstop = hitbox.hitlag;
+              p.hitstop = finalHitbox.hitlag;
               window.soundEngine.playSfx('shock');
               if (window.particleManager) {
                 window.particleManager.spawnHitSparks(hx, hy, 5, 'electric');
@@ -711,6 +803,29 @@ class MinunPlusle extends window.Fighter {
             }
           }
         }
+
+        // Collision with opponent
+        if (opponent && opponent.state !== 'RESPAWN' && opponent.invulnTimer <= 0) {
+          const hurtboxes = opponent.getHurtboxes
+            ? opponent.getHurtboxes()
+            : [{ x: opponent.x, y: opponent.y - opponent.height * 0.5, radius: opponent.hurtboxRadius, target: null }];
+
+          let hitSomething = false;
+          for (const hurtbox of hurtboxes) {
+            if (window.physicsEngine.checkHitboxCollision(proj, hurtbox)) {
+              const finalHitbox = this.getModifiedHitbox(proj, true);
+              opponent.takeHit(finalHitbox, this, hurtbox.target);
+              hitSomething = true;
+              if (proj.onHit) proj.onHit(opponent);
+              break;
+            }
+          }
+          if (hitSomething) {
+            this.projectiles.splice(i, 1);
+            continue;
+          }
+        }
+
         if (proj.life <= 0) {
           this.projectiles.splice(i, 1);
         }
@@ -730,6 +845,64 @@ class MinunPlusle extends window.Fighter {
 
   _updatePartner(dt, opponent, stage) {
     const p = this.partner;
+    if (p) {
+      p.heldItem = this.heldItem;
+      p.balloonPopped = this.balloonPopped;
+      p.focusSashActive = this.focusSashActive;
+    }
+
+    // Sincronización fuera de pantalla con Minun durante RESPAWN (Smash Blast KO)
+    if (this.state === 'RESPAWN') {
+      if (this.respawnTimer > 1.2) {
+        p.x = -9999;
+        p.y = -9999;
+        return;
+      } else if (p.x < -500 && this.x > -500) {
+        p.x = this.x - 26 * this.facing;
+        p.y = this.y;
+        p.state = 'IDLE';
+        p.invulnTimer = 2.0;
+        p.anim.setAim('center');
+        p.anim.loop('Idle', 1.0);
+      }
+    }
+
+    // Plusle delayed jump execution (0.4s after Minun)
+    if (this.partnerPendingJumps && this.partnerPendingJumps.length > 0 && !this.minunDead) {
+      for (let i = this.partnerPendingJumps.length - 1; i >= 0; i--) {
+        this.partnerPendingJumps[i].timer -= dt;
+        if (this.partnerPendingJumps[i].timer <= 0) {
+          this.partnerPendingJumps.splice(i, 1);
+          if (p && p.respawnTimer <= 0) {
+            const canPartnerJump = p.state !== 'HURT' && p.hitstop <= 0 && p.hitstun <= 0 && (!p.actionLockTimer || p.actionLockTimer <= 0);
+            if (canPartnerJump) {
+              if (p.isGrounded) {
+                // Salto sincronizado terrestre con 0.4s de retraso
+                p.vy = -this.jumpForce;
+                p.isGrounded = false;
+                p.isJumping = true;
+                p.jumpsLeft = 1;
+                p.state = 'JUMP';
+                window.soundEngine && window.soundEngine.playSfx('jump');
+                if (window.particleManager) {
+                  window.particleManager.spawnSmoke(p.x, p.y, '#f43f5e', 8);
+                }
+              } else if (p.jumpsLeft > 0) {
+                // Doble salto sincronizado aéreo con 0.4s de retraso
+                p.vy = -this.doubleJumpForce;
+                p.jumpsLeft--;
+                p.isJumping = true;
+                p.isFastFalling = false;
+                window.soundEngine && window.soundEngine.playSfx('djump');
+                if (window.particleManager) {
+                  window.particleManager.spawnSmoke(p.x, p.y, '#f43f5e', 10);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
 
     // Respawn / Rejoining timer after blast zone launch
     if (p.respawnTimer > 0) {
@@ -774,8 +947,26 @@ class MinunPlusle extends window.Fighter {
     // Hitstun decay for partner
     if (p.hitstun > 0) {
       p.hitstun--;
-      if (p.hitstun <= 0 && p.state === 'HURT') {
-        p.state = 'IDLE';
+    }
+
+    // Return control to partner as soon as hitstop & hitstun end
+    if (p.hitstun <= 0 && p.hitstop <= 0) {
+      if (p.state === 'HURT' || p.state === 'AIR_DODGE') {
+        p.state = p.isGrounded ? 'IDLE' : 'FALL';
+        p.anim.loop(p.isGrounded ? 'Idle' : 'Fall', 1.0);
+      }
+    }
+
+    // Action lock timer and cooldown decrements for partner
+    if (p.actionLockTimer > 0) p.actionLockTimer = Math.max(0, p.actionLockTimer - dt);
+    if (p.attackCooldown > 0) p.attackCooldown = Math.max(0, p.attackCooldown - dt);
+    if (p.specialCooldown > 0) p.specialCooldown = Math.max(0, p.specialCooldown - dt);
+    if (p.dropThroughTimer > 0) p.dropThroughTimer = Math.max(0, p.dropThroughTimer - dt);
+
+    if (p.state === 'ROLL') {
+      p.vx *= 0.975; // Menor fricción durante el roll
+      if (p.actionLockTimer <= 0) {
+        p.state = (this.state === 'SHIELD' || this.input.shield) ? 'SHIELD' : 'IDLE';
         p.anim.loop('Idle', 1.0);
       }
     }
@@ -783,9 +974,9 @@ class MinunPlusle extends window.Fighter {
     // Kinematics and stage collision for Plusle
     window.physicsEngine.updateFighter(p, stage, dt);
 
-    // Variable Jump Height for Plusle (Short Hop vs Full Hop)
-    if (this.minunDead && p.isJumping && p.vy < 0) {
-      if (!this.input.jump) {
+    // Variable Jump Height for Plusle (Short Hop vs Full Hop sincronizado con Minun)
+    if (p.isJumping && p.vy < 0) {
+      if (this.minunDead && !this.input.jump) {
         const shortHopCap = -this.jumpForce * 0.50;
         if (p.vy < shortHopCap) p.vy = shortHopCap;
         p.isJumping = false;
@@ -795,24 +986,14 @@ class MinunPlusle extends window.Fighter {
     }
 
     // Blast zone check for partner
-    if (stage.isOutsideBlastZone(p.x, p.y)) {
-      window.soundEngine.playSfx('blast_ko');
-      if (window.particleManager) {
-        window.particleManager.spawnBlastKO(p.x, p.y, '#f43f5e');
-      }
-
+    if (p.respawnTimer <= 0 && stage.isOutsideBlastZone(p.x, p.y)) {
       if (this.minunDead) {
-        // Both Minun and Plusle have fallen: full KO!
         this._fullKO(stage);
         return;
       }
-
-      p.respawnTimer = 1.5;
-      p.vx = 0;
-      p.vy = 0;
-      p.hitstun = 0;
-      p.hitstop = 0;
-      p.currentAttack = null;
+      if (p.onBlastZoneKO) {
+        p.onBlastZoneKO(stage);
+      }
       return;
     }
 
@@ -849,9 +1030,10 @@ class MinunPlusle extends window.Fighter {
 
           for (const hurtbox of hurtboxes) {
             if (window.physicsEngine.checkHitboxCollision(hitbox, hurtbox)) {
-              opponent.takeHit(hitbox, this, hurtbox.target);
+              const finalHitbox = this.getModifiedHitbox(hitbox, false);
+              opponent.takeHit(finalHitbox, this, hurtbox.target);
               p.hasHitOpponent = true;
-              p.hitstop = hitbox.hitlag;
+              p.hitstop = finalHitbox.hitlag;
               window.soundEngine.playSfx('shock');
               if (window.particleManager) {
                 window.particleManager.spawnHitSparks(hx, hy, 6, 'electric');
@@ -896,14 +1078,42 @@ class MinunPlusle extends window.Fighter {
         p.state = 'IDLE';
       }
 
-      // Movement & catch-up
+      // Movement & catch-up with ledge detection
       if (dist > 8) {
         const followSpeed = dist > 90 ? this.dashSpeed * 1.15 : this.walkSpeed;
-        p.vx += Math.sign(dx) * 1.35;
-        p.vx = Math.max(-followSpeed, Math.min(followSpeed, p.vx));
+        const moveDir = Math.sign(dx);
+        let canMove = true;
 
-        if (p.isGrounded && p.state !== 'SHIELD' && !p.anim.isBusy()) {
-          p.anim.loop('Walk', 1.25);
+        // Ledge safety: Don't walk off platforms into the void on her own
+        if (p.isGrounded && stage && stage.solidPlatforms) {
+          const plat = stage.solidPlatforms.find(pl =>
+            p.y >= pl.y - 4 && p.y <= pl.y + 10 &&
+            p.x >= pl.x - 12 && p.x <= pl.x + pl.width + 12
+          );
+          if (plat) {
+            const nextX = p.x + moveDir * (followSpeed * dt * 60 + 14);
+            if ((nextX < plat.x + 8 && moveDir < 0) || (nextX > plat.x + plat.width - 8 && moveDir > 0)) {
+              const minunOnSamePlat = this.isGrounded && (this.x >= plat.x && this.x <= plat.x + plat.width && Math.abs(this.y - plat.y) < 12);
+              if (!minunOnSamePlat) {
+                canMove = false;
+              }
+            }
+          }
+        }
+
+        if (canMove) {
+          p.vx += moveDir * 1.35;
+          p.vx = Math.max(-followSpeed, Math.min(followSpeed, p.vx));
+
+          if (p.isGrounded && p.state !== 'SHIELD' && !p.anim.isBusy()) {
+            p.anim.loop('Walk', 1.25);
+          }
+        } else {
+          p.vx *= 0.6;
+          if (p.isGrounded && p.state !== 'SHIELD' && !p.anim.isBusy()) {
+            p.state = 'IDLE';
+            p.anim.loop('Idle', 1.0);
+          }
         }
       } else {
         p.vx *= 0.75;
@@ -920,14 +1130,7 @@ class MinunPlusle extends window.Fighter {
         }
       }
 
-      // Jump synchronization: Plusle leaps if Minun is jumping or if she needs to ascend
-      if ((!this.isGrounded && this.vy < 0 && p.isGrounded) || (targetY < p.y - 35 && p.isGrounded && dist < 120)) {
-        p.vy = -this.jumpForce * 0.96;
-        p.isGrounded = false;
-        if (window.particleManager) {
-          window.particleManager.spawnSmoke(p.x, p.y, '#f43f5e', 5);
-        }
-      }
+      // Plusle ya NO salta por su propia cuenta (se elimina el salto autónomo por AI)
 
       // Drop through platform with Minun
       if (this.isDroppingThrough) {
@@ -941,6 +1144,20 @@ class MinunPlusle extends window.Fighter {
         p.vx = Math.sign(dx) * 10;
         if (window.particleManager && Math.random() < 0.4) {
           window.particleManager.spawnLightningBolt(p.x, p.y - 15, p.x + p.vx * 3, p.y - 15, '#f43f5e', '#ffffff', 3);
+        }
+      }
+
+      // Emergency Warp if separated far away (> 480px) and leader is safe
+      if (dist > 480 && this.isGrounded && stage && !stage.isOutsideBlastZone(this.x, this.y)) {
+        p.x = this.x - 26 * this.facing;
+        p.y = this.y;
+        p.vx = 0;
+        p.vy = 0;
+        p.isGrounded = true;
+        p.state = 'IDLE';
+        if (window.particleManager) {
+          window.particleManager.spawnRadialBurst(p.x, p.y - 20, '#f43f5e', 'electric', 25);
+          window.particleManager.spawnFloatingText(p.x, p.y - 35, '⚡ ¡REAGRUPACIÓN!', '#f43f5e', 14);
         }
       }
     }
@@ -1257,7 +1474,7 @@ class MinunPlusle extends window.Fighter {
           type: 'electric',
           hitlag: 7,
           endLag: 0.25,
-          cooldown: 0.70, // 20% reduced CD (from 0.88s)
+          cooldown: 1.10, // Aumentada en 0.4s (era 0.70s)
           onStart: (p) => {
             const dashDir = p.input.left ? -1 : p.input.right ? 1 : p.facing;
             p.facing = dashDir;
@@ -1342,6 +1559,7 @@ class MinunPlusle extends window.Fighter {
       case 'down':
         // Down Special (⬇️ + X): Refuerzo (Helping Hand)
         // Aumenta el daño realizado un 10% durante 5 segundos. NO se stackea. NO funciona si no está Minun presente.
+        // NUEVO: Teletransporta a Plusle a Minun siempre y cuando esté cerca (dist <= 350px).
         return {
           name: 'Refuerzo (Down X)',
           anim: 'Charge',
@@ -1367,15 +1585,48 @@ class MinunPlusle extends window.Fighter {
             window.soundEngine.playSfx('select');
             if (window.particleManager) {
               window.particleManager.spawnRadialBurst(p.x, p.y - 20, '#fbbf24', 'electric', 35);
-              if (this.partner && this.partner.respawnTimer <= 0) {
-                window.particleManager.spawnRadialBurst(this.partner.x, this.partner.y - 20, '#fbbf24', 'electric', 35);
-                window.particleManager.spawnLightningBolt(p.x, p.y - 20, this.partner.x, this.partner.y - 20, '#fbbf24', '#ffffff', 5);
-              }
               window.particleManager.spawnFloatingText(p.x, p.y - 40, '¡REFUERZO! +10% DAÑO (5s)', '#fbbf24', 18);
             }
 
+            // Refuerzo: Teletransporta a Plusle a Minun si está viva y cerca (dist <= 350px)
             if (this.partner && this.partner.respawnTimer <= 0) {
-              this.partner.anim.play('Charge', { speed: 1.3 });
+              const dx = this.partner.x - this.x;
+              const dy = this.partner.y - this.y;
+              const dist = Math.hypot(dx, dy);
+
+              if (dist <= 350) {
+                const oldPx = this.partner.x;
+                const oldPy = this.partner.y;
+                const targetX = this.x - 26 * this.facing;
+                const targetY = this.y;
+
+                this.partner.x = targetX;
+                this.partner.y = targetY;
+                this.partner.vx = 0;
+                this.partner.vy = 0;
+                this.partner.isGrounded = this.isGrounded;
+                this.partner.facing = this.facing;
+                this.partner.state = 'IDLE';
+                this.partner.hitstun = 0;
+                this.partner.hitstop = 0;
+                this.partner.actionLockTimer = 0;
+                this.partner.isSeparated = false;
+                this.partner.anim.setAim('center');
+                this.partner.anim.play('Charge', { speed: 1.3 });
+
+                window.soundEngine.playSfx('shock');
+                if (window.particleManager) {
+                  window.particleManager.spawnLightningBolt(oldPx, oldPy - 20, targetX, targetY - 20, '#f43f5e', '#ffffff', 5);
+                  window.particleManager.spawnRadialBurst(oldPx, oldPy - 20, '#f43f5e', 'electric', 25);
+                  window.particleManager.spawnRadialBurst(targetX, targetY - 20, '#fbbf24', 'electric', 35);
+                  window.particleManager.spawnFloatingText(targetX, targetY - 35, '⚡ ¡PLUSLE REAGRUPADA!', '#fbbf24', 16);
+                }
+              } else {
+                if (window.particleManager) {
+                  window.particleManager.spawnFloatingText(this.x, this.y - 25, '¡Plusle está lejos!', '#94a3b8', 14);
+                }
+                this.partner.anim.play('Charge', { speed: 1.3 });
+              }
             }
           }
         };
@@ -1858,7 +2109,35 @@ class MinunPlusle extends window.Fighter {
    * Draws both Minun and Plusle, shadows, dual shields, and active polarity link
    * ========================================================================= */
 
-  draw(ctx) {
+  draw(ctx, opts = {}) {
+    const isDittoMatch = (opts && opts.isDittoMatch !== undefined)
+      ? opts.isDittoMatch
+      : (window.game && window.game.playerDex === window.game.dummyDex);
+
+    // Ditto Match P1 Indicator
+    if (this.isPlayer && isDittoMatch) {
+      ctx.save();
+      const bounce = Math.sin(performance.now() * 0.008) * 3;
+      const leaderY = !this.minunDead ? this.y : this.partner.y;
+      const leaderX = !this.minunDead ? this.x : this.partner.x;
+      const tagY = leaderY - 45 + bounce;
+      ctx.fillStyle = '#38bdf8';
+      ctx.shadowColor = '#38bdf8';
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.moveTo(leaderX, tagY);
+      ctx.lineTo(leaderX - 6, tagY - 8);
+      ctx.lineTo(leaderX + 6, tagY - 8);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.font = 'bold 11px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText('P1', leaderX, tagY - 10);
+      ctx.restore();
+    }
+
     // 1. Shadows under feet
     if (this.isGrounded && !this.minunDead) {
       ctx.save();
@@ -1923,7 +2202,7 @@ class MinunPlusle extends window.Fighter {
 
     // 5. Draw Plusle (partner)
     if (this.partner.respawnTimer <= 0) {
-      const partnerHitFlashing = this.partner.hitstop > 0 || (this.partner.state === 'HURT' && this.partner.hitstun > 15);
+      const partnerHitFlashing = this.partner.hitstop > 0 || (this.partner.state === 'HURT' && this.partner.hitstun > 7);
       const partnerInvulnAlpha = this.partner.invulnTimer > 0 && Math.floor(performance.now() / 60) % 2 === 0 ? 0.35 : 1.0;
 
       this.partner.anim.draw(ctx, this.partner.x, this.partner.y, {
@@ -1944,7 +2223,7 @@ class MinunPlusle extends window.Fighter {
         ctx.restore();
       }
 
-      // If Minun is dead, draw 7-second countdown text above Plusle
+      // If Minun is dead, draw countdown text above Plusle
       if (this.minunDead) {
         ctx.save();
         ctx.font = 'bold 12px sans-serif';
@@ -1960,12 +2239,27 @@ class MinunPlusle extends window.Fighter {
         ctx.fillText(txt, this.partner.x, this.partner.y - this.partner.height - 10);
         ctx.restore();
       }
+    } else if (!this.minunDead) {
+      // Draw Plusle respawn countdown above Minun
+      ctx.save();
+      ctx.font = 'bold 11px sans-serif';
+      ctx.textAlign = 'center';
+      const txt = `⏳ Plusle KO: ${this.partner.respawnTimer.toFixed(1)}s`;
+      const tw = ctx.measureText(txt).width;
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+      ctx.fillRect(this.x - tw * 0.5 - 8, this.y - this.height - 28, tw + 16, 20);
+      ctx.strokeStyle = '#f43f5e';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(this.x - tw * 0.5 - 8, this.y - this.height - 28, tw + 16, 20);
+      ctx.fillStyle = '#f43f5e';
+      ctx.fillText(txt, this.x, this.y - this.height - 14);
+      ctx.restore();
     }
 
     // 6. Draw Minun (leader) - ONLY if alive!
     if (!this.minunDead) {
       if (!(this.invulnTimer > 0 && Math.floor(performance.now() / 60) % 2 === 0)) {
-        const isHitFlashing = this.hitstop > 0 || (this.state === 'HURT' && this.hitstun > 15);
+        const isHitFlashing = this.hitstop > 0 || (this.state === 'HURT' && this.hitstun > 7);
         this.anim.draw(ctx, this.x, this.y, { flash: isHitFlashing });
       }
 
@@ -1981,6 +2275,112 @@ class MinunPlusle extends window.Fighter {
         ctx.stroke();
         ctx.restore();
       }
+    }
+
+    // Dynamic Environmental Lighting
+    const currentStage = (opts && opts.stage) || (window.game && window.game.stage);
+    if (currentStage && typeof currentStage.getLightingAt === 'function') {
+      const activeChar = !this.minunDead ? this : this.partner;
+      const light = currentStage.getLightingAt(activeChar.x, activeChar.y);
+      if (light && (light.intensity > 0 || light.alpha > 0)) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const lightGrad = ctx.createRadialGradient(
+          activeChar.x,
+          activeChar.y - activeChar.height * 0.5,
+          4,
+          activeChar.x,
+          activeChar.y - activeChar.height * 0.5,
+          activeChar.height * 0.85
+        );
+        lightGrad.addColorStop(0, light.color);
+        lightGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = lightGrad;
+        ctx.beginPath();
+        ctx.arc(activeChar.x, activeChar.y - activeChar.height * 0.5, activeChar.height * 0.85, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+  }
+
+  getSmashAttackDef(dir) {
+    switch (dir) {
+      case 'up':
+        return {
+          name: '¡Salto Alto Voltaje Sinergia! (Up Smash)',
+          anim: 'Attack',
+          animSpeed: 1.45,
+          hitboxStart: 2,
+          hitboxEnd: 10,
+          offsetX: 14,
+          offsetY: 45,
+          radius: 40,
+          damage: 18,
+          baseKnockback: 36,
+          knockbackScaling: 1.60,
+          angle: 88,
+          type: 'electric',
+          hitlag: 9,
+          slashColor: '#f43f5e',
+          onStart: (p) => {
+            window.soundEngine.playSfx('shock');
+            if (window.particleManager) {
+              window.particleManager.spawnHitSparks(p.x, p.y - 35, 8, 'electric');
+            }
+          }
+        };
+
+      case 'down':
+        return {
+          name: '¡Polaridad Cruzada Terrestre! (Down Smash)',
+          anim: 'Attack',
+          animSpeed: 1.45,
+          hitboxStart: 2,
+          hitboxEnd: 10,
+          offsetX: 0,
+          offsetY: 15,
+          radius: 48,
+          damage: 16,
+          baseKnockback: 33,
+          knockbackScaling: 1.45,
+          angle: 52,
+          type: 'electric',
+          hitlag: 8,
+          slashColor: '#38bdf8',
+          onStart: (p) => {
+            window.soundEngine.playSfx('shock');
+            if (window.particleManager) {
+              window.particleManager.spawnRadialBurst(p.x, p.y - 15, '#38bdf8', 'electric', 46);
+            }
+          }
+        };
+
+      case 'side':
+      default:
+        return {
+          name: '¡Chispazo Dúo Smash! (Side Smash)',
+          anim: 'Attack',
+          animSpeed: 1.45,
+          hitboxStart: 2,
+          hitboxEnd: 10,
+          offsetX: 38,
+          offsetY: 22,
+          radius: 42,
+          damage: 17,
+          baseKnockback: 35,
+          knockbackScaling: 1.55,
+          angle: 35,
+          type: 'electric',
+          hitlag: 9,
+          slashColor: '#fbbf24',
+          onStart: (p) => {
+            window.soundEngine.playSfx('shock');
+            if (window.particleManager) {
+              window.particleManager.spawnLightningBolt(p.x, p.y - 20, p.x + p.facing * 55, p.y - 20, '#ffffff', '#fbbf24', 5);
+            }
+          }
+        };
     }
   }
 }

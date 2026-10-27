@@ -372,6 +372,202 @@ class SoundEngine {
         osc.stop(t + 0.18);
         break;
       }
+
+      case 'poison': {
+        // Toxic bubbling hiss / veneno sound
+        const osc = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(320 * pitch, t);
+        osc.frequency.linearRampToValueAtTime(140 * pitch, t + 0.10);
+        osc.frequency.linearRampToValueAtTime(260 * pitch, t + 0.20);
+        g.gain.setValueAtTime(0.3, t);
+        g.gain.exponentialRampToValueAtTime(0.01, t + 0.20);
+        osc.connect(g).connect(this.sfxGain);
+        osc.start(t);
+        osc.stop(t + 0.20);
+        this._noise(t, 0.15, 0.18);
+        break;
+      }
+
+      case 'charge': {
+        // High-energy rising pitch power accumulation
+        const osc = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(160 * pitch, t);
+        osc.frequency.exponentialRampToValueAtTime(540 * pitch, t + 0.35);
+        g.gain.setValueAtTime(0.24, t);
+        g.gain.exponentialRampToValueAtTime(0.01, t + 0.35);
+        osc.connect(g).connect(this.sfxGain);
+        osc.start(t);
+        osc.stop(t + 0.35);
+        break;
+      }
+
+      case 'smash': {
+        // Booming explosive Smash attack release
+        const osc = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(260 * pitch, t);
+        osc.frequency.exponentialRampToValueAtTime(25, t + 0.38);
+        g.gain.setValueAtTime(0.65, t);
+        g.gain.exponentialRampToValueAtTime(0.01, t + 0.38);
+        osc.connect(g).connect(this.sfxGain);
+        osc.start(t);
+        osc.stop(t + 0.38);
+        this._noise(t, 0.35, 0.55);
+        break;
+      }
+
+      case 'parry_shield': {
+        // Metallic perfect shield bell chime with high resonant overtone
+        const osc1 = this.ctx.createOscillator();
+        const g1 = this.ctx.createGain();
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(1174.66, t); // D6
+        osc1.frequency.exponentialRampToValueAtTime(1760.00, t + 0.08); // A6
+        g1.gain.setValueAtTime(0.55, t);
+        g1.gain.exponentialRampToValueAtTime(0.005, t + 0.42);
+        osc1.connect(g1).connect(this.sfxGain);
+        osc1.start(t);
+        osc1.stop(t + 0.42);
+
+        // Metallic second harmonic ping
+        const osc2 = this.ctx.createOscillator();
+        const g2 = this.ctx.createGain();
+        osc2.type = 'triangle';
+        osc2.frequency.setValueAtTime(2349.32, t); // D7
+        g2.gain.setValueAtTime(0.40, t);
+        g2.gain.exponentialRampToValueAtTime(0.005, t + 0.28);
+        osc2.connect(g2).connect(this.sfxGain);
+        osc2.start(t);
+        osc2.stop(t + 0.28);
+        break;
+      }
+
+      case 'ledge_grab': {
+        // Crisp ledge snap and hand grab
+        const osc = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(220 * pitch, t);
+        osc.frequency.exponentialRampToValueAtTime(440 * pitch, t + 0.09);
+        g.gain.setValueAtTime(0.35, t);
+        g.gain.exponentialRampToValueAtTime(0.01, t + 0.09);
+        osc.connect(g).connect(this.sfxGain);
+        osc.start(t);
+        osc.stop(t + 0.09);
+        this._noise(t, 0.06, 0.2);
+        break;
+      }
+
+      case 'countdown_beep': {
+        // High retro arcade beep for 3.. 2.. 1..
+        const osc = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(440, t);
+        g.gain.setValueAtTime(0.35, t);
+        g.gain.exponentialRampToValueAtTime(0.005, t + 0.14);
+        osc.connect(g).connect(this.sfxGain);
+        osc.start(t);
+        osc.stop(t + 0.14);
+        break;
+      }
+
+      case 'countdown_go': {
+        // Triumphant double chord for ¡YA!
+        [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
+          const osc = this.ctx.createOscillator();
+          const g = this.ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(freq, t);
+          g.gain.setValueAtTime(0.28, t);
+          g.gain.exponentialRampToValueAtTime(0.005, t + 0.45);
+          osc.connect(g).connect(this.sfxGain);
+          osc.start(t);
+          osc.stop(t + 0.45);
+        });
+        break;
+      }
+
+      case 'sing': {
+        // Sweet melodic chime notes for Jigglypuff's Sing (Lullaby)
+        const notes = [587.33, 659.25, 523.25]; // D5, E5, C5
+        notes.forEach((freq, i) => {
+          const osc = this.ctx.createOscillator();
+          const g = this.ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, t + i * 0.12);
+          g.gain.setValueAtTime(0.24, t + i * 0.12);
+          g.gain.exponentialRampToValueAtTime(0.005, t + i * 0.12 + 0.28);
+          osc.connect(g).connect(this.sfxGain);
+          osc.start(t + i * 0.12);
+          osc.stop(t + i * 0.12 + 0.28);
+        });
+        break;
+      }
+
+      case 'rest': {
+        // Sonic boom + critical snap for Rest
+        const osc = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(440, t);
+        osc.frequency.exponentialRampToValueAtTime(35, t + 0.4);
+        g.gain.setValueAtTime(0.8, t);
+        g.gain.exponentialRampToValueAtTime(0.01, t + 0.4);
+        osc.connect(g).connect(this.sfxGain);
+        osc.start(t);
+        osc.stop(t + 0.4);
+        this._noise(t, 0.4, 0.7);
+
+        // High sharp ping
+        const ping = this.ctx.createOscillator();
+        const pingG = this.ctx.createGain();
+        ping.type = 'sine';
+        ping.frequency.setValueAtTime(1760, t);
+        ping.frequency.exponentialRampToValueAtTime(2200, t + 0.25);
+        pingG.gain.setValueAtTime(0.4, t);
+        pingG.gain.exponentialRampToValueAtTime(0.01, t + 0.25);
+        ping.connect(pingG).connect(this.sfxGain);
+        ping.start(t);
+        ping.stop(t + 0.25);
+        break;
+      }
+
+      case 'rollout': {
+        // Revving turbine pitch sweep
+        const osc = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(150, t);
+        osc.frequency.exponentialRampToValueAtTime(480, t + 0.3);
+        g.gain.setValueAtTime(0.25, t);
+        g.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
+        osc.connect(g).connect(this.sfxGain);
+        osc.start(t);
+        osc.stop(t + 0.3);
+        break;
+      }
+
+      case 'slap': {
+        // Sharp physical slap for Jigglypuff
+        const osc = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(360 * pitch, t);
+        osc.frequency.exponentialRampToValueAtTime(80, t + 0.08);
+        g.gain.setValueAtTime(0.4, t);
+        g.gain.exponentialRampToValueAtTime(0.01, t + 0.08);
+        osc.connect(g).connect(this.sfxGain);
+        osc.start(t);
+        osc.stop(t + 0.08);
+        this._noise(t, 0.08, 0.35);
+        break;
+      }
     }
   }
 

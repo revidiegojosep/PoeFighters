@@ -3,7 +3,9 @@ window.SPRITE_META = {
     "s": 1,
     "name": "Bulbasaur",
     "type": "Planta / Veneno",
-    "weight": 105,
+    "weight": 6.9,
+    "pokedexWeight": 6.9,
+    "weightCategory": "Medio",
     "a": {
       "Idle": {"w":32,"h":40,"n":3,"r":8,"d":[40,6,6],"ax":15.5,"ay":23.5},
       "Walk": {"w":40,"h":40,"n":6,"r":8,"d":[4,4,4,4,4,4],"ax":19.5,"ay":23.5},
@@ -18,7 +20,9 @@ window.SPRITE_META = {
     "s": 1,
     "name": "Pikachu",
     "type": "Eléctrico",
-    "weight": 85,
+    "weight": 6.0,
+    "pokedexWeight": 6.0,
+    "weightCategory": "Ligero",
     "a": {
       "Idle": {"w":40,"h":56,"n":6,"r":8,"d":[40,2,3,3,3,2],"ax":19.5,"ay":31.5},
       "Walk": {"w":32,"h":40,"n":4,"r":8,"d":[8,10,8,10],"ax":15.5,"ay":23.5},
@@ -33,7 +37,9 @@ window.SPRITE_META = {
     "s": 0,
     "name": "Plusle",
     "type": "Eléctrico",
-    "weight": 70,
+    "weight": 4.2,
+    "pokedexWeight": 4.2,
+    "weightCategory": "Pluma",
     "a": {
       "Idle": {"w":24,"h":32,"n":4,"r":8,"d":[30,10,6,10],"ax":11.5,"ay":19.5},
       "Walk": {"w":24,"h":40,"n":8,"r":8,"d":[6,4,8,4,6,4,8,4],"ax":11.5,"ay":23.5},
@@ -48,7 +54,9 @@ window.SPRITE_META = {
     "s": 0,
     "name": "Minun",
     "type": "Eléctrico",
-    "weight": 70,
+    "weight": 4.2,
+    "pokedexWeight": 4.2,
+    "weightCategory": "Pluma",
     "a": {
       "Idle": {"w":24,"h":32,"n":4,"r":8,"d":[30,10,6,10],"ax":11.5,"ay":19.5},
       "Walk": {"w":24,"h":40,"n":8,"r":8,"d":[6,4,8,4,6,4,8,4],"ax":11.5,"ay":23.5},
@@ -63,7 +71,9 @@ window.SPRITE_META = {
     "s": 2,
     "name": "Gengar",
     "type": "Fantasma / Veneno",
-    "weight": 80,
+    "weight": 40.5,
+    "pokedexWeight": 40.5,
+    "weightCategory": "Pesado",
     "a": {
       "Idle": {"w":32,"h":40,"n":8,"r":8,"d":[40,4,3,3,3,3,3,4],"ax":15.5,"ay":23.5},
       "Walk": {"w":32,"h":40,"n":4,"r":8,"d":[8,10,8,10],"ax":15.5,"ay":23.5},
@@ -73,5 +83,23 @@ window.SPRITE_META = {
       "Hurt": {"w":48,"h":56,"n":2,"r":8,"d":[2,8],"ax":23.5,"ay":29.5},
       "Faint": {"w":32,"h":40,"n":4,"r":8,"d":[8,12,4,10],"ax":15.5,"ay":23.5}
     }
+  },
+  39: {
+    "s": 1,
+    "name": "Jigglypuff",
+    "type": "Normal / Hada",
+    "weight": 5.5,
+    "pokedexWeight": 5.5,
+    "weightCategory": "Ligero",
+    "a": {
+      "Idle": {"w":24,"h":32,"n":5,"r":8,"d":[25,8,15,8,15],"ax":11.5,"ay":19.5},
+      "Walk": {"w":32,"h":40,"n":5,"r":8,"d":[6,4,4,4,6],"ax":15.5,"ay":23.5},
+      "Attack": {"w":72,"h":80,"n":13,"r":8,"d":[2,2,6,1,1,2,2,2,2,2,2,2,2],"ax":35.5,"ay":43.5},
+      "Shoot": {"w":32,"h":40,"n":12,"r":8,"d":[2,2,6,1,1,2,2,2,2,2,2,2],"ax":15.5,"ay":23.5},
+      "Charge": {"w":24,"h":24,"n":10,"r":8,"d":[2,2,2,2,2,2,2,2,2,2],"ax":11.5,"ay":14.5},
+      "Hurt": {"w":40,"h":48,"n":2,"r":8,"d":[2,8],"ax":19.5,"ay":27.5},
+      "Faint": {"w":32,"h":32,"n":4,"r":8,"d":[8,12,4,10],"ax":15.5,"ay":19.5}
+    }
   }
 };
+
