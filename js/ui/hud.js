@@ -281,12 +281,12 @@ class GameHUD {
       this.dummyBadgeEl.style.display = gameMode === 'TRAINING' ? 'inline-block' : 'none';
     }
     if (this.dummyStocksEl) {
-      this.dummyStocksEl.style.display = gameMode === 'BATTLE' ? 'flex' : 'none';
+      this.dummyStocksEl.style.display = (gameMode === 'BATTLE' || gameMode === 'ONLINE') ? 'flex' : 'none';
     }
 
     const deck = document.querySelector('.training-deck');
     if (deck) {
-      if (gameMode === 'BATTLE') {
+      if (gameMode === 'BATTLE' || gameMode === 'ONLINE') {
         deck.classList.add('battle-mode');
       } else {
         deck.classList.remove('battle-mode');
@@ -309,7 +309,7 @@ class GameHUD {
       }
     }
 
-    const { isPlayerWin, isCpuVsCpu, winnerFighter, playerStocks, dummyStocks, maxCombo, totalDamage, cpuLevel } = data;
+    const { isPlayerWin, isOnline, isCpuVsCpu, winnerFighter, playerStocks, dummyStocks, maxCombo, totalDamage, cpuLevel } = data;
 
     if (this.victoryTitleEl) {
       if (isCpuVsCpu) {
@@ -328,6 +328,10 @@ class GameHUD {
     if (this.victorySubtitleEl) {
       if (isCpuVsCpu) {
         this.victorySubtitleEl.innerText = `¡${winnerFighter ? winnerFighter.name : 'Luchador'} ha ganado la batalla de CPUs!`;
+      } else if (isOnline) {
+        this.victorySubtitleEl.innerText = isPlayerWin
+          ? `¡Has derrotado a tu rival en combate en línea conservando ${Math.max(0, playerStocks)} vidas!`
+          : `Tu rival ha conseguido noquear todas tus vidas.`;
       } else {
         this.victorySubtitleEl.innerText = isPlayerWin
           ? `¡Has derrotado a la CPU (Nivel ${cpuLevel}) conservando tus vidas!`
@@ -341,8 +345,9 @@ class GameHUD {
     }
 
     if (this.victoryStocksEl) {
-      const p1Label = isCpuVsCpu ? 'CPU 1' : 'Jugador';
-      this.victoryStocksEl.innerText = `${p1Label}: ${Math.max(0, playerStocks)} ❤️ · CPU 2: ${Math.max(0, dummyStocks)} ❤️`;
+      const p1Label = isCpuVsCpu ? 'CPU 1' : 'Tú';
+      const p2Label = isOnline ? 'Rival' : (isCpuVsCpu ? 'CPU 2' : 'CPU');
+      this.victoryStocksEl.innerText = `${p1Label}: ${Math.max(0, playerStocks)} ❤️ · ${p2Label}: ${Math.max(0, dummyStocks)} ❤️`;
     }
 
     if (this.victoryComboEl) {

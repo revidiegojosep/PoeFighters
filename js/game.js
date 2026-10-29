@@ -1210,6 +1210,18 @@ class PokeSmashGame {
     const rematchBtn = document.getElementById('btn-victory-rematch');
     if (rematchBtn) {
       rematchBtn.addEventListener('click', () => {
+        const victoryModal = document.getElementById('victory-modal');
+        if (victoryModal) victoryModal.classList.remove('open');
+
+        if (this.isOnlineMatch && this.onlineManager) {
+          // En modo online, volver al lobby de la sala actual y resetear listos
+          const onlineModal = document.getElementById('online-match-modal');
+          if (onlineModal) onlineModal.classList.add('open');
+          this.onlineManager.setReady(false);
+          this.onlineManager.status = 'lobby';
+          return;
+        }
+
         this.startMatch({
           mode: this.gameMode,
           stocks: this.matchStocks,
@@ -1229,15 +1241,26 @@ class PokeSmashGame {
     }
 
     const victoryMenuBtn = document.getElementById('btn-victory-menu');
-    if (victoryMenuBtn && setupModal) {
+    if (victoryMenuBtn) {
       victoryMenuBtn.addEventListener('click', () => {
         const victoryModal = document.getElementById('victory-modal');
         if (victoryModal) victoryModal.classList.remove('open');
-        this.ensureFullscreenModal(setupModal);
-        this.hud.renderModalAvatars();
-        this._updateRosterButtonsUI();
-        this.goToSetupStep(1);
-        setupModal.classList.add('open');
+
+        if (this.isOnlineMatch && this.onlineManager) {
+          this.isOnlineMatch = false;
+          this.onlineManager.leaveRoom();
+          const startScreen = document.getElementById('start-screen');
+          if (startScreen) startScreen.classList.remove('hidden');
+          return;
+        }
+
+        if (setupModal) {
+          this.ensureFullscreenModal(setupModal);
+          this.hud.renderModalAvatars();
+          this._updateRosterButtonsUI();
+          this.goToSetupStep(1);
+          setupModal.classList.add('open');
+        }
       });
     }
   }
@@ -1836,13 +1859,14 @@ class PokeSmashGame {
       killer.onElimination();
     }
 
-    // In Battle Mode (3 Stocks), check if anyone reached 0 stocks
-    if (this.gameMode === 'BATTLE') {
-      if (this.dummy.stocks <= 0) {
+    // In Battle Mode & Online Mode (3 Stocks), check if anyone reached 0 stocks
+    if (this.gameMode === 'BATTLE' || this.gameMode === 'ONLINE') {
+      if (this.dummy && this.dummy.stocks <= 0) {
         this.triggerDecisiveFinish('PLAYER_WIN');
         return;
-      } else if (this.player.stocks <= 0) {
-        this.triggerDecisiveFinish('CPU_WIN');
+      } else if (this.player && this.player.stocks <= 0) {
+        const result = (this.gameMode === 'ONLINE') ? 'RIVAL_WIN' : 'CPU_WIN';
+        this.triggerDecisiveFinish(result);
         return;
       }
     }
@@ -1910,10 +1934,11 @@ class PokeSmashGame {
     const isPlayerWin = this.endCutsceneResult === 'PLAYER_WIN';
     this.hud.showVictoryModal({
       isPlayerWin,
+      isOnline: this.gameMode === 'ONLINE',
       isCpuVsCpu: this.p1Type === 'CPU',
       winnerFighter: isPlayerWin ? this.player : this.dummy,
-      playerStocks: this.player.stocks,
-      dummyStocks: this.dummy.stocks,
+      playerStocks: this.player ? this.player.stocks : 0,
+      dummyStocks: this.dummy ? this.dummy.stocks : 0,
       maxCombo: this.dummyController.maxCombo,
       totalDamage: Math.round(this.dummyController.totalDamageDealt),
       cpuLevel: this.cpuLevel
@@ -2067,6 +2092,18 @@ class PokeSmashGame {
       }
     }
 
+    // Verificación continua de fin de combate por vidas (3 Vidas oficiales)
+    if ((this.gameMode === 'BATTLE' || this.gameMode === 'ONLINE') && !this.isMatchOver && !this.isDecisiveFinish) {
+      if (this.dummy && this.dummy.stocks <= 0) {
+        this.triggerDecisiveFinish('PLAYER_WIN');
+        return;
+      } else if (this.player && this.player.stocks <= 0) {
+        const result = (this.gameMode === 'ONLINE') ? 'RIVAL_WIN' : 'CPU_WIN';
+        this.triggerDecisiveFinish(result);
+        return;
+      }
+    }
+
     // 1. Inputs & AI
     this.pollGamepads();
 
@@ -2080,7 +2117,10 @@ class PokeSmashGame {
       this.dummy.handleInputs(this.stage, dt);
     } else if (this.p2Type === 'ONLINE_RIVAL') {
       // ONLINE_RIVAL is driven entirely by OnlineManager network packets.
-      // Do NOT call dummy.handleInputs() because it overwrites remote state and animations with IDLE every frame!
+      // Suavizado e interpolación física continua a 60 FPS
+      if (this.onlineManager && typeof this.onlineManager.updateRivalPhysics === 'function') {
+        this.onlineManager.updateRivalPhysics(dt);
+      }
     } else {
       this.dummyController.update(dt, this.player, this.stage);
     }

@@ -157,6 +157,8 @@ class OnlineManager {
     this.lastHttpSendTime = 0;
     this.packetSeq = 0;
     this.lastAppliedPacketSeq = 0;
+    this.targetX = null;
+    this.targetY = null;
     this.ping = 0;
 
     // Selección de personajes (30 segundos)
@@ -447,8 +449,12 @@ class OnlineManager {
           this._handleRoomStatusTransition(this.status);
         }
 
-        // WebRTC Signaling Poll
-        if (!this.isRtcConnected && this.status !== 'waiting') {
+        // WebRTC Signaling Poll: continuar procesando señalización hasta que P2P esté verificado bidireccionalmente
+        const isRtcFullyBidirectional = this.isRtcConnected && 
+                                        this.dataChannel && 
+                                        this.dataChannel.readyState === 'open' && 
+                                        this.lastRtcPacketReceivedTime > 0;
+        if (!isRtcFullyBidirectional && this.status !== 'waiting' && this.room?.signaling) {
           this._handleSignaling(this.room.signaling);
         }
       }
@@ -555,6 +561,8 @@ class OnlineManager {
     this.lastRtcPacketReceivedTime = 0;
     this.packetSeq = 0;
     this.lastAppliedPacketSeq = 0;
+    this.targetX = null;
+    this.targetY = null;
 
     if (window.onOnlineBattleStart) {
       window.onOnlineBattleStart({
@@ -719,6 +727,41 @@ class OnlineManager {
   }
 
   /**
+   * Suavizado e interpolación continua a 60 FPS (elimina micro-tirones y lag visual del rival)
+   */
+  updateRivalPhysics(dt) {
+    if (!this.game || this.status !== 'playing') return;
+    const rival = this.game.dummy;
+    if (!rival) return;
+
+    // Si el rival está en reaparición o KO, no interpolar
+    if (rival.state === 'RESPAWN' || rival.state === 'KO') return;
+
+    if (this.targetX !== null && this.targetX !== undefined) {
+      const dx = this.targetX - rival.x;
+      if (Math.abs(dx) > 140) {
+        rival.x = this.targetX;
+      } else if (Math.abs(dx) > 0.3) {
+        // Interp exponencial suave a 60 FPS
+        rival.x += dx * 0.35;
+      } else {
+        rival.x = this.targetX;
+      }
+    }
+
+    if (this.targetY !== null && this.targetY !== undefined && !rival.isGrounded) {
+      const dy = this.targetY - rival.y;
+      if (Math.abs(dy) > 120) {
+        rival.y = this.targetY;
+      } else if (Math.abs(dy) > 0.3) {
+        rival.y += dy * 0.35;
+      } else {
+        rival.y = this.targetY;
+      }
+    }
+  }
+
+  /**
    * Envía los datos locales al rival
    */
   _sendLocalFighterState() {
@@ -841,9 +884,9 @@ class OnlineManager {
       } catch (e) {}
     }
 
-    // 2. HTTP Fallback Sync: ~15 req/s (intervalo de 65ms)
-    // Garantiza sincronización continua e instantánea en caso de que WebRTC falle
-    if (!this.isHttpInFlight && (now - this.lastHttpSendTime >= 65)) {
+    // 2. HTTP Fallback Sync: ~28-30 req/s (intervalo de 32ms)
+    // Garantiza sincronización fluida y continua sin retrasos
+    if (!this.isHttpInFlight && (now - this.lastHttpSendTime >= 32)) {
       this.lastHttpSendTime = now;
       this._httpSync(payload, false);
     }
@@ -1024,6 +1067,9 @@ class OnlineManager {
 
     if (typeof safe.stocks === 'number') {
       rivalFighter.stocks = Math.min(rivalFighter.stocks, safe.stocks);
+      if (rivalFighter.stocks <= 0 && this.game && !this.game.isMatchOver && !this.game.isDecisiveFinish) {
+        this.game.triggerDecisiveFinish('PLAYER_WIN');
+      }
     }
 
     // 3. Replicación inmediata de acciones ofensivas y defensivas (Ataques, Especiales, Smash, Agarres, Esquives)
@@ -1108,23 +1154,15 @@ class OnlineManager {
     }
 
     if (typeof safe.x === 'number') {
-      const dx = safe.x - rivalFighter.x;
-      if (Math.abs(dx) > 120 || safe.state === 'RESPAWN' || safe.state === 'KO') {
-        rivalFighter.x = safe.x;
-      } else if (Math.abs(dx) > 1.0) {
-        rivalFighter.x += dx * 0.85;
-      } else {
+      this.targetX = safe.x;
+      if (Math.abs(safe.x - rivalFighter.x) > 140 || safe.state === 'RESPAWN' || safe.state === 'KO') {
         rivalFighter.x = safe.x;
       }
     }
 
     if (!lockedToPlat && typeof safe.y === 'number') {
-      const dy = safe.y - rivalFighter.y;
-      if (Math.abs(dy) > 100 || safe.state === 'RESPAWN' || safe.state === 'KO') {
-        rivalFighter.y = safe.y;
-      } else if (Math.abs(dy) > 1.0) {
-        rivalFighter.y += dy * 0.85;
-      } else {
+      this.targetY = safe.y;
+      if (Math.abs(safe.y - rivalFighter.y) > 120 || safe.state === 'RESPAWN' || safe.state === 'KO') {
         rivalFighter.y = safe.y;
       }
     }
