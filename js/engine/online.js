@@ -659,27 +659,67 @@ class OnlineManager {
   }
 
   /**
-   * Configuración de WebRTC PeerConnection para latencia mínima directa (P2P)
+   * Configuración de WebRTC PeerConnection para latencia mínima directa (P2P + STUN/TURN)
    */
   initWebRTC() {
     if (this.peerConnection) return;
     const config = {
       iceServers: [
+        // STUN Servers públicos de alta velocidad
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
-        { urls: 'stun:stun2.l.google.com:19302' },
-        { urls: 'stun:stun3.l.google.com:19302' },
-        { urls: 'stun:stun4.l.google.com:19302' }
-      ]
+        { urls: 'stun:stun.cloudflare.com:3478' },
+        { urls: 'stun:openrelay.metered.ca:80' },
+
+        // Servidores TURN (OpenRelay) para atravesar CGNAT / Symmetric NAT / Routers estrictos
+        {
+          urls: 'turn:openrelay.metered.ca:80',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        },
+        {
+          urls: 'turn:openrelay.metered.ca:443',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        },
+        {
+          urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        }
+      ],
+      iceCandidatePoolSize: 2
     };
 
     try {
       this.peerConnection = new RTCPeerConnection(config);
 
+      // Buffer para enviar candidatos ICE agrupados y no saturar HTTP
+      this._iceCandidateBatch = [];
+      this._iceBatchTimer = null;
+
       this.peerConnection.onicecandidate = (event) => {
         if (event.candidate) {
-          this._sendSignal('candidate', event.candidate);
+          this._iceCandidateBatch.push(event.candidate);
+          if (!this._iceBatchTimer) {
+            this._iceBatchTimer = setTimeout(() => {
+              this._iceBatchTimer = null;
+              if (this._iceCandidateBatch.length > 0) {
+                const batch = [...this._iceCandidateBatch];
+                this._iceCandidateBatch = [];
+                this._sendSignal('candidates', batch);
+              }
+            }, 50);
+          }
         }
+      };
+
+      this.peerConnection.onconnectionstatechange = () => {
+        console.log('[🌐 WebRTC] Connection State:', this.peerConnection.connectionState);
+      };
+
+      this.peerConnection.oniceconnectionstatechange = () => {
+        console.log('[🌐 WebRTC] ICE State:', this.peerConnection.iceConnectionState);
       };
 
       if (this.role === 'host') {
@@ -770,6 +810,7 @@ class OnlineManager {
         const myCandidatesKey = this.role === 'host' ? 'candidates_p2' : 'candidates_p1';
         if (signals[myCandidatesKey] && Array.isArray(signals[myCandidatesKey])) {
           for (const c of signals[myCandidatesKey]) {
+            if (!c || !c.candidate) continue;
             const sig = `${c.candidate}_${c.sdpMid}_${c.sdpMLineIndex}`;
             if (!this.addedCandidates.has(sig)) {
               try {

@@ -725,11 +725,21 @@ if ($action === 'signal' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $room['signaling']['offer'] = $data;
     } elseif ($type === 'answer' && $isGuest) {
         $room['signaling']['answer'] = $data;
-    } elseif ($type === 'candidate') {
+    } elseif ($type === 'candidate' && $data) {
         if ($isHost) {
             $room['signaling']['candidates_p1'][] = $data;
         } else {
             $room['signaling']['candidates_p2'][] = $data;
+        }
+    } elseif ($type === 'candidates' && is_array($data)) {
+        if ($isHost) {
+            foreach ($data as $cand) {
+                if ($cand) $room['signaling']['candidates_p1'][] = $cand;
+            }
+        } else {
+            foreach ($data as $cand) {
+                if ($cand) $room['signaling']['candidates_p2'][] = $cand;
+            }
         }
     }
 
