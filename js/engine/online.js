@@ -156,6 +156,7 @@ class OnlineManager {
     this.isHttpInFlight = false;
     this.lastHttpSendTime = 0;
     this.packetSeq = 0;
+    this.lastAppliedPacketSeq = 0;
     this.ping = 0;
 
     // Selección de personajes (30 segundos)
@@ -551,7 +552,9 @@ class OnlineManager {
 
     this.antiCheat.reset();
     this.lastRtcPacketTime = 0;
+    this.lastRtcPacketReceivedTime = 0;
     this.packetSeq = 0;
+    this.lastAppliedPacketSeq = 0;
 
     if (window.onOnlineBattleStart) {
       window.onOnlineBattleStart({
@@ -878,10 +881,24 @@ class OnlineManager {
       }
 
       if (data.success && data.rival_state) {
-        // Si WebRTC está activo a 60 FPS, no sobreescribir el estado P2P con HTTP retrasado
-        if (!this.isRtcConnected) {
-          this._applyRivalState(data.rival_state);
-          if (window.onOnlineNetStatus) {
+        const rivalPkt = data.rival_state;
+        const now = performance.now();
+        // WebRTC está entregando paquetes activamente si y solo si recibimos un paquete P2P hace menos de 250ms
+        const isRtcActivelyDelivering = this.isRtcConnected && 
+                                        this.dataChannel && 
+                                        this.dataChannel.readyState === 'open' &&
+                                        this.lastRtcPacketReceivedTime > 0 && 
+                                        (now - this.lastRtcPacketReceivedTime < 250);
+
+        // Si WebRTC no está entregando activamente (ej: navegadores distintos en localhost),
+        // o si el paquete HTTP es más nuevo que el último recibido:
+        const isNewerSeq = !rivalPkt.seq || (!this.lastAppliedPacketSeq || rivalPkt.seq >= this.lastAppliedPacketSeq);
+        if (!isRtcActivelyDelivering || isNewerSeq) {
+          if (rivalPkt.seq) {
+            this.lastAppliedPacketSeq = Math.max(this.lastAppliedPacketSeq || 0, rivalPkt.seq);
+          }
+          this._applyRivalState(rivalPkt);
+          if (!isRtcActivelyDelivering && window.onOnlineNetStatus) {
             window.onOnlineNetStatus('http', this.ping);
           }
         }
@@ -911,7 +928,15 @@ class OnlineManager {
         return;
       }
 
-      if (window.onOnlineNetStatus) window.onOnlineNetStatus('p2p', 8);
+      if (packet.seq) {
+        if (this.lastAppliedPacketSeq && packet.seq < this.lastAppliedPacketSeq) {
+          return; // Paquete P2P desordenado o antiguo descartado
+        }
+        this.lastAppliedPacketSeq = packet.seq;
+      }
+      this.lastRtcPacketReceivedTime = performance.now();
+
+      if (window.onOnlineNetStatus) window.onOnlineNetStatus('p2p', this.ping || 6);
       this._applyRivalState(packet);
     } catch (e) {}
   }
@@ -921,9 +946,18 @@ class OnlineManager {
    */
   _applyRivalState(incomingPacket) {
     if (!this.game) return;
-    const rivalFighter = this.game.dummy;
+    let rivalFighter = this.game.dummy;
     const localPlayer = this.game.player;
     if (!rivalFighter || !localPlayer) return;
+
+    // 0. Protección contra paquetes propios: Un jugador NUNCA debe aplicar su propio estado al muñeco rival
+    if (incomingPacket.role && incomingPacket.role === this.role) {
+      return;
+    }
+    const mySlot = (this.role === 'host') ? 1 : 2;
+    if (incomingPacket.slot && incomingPacket.slot === mySlot) {
+      return;
+    }
 
     // 🛡️ Filtro y validación Anti-Cheat
     const safe = this.antiCheat.validateState(incomingPacket, rivalFighter);
@@ -937,6 +971,9 @@ class OnlineManager {
     // Sincronización dinámica de luchador si difiere del paquete de red recibido
     if (safe.dex && rivalFighter.dex !== safe.dex && typeof this.game.swapRivalFighter === 'function') {
       this.game.swapRivalFighter(safe.dex);
+      // ¡CRÍTICO! Actualizar la referencia local a la nueva instancia creada por swapRivalFighter
+      rivalFighter = this.game.dummy;
+      if (!rivalFighter) return;
     }
 
     // 1. Sincronizar eventos de impacto / daño recibido autoritativo

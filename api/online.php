@@ -110,6 +110,10 @@ if ($action === 'create_room' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $hostToken = bin2hex(random_bytes(16));
 
+    // Limpiar posibles residuos de estados anteriores del mismo código
+    @unlink($roomsDir . '/' . $code . '_p1.json');
+    @unlink($roomsDir . '/' . $code . '_p2.json');
+
     $room = [
         'code' => $code,
         'status' => 'waiting', // waiting | lobby | char_select | item_draft | playing | ended
@@ -385,6 +389,8 @@ if ($action === 'set_ready' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!empty($room['p1']) && !empty($room['p2']) && !empty($room['p1']['ready']) && !empty($room['p2']['ready'])) {
         $room['status'] = 'char_select';
         $now = microtime(true);
+        @unlink($roomsDir . '/' . $code . '_p1.json');
+        @unlink($roomsDir . '/' . $code . '_p2.json');
         $room['char_select'] = [
             'started_at' => $now,
             'duration' => 30, // 30 Segundos oficiales
@@ -680,8 +686,12 @@ if ($action === 'sync' || $action === 'sync_state') {
         if ($rivalContent) {
             $rivalData = json_decode($rivalContent, true);
             if ($rivalData && isset($rivalData['state'])) {
-                $rivalState = $rivalData['state'];
-                $rivalSeen = (float)($rivalData['t'] ?? 0);
+                // Validación de rol cruzado: garantizar que el paquete leído es auténticamente del rival
+                $expectedRivalRole = $isHost ? 'guest' : 'host';
+                if (!isset($rivalData['state']['role']) || $rivalData['state']['role'] === $expectedRivalRole) {
+                    $rivalState = $rivalData['state'];
+                    $rivalSeen = (float)($rivalData['t'] ?? 0);
+                }
             }
         }
     }
