@@ -149,6 +149,8 @@ class PokeSmashGame {
     this.onlineRole = null;
     this.onlineRoomCode = null;
     this.onlineManager = new window.OnlineManager(this);
+    this.inputDelayFrames = 3; // 3 frames (~50ms a 60Hz) en multijugador online
+    this.localInputQueue = [];
 
     this._bindControls();
     this._bindTrainingButtons();
@@ -363,6 +365,8 @@ class PokeSmashGame {
     this.matchTimeLimit = options.timeLimit !== undefined ? options.timeLimit : (this.matchTimeLimit || 0);
     this.matchTimeRemaining = this.matchTimeLimit;
     this.isOnlineMatch = (this.gameMode === 'ONLINE');
+    this.localInputQueue = [];
+    this.inputDelayFrames = this.isOnlineMatch ? 3 : 0;
     this.itemsEnabled = options.itemsEnabled !== undefined ? options.itemsEnabled : (this.itemsEnabled !== false);
 
     // Reglas fijas oficiales de Multijugador en Línea
@@ -1985,8 +1989,8 @@ class PokeSmashGame {
     let frameTime = (currentTime - this.lastTime) / 1000;
     this.lastTime = currentTime;
 
-    // Slow-motion effect before decisive cutscene
-    if (this.slomoTimer > 0) {
+    // Slow-motion effect before decisive cutscene (desactivado en online para evitar desincronización física)
+    if (this.slomoTimer > 0 && !this.isOnlineMatch) {
       this.slomoTimer -= frameTime;
       frameTime *= this.slomoFactor;
       if (this.slomoTimer <= 0) {
@@ -2003,10 +2007,16 @@ class PokeSmashGame {
     // Cap frame time to prevent giant leaps if tab loses focus
     this.accumulator += Math.min(frameTime, 0.1);
 
-    // Fixed 60Hz physics and logic ticks
-    while (this.accumulator >= this.fixedStep) {
+    // Fixed 60Hz physics and logic ticks con protección anti-espiral de la muerte (máx 5 pasos por frame)
+    let steps = 0;
+    const maxStepsPerFrame = 5;
+    while (this.accumulator >= this.fixedStep && steps < maxStepsPerFrame) {
       this.fixedUpdate(this.fixedStep);
       this.accumulator -= this.fixedStep;
+      steps++;
+    }
+    if (steps >= maxStepsPerFrame) {
+      this.accumulator = 0;
     }
 
     // Live FPS computation over 400ms window
@@ -2131,8 +2141,62 @@ class PokeSmashGame {
 
     if (this.p1Type === 'CPU' && this.p1Controller) {
       this.p1Controller.update(dt, this.dummy, this.stage);
-    } else {
-      this.player.handleInputs(this.stage, dt);
+    } else if (this.player) {
+      // Snapshot del input crudo local
+      const rawInput = {
+        left: !!this.player.input?.left,
+        right: !!this.player.input?.right,
+        up: !!this.player.input?.up,
+        down: !!this.player.input?.down,
+        attack: !!this.player.input?.attack,
+        special: !!this.player.input?.special,
+        jump: !!this.player.input?.jump,
+        shield: !!this.player.input?.shield,
+        grab: !!this.player.input?.grab,
+        leftPressed: !!this.player.input?.leftPressed,
+        rightPressed: !!this.player.input?.rightPressed,
+        upPressed: !!this.player.input?.upPressed,
+        downPressed: !!this.player.input?.downPressed,
+        attackPressed: !!this.player.input?.attackPressed,
+        specialPressed: !!this.player.input?.specialPressed,
+        jumpPressed: !!this.player.input?.jumpPressed,
+        shieldPressed: !!this.player.input?.shieldPressed,
+        grabPressed: !!this.player.input?.grabPressed
+      };
+
+      // Consumir flags de pulsación de 1 frame
+      if (this.player.input) {
+        this.player.input.leftPressed = false;
+        this.player.input.rightPressed = false;
+        this.player.input.upPressed = false;
+        this.player.input.downPressed = false;
+        this.player.input.attackPressed = false;
+        this.player.input.specialPressed = false;
+        this.player.input.jumpPressed = false;
+        this.player.input.shieldPressed = false;
+        this.player.input.grabPressed = false;
+      }
+
+      if (this.isOnlineMatch) {
+        // Enviar INMEDIATAMENTE el input crudo al rival a través de WebRTC a 60 FPS
+        if (this.onlineManager && typeof this.onlineManager._sendLocalFighterState === 'function') {
+          this.onlineManager._sendLocalFighterState(rawInput);
+        }
+
+        // Encolar en el buffer FIFO de retraso controlado (3 frames = ~50ms a 60Hz)
+        this.localInputQueue.push(rawInput);
+
+        // Cuando la cola supera los frames de retraso, ejecutamos el input buffered
+        if (this.localInputQueue.length > this.inputDelayFrames) {
+          const delayedInput = this.localInputQueue.shift();
+          this.player.input = delayedInput;
+          this.player.handleInputs(this.stage, dt);
+        }
+      } else {
+        // Modo local / entrenamiento: latencia cero directa
+        this.player.input = rawInput;
+        this.player.handleInputs(this.stage, dt);
+      }
     }
 
     if (this.p2Type === 'HUMAN') {
@@ -3081,7 +3145,8 @@ class PokeSmashGame {
         dot.className = `net-dot ${type === 'p2p' ? 'p2p' : 'http'}`;
       }
       if (pingText) {
-        pingText.innerText = type === 'p2p' ? `P2P ${ping || 8}ms` : `HTTP ${ping || 45}ms`;
+        const delayStr = this.isOnlineMatch ? ` | Delay: ${this.inputDelayFrames}F (~50ms)` : '';
+        pingText.innerText = (type === 'p2p' ? `P2P ${ping || 8}ms` : `HTTP ${ping || 45}ms`) + delayStr;
       }
     };
 

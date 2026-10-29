@@ -832,11 +832,15 @@ class OnlineManager {
   _startBattleSync() {
     if (this.syncInterval) clearInterval(this.syncInterval);
 
-    // Ticks a ~60 Hz (16ms)
+    // Watchdog de respaldo: fixedUpdate en el bucle principal de 60Hz emite paquetes directamente
+    // con cada tick de físicas. Este timer solo actúa si por algún motivo no se ha enviado paquete en 90ms
     this.syncInterval = setInterval(() => {
       if (this.status !== 'playing' || !this.game) return;
-      this._sendLocalFighterState();
-    }, 16);
+      const now = performance.now();
+      if (!this.lastSendTime || (now - this.lastSendTime >= 90)) {
+        this._sendLocalFighterState();
+      }
+    }, 45);
   }
 
   recordRivalHit(hitInfo) {
@@ -896,10 +900,13 @@ class OnlineManager {
   /**
    * Envía los datos locales al rival
    */
-  _sendLocalFighterState() {
+  _sendLocalFighterState(overrideInput = null) {
     if (!this.game) return;
     const localFighter = this.game.player;
     if (!localFighter) return;
+
+    this.lastSendTime = performance.now();
+    const currentInput = overrideInput || localFighter.input;
 
     this.packetSeq++;
     const curAnim = localFighter.anim ? (localFighter.anim.curAnim || localFighter.anim.currentAnimName || 'Idle') : 'Idle';
@@ -923,13 +930,13 @@ class OnlineManager {
         this.localActionSeq = (this.localActionSeq || 0) + 1;
         let determinedDir = 'neutral';
         if (localFighter.state === 'SPECIAL') {
-          determinedDir = localFighter.specialMoveDir || (localFighter.input?.up ? 'up' : localFighter.input?.down ? 'down' : (localFighter.input?.left || localFighter.input?.right) ? 'side' : 'neutral');
+          determinedDir = localFighter.specialMoveDir || (currentInput?.up ? 'up' : currentInput?.down ? 'down' : (currentInput?.left || currentInput?.right) ? 'side' : 'neutral');
         } else if (localFighter.state === 'ATTACK') {
-          determinedDir = localFighter.basicAttackDir || (aimDir !== 'center' ? aimDir : (localFighter.input?.up ? 'up' : localFighter.input?.down ? 'down' : (localFighter.input?.left || localFighter.input?.right) ? 'side' : 'neutral'));
+          determinedDir = localFighter.basicAttackDir || (aimDir !== 'center' ? aimDir : (currentInput?.up ? 'up' : currentInput?.down ? 'down' : (currentInput?.left || currentInput?.right) ? 'side' : 'neutral'));
         } else if (localFighter.state === 'SMASH_CHARGE' || localFighter.state === 'SMASH_ATTACK') {
           determinedDir = localFighter.smashChargeDir || 'side';
         } else {
-          determinedDir = aimDir !== 'center' ? aimDir : (localFighter.input?.up ? 'up' : localFighter.input?.down ? 'down' : (localFighter.input?.left || localFighter.input?.right) ? 'side' : 'neutral');
+          determinedDir = aimDir !== 'center' ? aimDir : (currentInput?.up ? 'up' : currentInput?.down ? 'down' : (currentInput?.left || currentInput?.right) ? 'side' : 'neutral');
         }
 
         this.currentActionPayload = {
@@ -995,24 +1002,24 @@ class OnlineManager {
       } : null,
       heldItem: localFighter.heldItem ? localFighter.heldItem.id : null,
       input: {
-        left: !!localFighter.input?.left,
-        right: !!localFighter.input?.right,
-        up: !!localFighter.input?.up,
-        down: !!localFighter.input?.down,
-        attack: !!localFighter.input?.attack,
-        special: !!localFighter.input?.special,
-        jump: !!localFighter.input?.jump,
-        shield: !!localFighter.input?.shield,
-        grab: !!localFighter.input?.grab,
-        leftPressed: !!localFighter.input?.leftPressed,
-        rightPressed: !!localFighter.input?.rightPressed,
-        upPressed: !!localFighter.input?.upPressed,
-        downPressed: !!localFighter.input?.downPressed,
-        attackPressed: !!localFighter.input?.attackPressed,
-        specialPressed: !!localFighter.input?.specialPressed,
-        jumpPressed: !!localFighter.input?.jumpPressed,
-        shieldPressed: !!localFighter.input?.shieldPressed,
-        grabPressed: !!localFighter.input?.grabPressed
+        left: !!currentInput?.left,
+        right: !!currentInput?.right,
+        up: !!currentInput?.up,
+        down: !!currentInput?.down,
+        attack: !!currentInput?.attack,
+        special: !!currentInput?.special,
+        jump: !!currentInput?.jump,
+        shield: !!currentInput?.shield,
+        grab: !!currentInput?.grab,
+        leftPressed: !!currentInput?.leftPressed,
+        rightPressed: !!currentInput?.rightPressed,
+        upPressed: !!currentInput?.upPressed,
+        downPressed: !!currentInput?.downPressed,
+        attackPressed: !!currentInput?.attackPressed,
+        specialPressed: !!currentInput?.specialPressed,
+        jumpPressed: !!currentInput?.jumpPressed,
+        shieldPressed: !!currentInput?.shieldPressed,
+        grabPressed: !!currentInput?.grabPressed
       }
     };
 
