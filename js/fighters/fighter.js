@@ -1631,6 +1631,7 @@ class Fighter {
     this.state = 'ATTACK';
     this.currentAttack = attackDef;
     this.attackFrame = 0;
+    this.basicAttackDir = dir;
     this.hasHitOpponent = false;
     this.attackCooldown = 0.20; // Nerf a ataques Z: 0.20s de lag/cooldown entre ataques
 
@@ -1751,12 +1752,6 @@ class Fighter {
   _updateAttack(dt, opponent) {
     if (!this.currentAttack) return;
 
-    // En partidas online, el muñeco rival (dummy) es un títere replicado por red.
-    // Solo el jugador local puede golpear al rival en su propia pantalla.
-    // Los golpes del rival remoto se reciben y aplican exclusivamente vía safe.hitEvent por red.
-    if (window.game && window.game.isOnlineMatch && this === window.game.dummy) {
-      return;
-    }
     const isBasicAttack = (this.state === 'ATTACK');
     const isSlowed = (this.statuses && this.statuses.slow && this.statuses.slow.active);
     const timeScale = (isBasicAttack && isSlowed) ? 0.90 : 1.0;
@@ -1901,25 +1896,30 @@ class Fighter {
       };
 
       if (opponent && opponent.state !== 'RESPAWN' && opponent.invulnTimer <= 0) {
-        const hurtboxes = opponent.getHurtboxes
-          ? opponent.getHurtboxes()
-          : [{ x: opponent.x, y: opponent.y - opponent.height * 0.5, radius: opponent.hurtboxRadius, target: null }];
+        // En partidas online, los golpes melee del muñeco rival se simulan visualmente pero el daño se procesa autoritativo vía hitEvent
+        if (window.game && window.game.isOnlineMatch && this === window.game.dummy) {
+          // El dummy reproduce animaciones, proyectiles y efectos, pero no aplica takeHit local al jugador
+        } else {
+          const hurtboxes = opponent.getHurtboxes
+            ? opponent.getHurtboxes()
+            : [{ x: opponent.x, y: opponent.y - opponent.height * 0.5, radius: opponent.hurtboxRadius, target: null }];
 
-        for (const hurtbox of hurtboxes) {
-          if (window.physicsEngine.checkHitboxCollision(hitbox, hurtbox)) {
-            const finalHitbox = this.getModifiedHitbox(hitbox, false);
-            opponent.takeHit(finalHitbox, this, hurtbox.target);
-            this.hasHitOpponent = true;
-            this.hitstop = finalHitbox.hitlag; // Attacker hitfreeze
+          for (const hurtbox of hurtboxes) {
+            if (window.physicsEngine.checkHitboxCollision(hitbox, hurtbox)) {
+              const finalHitbox = this.getModifiedHitbox(hitbox, false);
+              opponent.takeHit(finalHitbox, this, hurtbox.target);
+              this.hasHitOpponent = true;
+              this.hitstop = finalHitbox.hitlag; // Attacker hitfreeze
 
-            // Combo hit cancel: connecting a Z attack eliminates action lock and minimizes cooldown!
-            if (this.state === 'ATTACK') {
-              this.attackCooldown = 0.05;
-              this.actionLockTimer = 0;
+              // Combo hit cancel: connecting a Z attack eliminates action lock and minimizes cooldown!
+              if (this.state === 'ATTACK') {
+                this.attackCooldown = 0.05;
+                this.actionLockTimer = 0;
+              }
+
+              if (atk.onHit) atk.onHit(this, opponent);
+              break;
             }
-
-            if (atk.onHit) atk.onHit(this, opponent);
-            break;
           }
         }
       }

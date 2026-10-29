@@ -907,6 +907,9 @@ class OnlineManager {
 
     // Detección y emisión de eventos de acción ofensiva / defensiva
     let actionPayload = null;
+    const hasAttackChanged = localFighter.currentAttack && (this.lastSentAttackObj !== localFighter.currentAttack);
+    const hasStateChanged = (this.lastSentLocalState !== localFighter.state);
+
     if (
       localFighter.state === 'ATTACK' ||
       localFighter.state === 'SPECIAL' ||
@@ -916,12 +919,23 @@ class OnlineManager {
       localFighter.state === 'ROLL' ||
       localFighter.state === 'AIR_DODGE'
     ) {
-      if (this.lastSentLocalState !== localFighter.state) {
+      if (hasStateChanged || hasAttackChanged) {
         this.localActionSeq = (this.localActionSeq || 0) + 1;
+        let determinedDir = 'neutral';
+        if (localFighter.state === 'SPECIAL') {
+          determinedDir = localFighter.specialMoveDir || (localFighter.input?.up ? 'up' : localFighter.input?.down ? 'down' : (localFighter.input?.left || localFighter.input?.right) ? 'side' : 'neutral');
+        } else if (localFighter.state === 'ATTACK') {
+          determinedDir = localFighter.basicAttackDir || (aimDir !== 'center' ? aimDir : (localFighter.input?.up ? 'up' : localFighter.input?.down ? 'down' : (localFighter.input?.left || localFighter.input?.right) ? 'side' : 'neutral'));
+        } else if (localFighter.state === 'SMASH_CHARGE' || localFighter.state === 'SMASH_ATTACK') {
+          determinedDir = localFighter.smashChargeDir || 'side';
+        } else {
+          determinedDir = aimDir !== 'center' ? aimDir : (localFighter.input?.up ? 'up' : localFighter.input?.down ? 'down' : (localFighter.input?.left || localFighter.input?.right) ? 'side' : 'neutral');
+        }
+
         this.currentActionPayload = {
           id: this.localActionSeq,
           type: localFighter.state,
-          dir: aimDir !== 'center' ? aimDir : (localFighter.input?.up ? 'up' : localFighter.input?.down ? 'down' : (localFighter.input?.left || localFighter.input?.right) ? 'side' : 'neutral'),
+          dir: determinedDir,
           isAir: !localFighter.isGrounded,
           animName: curAnim
         };
@@ -929,6 +943,7 @@ class OnlineManager {
       }
     }
     this.lastSentLocalState = localFighter.state;
+    this.lastSentAttackObj = localFighter.currentAttack;
 
     if (this.currentActionPayload && this.currentActionFramesLeft > 0) {
       actionPayload = this.currentActionPayload;
@@ -968,6 +983,15 @@ class OnlineManager {
         facing: localFighter.partner.facing,
         state: localFighter.partner.state,
         anim: localFighter.partner.anim ? (localFighter.partner.anim.curAnim || 'Idle') : 'Idle'
+      } : null,
+      hyperBeam: (localFighter.dex === 700 && localFighter.hyperBeamActive) ? {
+        active: true,
+        length: Math.round(localFighter.hyperBeamLength || 0),
+        chargeRatio: Math.round((localFighter.hyperBeamChargeRatio || 0) * 100) / 100,
+        facing: localFighter.hyperBeamFacing || localFighter.facing,
+        startX: Math.round(localFighter.hyperBeamStartX || localFighter.x),
+        startY: Math.round(localFighter.hyperBeamStartY || (localFighter.y - 20)),
+        thickness: localFighter.hyperBeamThickness || 14
       } : null,
       heldItem: localFighter.heldItem ? localFighter.heldItem.id : null,
       input: {
@@ -1297,6 +1321,35 @@ class OnlineManager {
     // 3.5. Replicar entradas de teclado / mando del rival para fluidez visual completa
     if (safe.input) {
       rivalFighter.input = Object.assign({}, safe.input);
+    }
+
+    // Si el rival terminó su ataque y volvió a IDLE, pero el muñeco local seguía esperando carga, forzar disparo
+    if (safe.state === 'IDLE' && rivalFighter.specialIsCharging && rivalFighter.currentAttack) {
+      const atk = rivalFighter.currentAttack;
+      rivalFighter.specialIsCharging = false;
+      const maxCharge = atk.maxCharge || 0.85;
+      const chargeRatio = rivalFighter.specialChargeTimer < 0.10 ? 0 : Math.min(1.0, (rivalFighter.specialChargeTimer - 0.10) / (maxCharge - 0.10));
+      rivalFighter.specialChargeTimer = 0;
+      const fireHandler = atk.onFire || atk.onRelease;
+      if (fireHandler) fireHandler(rivalFighter, chargeRatio);
+    }
+
+    // Sincronizar visualmente el haz de energía de Sylveon (Hiper Rayo)
+    if (rivalFighter.dex === 700) {
+      if (safe.hyperBeam && safe.hyperBeam.active) {
+        rivalFighter.hyperBeamActive = true;
+        rivalFighter.hyperBeamLength = safe.hyperBeam.length;
+        rivalFighter.hyperBeamChargeRatio = safe.hyperBeam.chargeRatio;
+        rivalFighter.hyperBeamFacing = safe.hyperBeam.facing;
+        rivalFighter.hyperBeamStartX = safe.hyperBeam.startX;
+        rivalFighter.hyperBeamStartY = safe.hyperBeam.startY;
+        rivalFighter.hyperBeamThickness = safe.hyperBeam.thickness;
+        if (!rivalFighter.hyperBeamTimer || rivalFighter.hyperBeamTimer <= 0) {
+          rivalFighter.hyperBeamTimer = 0.55;
+        }
+      } else if (!safe.hyperBeam && rivalFighter.hyperBeamActive && !rivalFighter.specialIsCharging) {
+        rivalFighter.hyperBeamActive = false;
+      }
     }
 
     // 4. Orientación, Apuntado y Estados de Animación continuos
