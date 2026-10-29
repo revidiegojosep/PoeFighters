@@ -265,6 +265,8 @@ class PokeSmashGame {
         return new window.Charizard(config);
       case 39:
         return new window.Jigglypuff(config);
+      case 700:
+        return new window.Sylveon(config);
       case 94:
         return new window.Gengar(config);
       case 312:
@@ -2885,7 +2887,8 @@ class PokeSmashGame {
       312: { name: 'Minun & Plusle', desc: 'Dúo Eléctrico · Peso: 4.2kg' },
       94: { name: 'Gengar', desc: 'Fantasma · Peso: 40.5kg' },
       39: { name: 'Jigglypuff', desc: 'Normal/Hada · Peso: 5.5kg' },
-      6: { name: 'Charizard', desc: 'Fuego/Volador · Peso: 90.5kg' }
+      6: { name: 'Charizard', desc: 'Fuego/Volador · Peso: 90.5kg' },
+      700: { name: 'Sylveon', desc: 'Hada · Peso: 23.5kg' }
     };
 
     charCards.forEach(card => {
@@ -3085,7 +3088,8 @@ class PokeSmashGame {
       312: { name: 'Minun & Plusle', desc: 'Dúo Eléctrico · Peso: 4.2kg' },
       94: { name: 'Gengar', desc: 'Fantasma · Peso: 40.5kg' },
       39: { name: 'Jigglypuff', desc: 'Normal/Hada · Peso: 5.5kg' },
-      6: { name: 'Charizard', desc: 'Fuego/Volador · Peso: 90.5kg' }
+      6: { name: 'Charizard', desc: 'Fuego/Volador · Peso: 90.5kg' },
+      700: { name: 'Sylveon', desc: 'Hada · Peso: 23.5kg' }
     };
 
     // 1. Actualizar código de sala

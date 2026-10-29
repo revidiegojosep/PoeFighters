@@ -2382,7 +2382,20 @@ class Stage {
 
   _drawLavenderForeground(ctx, quality) {
     ctx.save();
-    // Rolling animated spectral fog across the foreground
+    // 1. Efecto sutil de poca iluminación ambiental (Low-light atmosphere / ambient dark vignette)
+    // Aporta la atmósfera tétrica y misteriosa de Pueblo Lavanda sin obstaculizar la visión
+    const lowLightGrad = ctx.createRadialGradient(
+      this.width / 2, 380, 160,
+      this.width / 2, 380, this.width * 0.72
+    );
+    lowLightGrad.addColorStop(0, 'rgba(15, 6, 28, 0.08)');
+    lowLightGrad.addColorStop(0.45, 'rgba(10, 4, 20, 0.28)');
+    lowLightGrad.addColorStop(0.80, 'rgba(5, 2, 12, 0.52)');
+    lowLightGrad.addColorStop(1, 'rgba(2, 1, 8, 0.70)');
+    ctx.fillStyle = lowLightGrad;
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    // 2. Rolling animated spectral fog across the foreground
     const fogSpeed = 0.5;
     for (let f = 0; f < 3; f++) {
       const fogPhase = this.time * (fogSpeed + f * 0.15) + f * 2.0;

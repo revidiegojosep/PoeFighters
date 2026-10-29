@@ -157,12 +157,20 @@ class Fighter {
       this.maxItemCharges = 1;
     }
 
-    // Status System (Veneno / Poison is the primary status)
+    // Status System (Veneno / Sueño / Slow)
     this.statuses = {
       poison: {
         active: false,
         timer: 0,
         tickTimer: 0
+      },
+      sleep: {
+        active: false,
+        timer: 0
+      },
+      slow: {
+        active: false,
+        timer: 0
       }
     };
 
@@ -271,6 +279,25 @@ class Fighter {
           '#38bdf8',
           18
         );
+      }
+    } else if (statusName === 'slow') {
+      if (!this.statuses.slow) {
+        this.statuses.slow = { active: false, timer: 0 };
+      }
+      this.statuses.slow.active = true;
+      this.statuses.slow.timer = duration;
+      if (window.soundEngine) {
+        window.soundEngine.playSfx('baby_doll_eyes');
+      }
+      if (window.particleManager) {
+        window.particleManager.spawnFloatingText(
+          this.x,
+          this.y - this.height - 18,
+          '🥺 ¡OJITOS TIERNOS! (-30% VEL)',
+          '#f472b6',
+          18
+        );
+        window.particleManager.spawnHitSparks(this.x, this.y - this.height * 0.5, 8, 'fairy');
       }
     }
   }
@@ -482,6 +509,8 @@ class Fighter {
         this.focusSashActive = true;
         this.balloonPopped = false;
         if (this.statuses && this.statuses.poison) this.statuses.poison.active = false;
+        if (this.statuses && this.statuses.sleep) this.statuses.sleep.active = false;
+        if (this.statuses && this.statuses.slow) this.statuses.slow.active = false;
         this.anim.setAim('center');
         this.anim.loop('Idle', 1.0);
         if (window.particleManager) {
@@ -556,6 +585,22 @@ class Fighter {
       if (this.statuses.sleep.timer <= 0) {
         this.statuses.sleep.active = false;
         if (this.state === 'HURT') this.state = 'IDLE';
+      }
+    }
+
+    // Status System: Reducción de Velocidad (Slow / Ojitos Tiernos)
+    if (this.statuses && this.statuses.slow && this.statuses.slow.active) {
+      this.statuses.slow.timer -= dt;
+      if (Math.random() < 0.22 && window.particleManager) {
+        window.particleManager.spawnHitSparks(
+          this.x + (Math.random() - 0.5) * 20,
+          this.y - Math.random() * this.height,
+          1,
+          'fairy'
+        );
+      }
+      if (this.statuses.slow.timer <= 0) {
+        this.statuses.slow.active = false;
       }
     }
 
@@ -964,10 +1009,11 @@ class Fighter {
     }
 
     // Movement (Left / Right): Walking vs Running (Dash)
+    const speedMult = (this.statuses && this.statuses.slow && this.statuses.slow.active) ? 0.70 : 1.0;
     if (this.input.left && !this.input.right) {
       this.facing = -1;
       const isDash = this.isRunning && this.runDirection === -1;
-      this.vx = isDash ? -this.dashSpeed : -this.walkSpeed;
+      this.vx = (isDash ? -this.dashSpeed : -this.walkSpeed) * speedMult;
       if (this.isGrounded) {
         this.state = isDash ? 'DASH' : 'WALK';
         this.anim.loop('Walk', isDash ? 1.85 : 1.25);
@@ -978,7 +1024,7 @@ class Fighter {
     } else if (this.input.right && !this.input.left) {
       this.facing = 1;
       const isDash = this.isRunning && this.runDirection === 1;
-      this.vx = isDash ? this.dashSpeed : this.walkSpeed;
+      this.vx = (isDash ? this.dashSpeed : this.walkSpeed) * speedMult;
       if (this.isGrounded) {
         this.state = isDash ? 'DASH' : 'WALK';
         this.anim.loop('Walk', isDash ? 1.85 : 1.25);

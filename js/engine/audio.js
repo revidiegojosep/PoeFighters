@@ -724,6 +724,68 @@ class SoundEngine {
         this._noise(t, 0.08, 0.35);
         break;
       }
+
+      case 'hyper_beam': {
+        const osc = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(440 * pitch, t);
+        osc.frequency.exponentialRampToValueAtTime(80, t + 0.45);
+        g.gain.setValueAtTime(0.4, t);
+        g.gain.exponentialRampToValueAtTime(0.01, t + 0.45);
+        osc.connect(g).connect(this.sfxGain);
+        osc.start(t);
+        osc.stop(t + 0.45);
+        this._noise(t, 0.42, 0.4);
+        break;
+      }
+
+      case 'draining_kiss': {
+        const freqs = [659.25, 880, 1174.66];
+        freqs.forEach((f, i) => {
+          const osc = this.ctx.createOscillator();
+          const g = this.ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(f * pitch, t + i * 0.07);
+          g.gain.setValueAtTime(0.22, t + i * 0.07);
+          g.gain.exponentialRampToValueAtTime(0.005, t + i * 0.07 + 0.22);
+          osc.connect(g).connect(this.sfxGain);
+          osc.start(t + i * 0.07);
+          osc.stop(t + i * 0.07 + 0.22);
+        });
+        break;
+      }
+
+      case 'moonblast': {
+        const osc = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(780 * pitch, t);
+        osc.frequency.exponentialRampToValueAtTime(160, t + 0.32);
+        g.gain.setValueAtTime(0.35, t);
+        g.gain.exponentialRampToValueAtTime(0.01, t + 0.32);
+        osc.connect(g).connect(this.sfxGain);
+        osc.start(t);
+        osc.stop(t + 0.32);
+        this._noise(t, 0.22, 0.25);
+        break;
+      }
+
+      case 'baby_doll_eyes': {
+        const freqs = [783.99, 1046.50, 1318.51];
+        freqs.forEach((f, i) => {
+          const osc = this.ctx.createOscillator();
+          const g = this.ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(f * pitch, t + i * 0.06);
+          g.gain.setValueAtTime(0.22, t + i * 0.06);
+          g.gain.exponentialRampToValueAtTime(0.005, t + i * 0.06 + 0.18);
+          osc.connect(g).connect(this.sfxGain);
+          osc.start(t + i * 0.06);
+          osc.stop(t + i * 0.06 + 0.18);
+        });
+        break;
+      }
     }
   }
 

@@ -170,6 +170,33 @@
         '🛡️ Destructor causa 55 de daño directo a escudos',
         '🎵 Canto somnífero que duerme a rivales terrestres'
       ]
+    },
+    700: {
+      dex: 700,
+      name: 'Sylveon',
+      title: 'El Vínculo Mágico',
+      type: 'Hada',
+      typeColor: '#f472b6',
+      badgeGradient: 'linear-gradient(135deg, #f43f5e, #f472b6)',
+      weight: '23.5 kg',
+      weightCategory: 'Medio',
+      difficulty: 'Intermedio',
+      difficultyStars: 2,
+      tier: 'S Tier · Zonificación & Sustento',
+      stats: {
+        walkSpeed: 4.40,
+        dashSpeed: 7.50,
+        jumpForce: 13.20,
+        doubleJumpForce: 11.80,
+        weight: 23.5,
+        maxJumps: 2
+      },
+      traits: [
+        '✨ Hiper Rayo lineal de carga y daño masivo progresivo',
+        '💖 Beso Drenaje cura el 30% del daño infligido al conectar',
+        '🌙 Fuerza Lunar (Moonblast) con teletransporte y 3 rayos al suelo',
+        '🥺 Ojitos Tiernos en área ralentiza al oponente un 30% por 7s'
+      ]
     }
   };
 

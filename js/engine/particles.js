@@ -380,6 +380,8 @@ class ParticleManager {
       ? ['#9333ea', '#6b21a8', '#38bdf8', '#0f172a']
       : type === 'fire'
       ? ['#ff4500', '#f97316', '#facc15', '#ffffff', '#ef4444']
+      : type === 'fairy'
+      ? ['#f472b6', '#fb7185', '#ffffff', '#e879f9', '#fbcfe8', '#38bdf8']
       : ['#ff4444', '#ffbb00', '#ffffff', '#ff9900'];
 
     for (let i = 0; i < count; i++) {

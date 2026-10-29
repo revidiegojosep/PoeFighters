@@ -3044,10 +3044,10 @@ body {
   transition: width 0.25s linear;
 }
 
-/* Roster Grid de 6 Luchadores */
+/* Roster Grid de Luchadores (Online Draft) */
 .char-roster-grid {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(7, 1fr);
   gap: 10px;
   margin-bottom: 20px;
 }

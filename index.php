@@ -127,6 +127,27 @@ $fighters = [
             'Arriba (⬆️)' => ['name' => 'Canto Somnífero (Sing / Up-B)', 'damage' => 'Estado: Sueño', 'desc' => 'Entona una dulce melodía en área (Lag: 0.4s / CD: 5.0s) que duerme a los oponentes cercanos dejándolos vulnerables.'],
             'Abajo (⬇️)' => ['name' => '¡Descanso! (Rest / Down-B)', 'damage' => '25% (Devastador)', 'desc' => 'Ataque de contacto directo milimétrico. Si conecta dentro del oponente, desata una explosión colosal con lanzamiento vertical letal y manda a Jigglypuff a dormir.']
         ]
+    ],
+    700 => [
+        'name' => 'Sylveon',
+        'dex' => 700,
+        'type' => 'Hada',
+        'type_color' => '#f472b6',
+        'weight' => '23.5 kg',
+        'weight_category' => 'Medio',
+        'desc' => 'La evolución tipo Hada de Eevee. Combina elegancia y poder místico. Utiliza sus lazos mágicos para encadenar combos cuerpo a cuerpo, un Hiper Rayo lineal de carga variable, Beso Drenaje curativo, teletransporte con lluvia lunar de Moonblast y Ojitos Tiernos para mermar la velocidad enemiga.',
+        'moves_z' => [
+            'Neutral' => ['name' => 'Látigo Lazo (Suelo) / Espiral Hada Nair (Aire)', 'damage' => '4% / 7.5%', 'desc' => 'Rápidos azotes con sus cintas mágicas. En el aire despliega sus lazos en un giro de 360°.'],
+            'Lateral (⬅️/➡️)' => ['name' => 'Latigazo Mágico (Suelo) / Cintas Fair (Aire)', 'damage' => '8.5% / 9.5%', 'desc' => 'Azote horizontal de cintas con brillo rosáceo. En el aire golpea hacia adelante.'],
+            'Arriba (⬆️)' => ['name' => 'Arco Ascendente (Suelo) / Salto Cinta Uair (Aire)', 'damage' => '7.5% / 9%', 'desc' => 'Eleva sus cintas en un arco mágico que proyecta al rival verticalmente para combos aéreos.'],
+            'Abajo (⬇️)' => ['name' => 'Barrido Dulce (Suelo) / Taladro Feérico Dair (Aire)', 'damage' => '6.5% / 10.5% (Spike)', 'desc' => 'En el suelo un barrido bajo elegante; en el aire sus cintas giran en taladro hacia abajo con efecto Meteoro.']
+        ],
+        'moves_x' => [
+            'Neutral (Sin dirección)' => ['name' => 'Hiper Rayo (Cargable)', 'damage' => '12% - 26%', 'desc' => 'Dispara un demoledor haz de energía en línea recta. Mantén X para cargarlo y desatar mayor alcance, grosor y un daño devastador.'],
+            'Lateral (⬅️/➡️)' => ['name' => 'Beso Drenaje (Cura 30%)', 'damage' => '14% (Cura 30%)', 'desc' => 'Lanza un proyectil feérico en forma de corazón que viaja hacia adelante. Al impactar, cura a Sylveon un 30% del daño infligido.'],
+            'Arriba (⬆️)' => ['name' => 'Fuerza Lunar (Moonblast / Up-X)', 'damage' => '3x 8%', 'desc' => 'Se teletransporta hacia arriba en un destello de luz lunar y desata una ráfaga en abanico de 3 proyectiles de energía celeste que caen al suelo.'],
+            'Abajo (⬇️)' => ['name' => 'Ojitos Tiernos (AOE -30% Vel)', 'damage' => '5% (+ Slow 7s)', 'desc' => 'Emite una tierna y cautivadora mirada en área a corto alcance que reduce la velocidad del oponente un 30% durante 7 segundos.']
+        ]
     ]
 ];
 
@@ -555,6 +576,7 @@ $pokemon_items = [
           <button class="btn-deck roster-btn" data-p1-dex="312" title="Peso Oficial: 4.2 kg (Pluma)">🔋 Minun/Plusle (4.2kg)</button>
           <button class="btn-deck roster-btn" data-p1-dex="94" title="Peso Oficial: 40.5 kg (Pesado)">👻 Gengar (40.5kg)</button>
           <button class="btn-deck roster-btn" data-p1-dex="39" title="Peso Oficial: 5.5 kg (Floaty)">🎈 Jigglypuff (5.5kg)</button>
+          <button class="btn-deck roster-btn" data-p1-dex="700" title="Peso Oficial: 23.5 kg (Medio)">🎀 Sylveon (23.5kg)</button>
         </div>
 
         <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px;">CPU / Rival:</div>
@@ -565,6 +587,7 @@ $pokemon_items = [
           <button class="btn-deck roster-btn" data-dummy-dex="312" title="Peso Oficial: 4.2 kg (Pluma)">🔋 Minun/Plusle (4.2kg)</button>
           <button class="btn-deck roster-btn" data-dummy-dex="94" title="Peso Oficial: 40.5 kg (Pesado)">👻 Gengar (40.5kg)</button>
           <button class="btn-deck roster-btn" data-dummy-dex="39" title="Peso Oficial: 5.5 kg (Floaty)">🎈 Jigglypuff (5.5kg)</button>
+          <button class="btn-deck roster-btn" data-dummy-dex="700" title="Peso Oficial: 23.5 kg (Medio)">🎀 Sylveon (23.5kg)</button>
         </div>
 
         <div class="deck-buttons-row">
@@ -725,35 +748,6 @@ $pokemon_items = [
         <span class="poke-glow">POKÉ</span><span class="fighters-glow">FIGHTERS</span>
       </h1>
       <p class="start-screen-subtitle">Plataforma de Lucha Competitiva Pokémon en Tiempo Real</p>
-
-      <!-- Animated Roster Showcase Preview -->
-      <div class="start-screen-roster">
-        <div class="start-roster-item" title="Pikachu">
-          <img src="assets/pokemon/25/Idle.png" alt="Pikachu" class="start-roster-sprite">
-          <span class="start-roster-name">Pikachu</span>
-        </div>
-        <div class="start-roster-item" title="Bulbasaur">
-          <img src="assets/pokemon/1/Idle.png" alt="Bulbasaur" class="start-roster-sprite">
-          <span class="start-roster-name">Bulbasaur</span>
-        </div>
-        <div class="start-roster-item" title="Minun y Plusle">
-          <img src="assets/pokemon/312/Idle.png" alt="Minun y Plusle" class="start-roster-sprite">
-          <span class="start-roster-name">Minun & Plusle</span>
-        </div>
-        <div class="start-roster-item" title="Gengar">
-          <img src="assets/pokemon/94/Idle.png" alt="Gengar" class="start-roster-sprite">
-          <span class="start-roster-name">Gengar</span>
-        </div>
-        <div class="start-roster-item" title="Jigglypuff">
-          <img src="assets/pokemon/39/Idle.png" alt="Jigglypuff" class="start-roster-sprite">
-          <span class="start-roster-name" style="color: #f472b6;">Jigglypuff</span>
-        </div>
-        <div class="start-roster-item new-fighter-showcase" title="¡NUEVO LUCHADOR! Charizard">
-          <div class="new-pill retro-font">¡NUEVO!</div>
-          <img src="assets/pokemon/6/Idle.png" alt="Charizard" class="start-roster-sprite">
-          <span class="start-roster-name" style="color: #f97316;">Charizard</span>
-        </div>
-      </div>
 
       <!-- Main Start Screen Buttons -->
       <div class="start-screen-menu">
@@ -1017,6 +1011,11 @@ $pokemon_items = [
           <img src="assets/pokemon/6/Idle.png" alt="Charizard">
           <span class="char-card-name">Charizard</span>
           <span class="char-card-tag" style="color: #f97316;">Fuego/Volador · Pesado</span>
+        </div>
+        <div class="char-card" data-char-dex="700" data-name="Sylveon">
+          <img src="assets/pokemon/700/Idle.png" alt="Sylveon">
+          <span class="char-card-name">Sylveon</span>
+          <span class="char-card-tag" style="color: #f472b6;">Hada · Mágico</span>
         </div>
       </div>
 
@@ -1333,7 +1332,7 @@ $pokemon_items = [
           <!-- SSBU Unified Roster Grid (6 Fighters) -->
           <div class="ssbu-roster-grid">
             <?php
-              $ssbu_order = [25, 6, 1, 312, 94, 39];
+              $ssbu_order = [25, 6, 1, 312, 94, 39, 700];
               foreach ($ssbu_order as $dex):
                 $f = $fighters[$dex];
             ?>
@@ -2328,6 +2327,7 @@ $pokemon_items = [
   <script src="js/fighters/gengar.js?v=<?= $v ?>"></script>
   <script src="js/fighters/jigglypuff.js?v=<?= $v ?>"></script>
   <script src="js/fighters/charizard.js?v=<?= $v ?>"></script>
+  <script src="js/fighters/sylveon.js?v=<?= $v ?>"></script>
   <script src="js/ui/hud.js?v=<?= $v ?>"></script>
   <script src="js/engine/online.js?v=<?= $v ?>"></script>
   <script>

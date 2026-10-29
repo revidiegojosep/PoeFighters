@@ -97,7 +97,7 @@ function saveRoom($file, $room) {
 // -----------------------------------------------------------------------------
 if ($action === 'create_room' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $dex = (int)($payload['dex'] ?? 25);
-    $validDex = [25, 6, 1, 312, 94, 39];
+    $validDex = [25, 6, 1, 312, 94, 39, 700];
     if (!in_array($dex, $validDex)) $dex = 25;
 
     // Generar código único aleatorio de 4 dígitos
@@ -201,7 +201,7 @@ if ($action === 'join_room' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $dex = (int)($payload['dex'] ?? 1);
-    $validDex = [25, 6, 1, 312, 94, 39];
+    $validDex = [25, 6, 1, 312, 94, 39, 700];
     if (!in_array($dex, $validDex)) $dex = 1;
 
     $guestToken = bin2hex(random_bytes(16));
@@ -415,7 +415,7 @@ if ($action === 'select_fighter' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $token = $payload['token'] ?? '';
     $dex = (int)($payload['dex'] ?? 25);
     $confirmed = !empty($payload['confirmed']);
-    $validDex = [25, 6, 1, 312, 94, 39];
+    $validDex = [25, 6, 1, 312, 94, 39, 700];
     if (!in_array($dex, $validDex)) $dex = 25;
 
     $file = getRoomFile($roomsDir, $code);
@@ -503,7 +503,7 @@ if ($action === 'start_game' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     // Actualizar dex del anfitrión si se envió en el payload al iniciar
     if (isset($payload['dex'])) {
         $dex = (int)$payload['dex'];
-        $validDex = [25, 6, 1, 312, 94, 39];
+        $validDex = [25, 6, 1, 312, 94, 39, 700];
         if (in_array($dex, $validDex) && isset($room['p1'])) {
             $room['p1']['dex'] = $dex;
         }
