@@ -28,15 +28,15 @@ class Jigglypuff extends window.Fighter {
       walkSpeed: 3.6,
       dashSpeed: 6.8,
       jumpForce: 6.8,        // Distancia de salto moderada para equilibrar sus 5 saltos
-      doubleJumpForce: 5.2,  // Aleteos aéreos más suaves y controlables
+      doubleJumpForce: 6.4,  // Aleteos aéreos más generosos
       scale: 2.3,
       ...config
     });
 
     // Authentic Smash Bros Floaty Physics
     this.isFloaty = true;
-    this.gravityMult = 0.52;
-    this.terminalVelocityMult = 0.58;
+    this.gravityMult = 0.44; // Gravedad reducida (+ flotabilidad)
+    this.terminalVelocityMult = 0.52;
     this.airFriction = 0.988;
 
     // 5 Mid-Air Jumps (6 jumps total)
@@ -502,11 +502,11 @@ class Jigglypuff extends window.Fighter {
     // Reset jumps upon touching ground and apply progressive jump force
     if (this.isGrounded) {
       this.jumpsLeft = this.maxJumps;
-      this.doubleJumpForce = 5.2;
+      this.doubleJumpForce = 6.4;
     } else {
       // Each consecutive mid-air flutter hop has slightly lower force to keep max height balanced
       const jumpsUsed = this.maxJumps - this.jumpsLeft;
-      this.doubleJumpForce = Math.max(3.6, 5.2 - jumpsUsed * 0.35);
+      this.doubleJumpForce = Math.max(4.6, 6.4 - jumpsUsed * 0.35);
     }
   }
 

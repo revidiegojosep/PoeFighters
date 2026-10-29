@@ -44,7 +44,7 @@ class SpriteManager {
   }
 
   preloadAll(onProgress, onComplete) {
-    const dexes = [1, 25, 94, 311, 312, 39];
+    const dexes = [1, 25, 94, 311, 312, 39, 6];
     const anims = ['Idle', 'Walk', 'Attack', 'Shoot', 'Charge', 'Hurt', 'Faint'];
     let loaded = 0;
     const total = dexes.length * anims.length;
@@ -103,6 +103,10 @@ class SpriteAnimator {
     this.facing = 1; // 1 = right, -1 = left
     this.aimDir = 'center'; // 'up', 'down', 'center'
     this.onFinishCallback = null;
+  }
+
+  get currentAnimName() {
+    return this.curAnim;
   }
 
   setFacing(facing) {

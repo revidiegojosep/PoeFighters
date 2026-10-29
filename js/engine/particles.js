@@ -378,6 +378,8 @@ class ParticleManager {
       ? ['#a855f7', '#c084fc', '#e879f9', '#7e22ce']
       : type === 'shadow'
       ? ['#9333ea', '#6b21a8', '#38bdf8', '#0f172a']
+      : type === 'fire'
+      ? ['#ff4500', '#f97316', '#facc15', '#ffffff', '#ef4444']
       : ['#ff4444', '#ffbb00', '#ffffff', '#ff9900'];
 
     for (let i = 0; i < count; i++) {
@@ -700,6 +702,24 @@ class ParticleManager {
     }
   }
 
+  spawnSlash(x, y, facing = 1, color = '#ffffff', radius = 32) {
+    const startAngle = facing === 1 ? -Math.PI * 0.45 : Math.PI * 0.55;
+    const endAngle = facing === 1 ? Math.PI * 0.45 : Math.PI * 1.45;
+    this.particles.push({
+      type: 'slash',
+      x: x,
+      y: y,
+      radius: radius,
+      startAngle: startAngle,
+      endAngle: endAngle,
+      color: color,
+      size: 4,
+      life: 0.16,
+      maxLife: 0.16
+    });
+    this.spawnMeleeSlash(x, y, 'side', facing, color, 'normal', radius);
+  }
+
   spawnVineWhip(x, y, dir, facing, length = 68) {
     let spawnX = x + (dir === 'up' ? 6 * facing : dir === 'down' ? 10 * facing : 22 * facing);
     let spawnY = y - (dir === 'up' ? 36 : dir === 'down' ? 6 : 20);
@@ -778,6 +798,62 @@ class ParticleManager {
       const angle = (Math.PI * 2 * i) / 9;
       this.spawnSmoke(fistX + Math.cos(angle) * 12, fistY + Math.sin(angle) * 12, '#9333ea', 7);
       this.spawnHitSparks(fistX + facing * 22, fistY, 3, 'shadow');
+    }
+  }
+
+  spawnFlameStream(x, y, facing, length = 110, width = 26) {
+    const colors = ['#ea580c', '#f97316', '#facc15', '#ffffff', '#ef4444'];
+    for (let i = 0; i < 4; i++) {
+      const spread = (Math.random() - 0.5) * width;
+      const speed = (length * 0.08) + Math.random() * 4;
+      const angle = (facing === 1 ? 0 : Math.PI) + (Math.random() - 0.5) * 0.35;
+      this.particles.push({
+        type: 'circle',
+        x: x,
+        y: y + spread,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 0.5,
+        size: 5 + Math.random() * 9,
+        scale: 1,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        life: 0.18 + Math.random() * 0.16,
+        maxLife: 0.34,
+        friction: 0.94
+      });
+    }
+  }
+
+  spawnFieryExplosion(x, y, radius = 55) {
+    this.spawnRadialBurst(x, y, '#ea580c', 'electric', radius);
+    this.spawnRadialBurst(x, y, '#facc15', 'electric', radius * 0.7);
+    for (let i = 0; i < 16; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = Math.random() * radius * 0.8;
+      this.spawnSmoke(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist, '#f97316', 10);
+      this.spawnHitSparks(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist, 4, 'fire');
+    }
+  }
+
+  spawnRockShards(x, y, count = 12) {
+    const rockColors = ['#57534e', '#78716c', '#a8a29e', '#44403c'];
+    for (let i = 0; i < count; i++) {
+      const angle = (Math.random() * Math.PI) - Math.PI * 0.8;
+      const speed = 3 + Math.random() * 7;
+      this.particles.push({
+        type: 'spark',
+        x: x + (Math.random() - 0.5) * 10,
+        y: y + (Math.random() - 0.5) * 10,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        rot: Math.random() * Math.PI * 2,
+        rotSpeed: (Math.random() - 0.5) * 0.5,
+        size: 4 + Math.random() * 5,
+        color: rockColors[Math.floor(Math.random() * rockColors.length)],
+        life: 0.35 + Math.random() * 0.25,
+        maxLife: 0.6,
+        gravity: 0.28,
+        friction: 0.96
+      });
     }
   }
 }

@@ -2277,14 +2277,15 @@ class MinunPlusle extends window.Fighter {
       }
     }
 
-    // Dynamic Environmental Lighting
-    const currentStage = (opts && opts.stage) || (window.game && window.game.stage);
-    if (currentStage && typeof currentStage.getLightingAt === 'function') {
+    // Dynamic Environmental Lighting with smooth cinematic fade
+    if (this.lightFadeAlpha > 0.008) {
       const activeChar = !this.minunDead ? this : this.partner;
-      const light = currentStage.getLightingAt(activeChar.x, activeChar.y);
-      if (light && (light.intensity > 0 || light.alpha > 0)) {
+      if (activeChar) {
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
+        const lr = Math.round(this.lightFadeR || 250);
+        const lg = Math.round(this.lightFadeG || 204);
+        const lb = Math.round(this.lightFadeB || 21);
         const lightGrad = ctx.createRadialGradient(
           activeChar.x,
           activeChar.y - activeChar.height * 0.5,
@@ -2293,7 +2294,8 @@ class MinunPlusle extends window.Fighter {
           activeChar.y - activeChar.height * 0.5,
           activeChar.height * 0.85
         );
-        lightGrad.addColorStop(0, light.color);
+        lightGrad.addColorStop(0, `rgba(${lr}, ${lg}, ${lb}, ${(this.lightFadeAlpha * 0.85).toFixed(3)})`);
+        lightGrad.addColorStop(0.55, `rgba(${lr}, ${lg}, ${lb}, ${(this.lightFadeAlpha * 0.35).toFixed(3)})`);
         lightGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
         ctx.fillStyle = lightGrad;
         ctx.beginPath();

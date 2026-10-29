@@ -38,7 +38,7 @@ class PhysicsEngine {
     // 2. Modificador de Peso Oficial de la Pokédex:
     // Restringido estrictamente: El peso solo puede reducir como MÁXIMO y como MÍNIMO hasta un 10% (0.90 a 1.10)
     let kg = typeof w === 'number' ? w : 6.0;
-    if (kg > 50) {
+    if (kg > 95) {
       if (kg === 75 || kg === 70) kg = 4.2;
       else if (kg === 85) kg = 6.0;
       else if (kg === 105) kg = 6.9;
@@ -46,8 +46,8 @@ class PhysicsEngine {
       else kg = kg * 0.1;
     }
 
-    // Roster de pesos Pokédex: Minun/Plusle (4.2 kg) a Gengar (40.5 kg)
-    const t = Math.max(0, Math.min(1, (kg - 4.2) / (40.5 - 4.2)));
+    // Roster de pesos Pokédex: Minun/Plusle (4.2 kg) a Charizard (90.5 kg)
+    const t = Math.max(0, Math.min(1, (kg - 4.2) / (90.5 - 4.2)));
     const calculatedFactor = 1.10 - t * 0.20;
 
     // Clamp riguroso entre 0.90 (-10% reducción máxima) y 1.10 (+10% aumento máximo)
@@ -212,6 +212,7 @@ class PhysicsEngine {
         fighter.y = plat.y;
         fighter.vy = 0;
         fighter.isGrounded = true;
+        fighter.groundedPlat = plat;
         fighter.jumpsLeft = fighter.maxJumps;
         fighter.isFastFalling = false;
         fighter.isAirDodging = false;

@@ -20,7 +20,28 @@ $fighters = [
             'Neutral (Sin dirección)' => ['name' => 'Bola Voltio', 'damage' => '10%', 'desc' => 'Lanza una esfera de plasma eléctrico que viaja horizontalmente por el escenario.'],
             'Lateral (⬅️/➡️)' => ['name' => 'Placaje Eléctrico', 'damage' => '12%', 'desc' => 'Dash ultrarrápido electrificado hacia los lados que arrolla al oponente con gran fuerza e impacto eléctrico.'],
             'Arriba (⬆️)' => ['name' => 'Ataque Rápido', 'damage' => '8%', 'desc' => 'Impulso supersónico diagonal con relámpagos que daña y recupera altura.'],
-            'Abajo (⬇️)' => ['name' => '¡Trueno!', 'damage' => '14%', 'desc' => 'Invoca un relámpago vertical del cielo que impacta con tremenda explosión.']
+            'Abajo (⬇️)' => ['name' => '¡Trueno! (Rayo Descendente)', 'damage' => '6% (Rayo) / 14% (Descarga)', 'desc' => 'Invoca un relámpago que cae desde el cielo causando daño reducido y empuje horizontal hacia izquierda o derecha (nunca vertical). Si el rayo impacta a Pikachu, desata una violenta descarga eléctrica radial.']
+        ]
+    ],
+    6 => [
+        'name' => 'Charizard',
+        'dex' => 6,
+        'type' => 'Fuego / Volador',
+        'type_color' => '#f97316',
+        'weight' => '90.5 kg',
+        'weight_category' => 'Pesado (2 Saltos Aéreos)',
+        'desc' => 'El icónico dragón de fuego de Super Smash Bros. Luchador pesado con gran tamaño y 2 saltos aéreos. Controla distancias con Lanzallamas, embiste a los rivales con Envite Ígneo asumiendo un 50% de recoil, remata hacia abajo con Pisotón Meteoro y despega con Vuelo.',
+        'moves_z' => [
+            'Neutral' => ['name' => 'Zarpazo / Coletazo (Suelo) / Giro Aéreo Nair (Aire)', 'damage' => '3.5% - 5.6% / 8%', 'desc' => 'Garra rápida y mordisco en el suelo. En el aire gira su cola y cuerpo con amplio arco de fuego.'],
+            'Lateral (⬅️/➡️)' => ['name' => 'Garra Dragón (Suelo) / Zarpazo Aéreo Fair (Aire)', 'damage' => '8.8% / 10%', 'desc' => 'Cuchillada de garras ígneas hacia adelante. Ataque Smash lateral desata una violenta llamarada cargada.'],
+            'Arriba (⬆️)' => ['name' => 'Gancho Alado (Suelo) / Golpe Cuerno Uair (Aire)', 'damage' => '7.6% / 10.4%', 'desc' => 'Alazo ascendente que eleva al oponente. En el aire empuja hacia arriba con su cuerno.'],
+            'Abajo (⬇️)' => ['name' => 'Pisotón Pesado (Suelo) / Pisotón Meteoro Dair (Aire)', 'damage' => '6.8% / 11.2% (Spike)', 'desc' => 'Pisotón sísmico bajo en tierra; en el aire pisa con ambas garras hacia abajo estampando al rival (Meteor Spike).']
+        ],
+        'moves_x' => [
+            'Neutral (Sin dirección)' => ['name' => 'Lanzallamas (Flamethrower)', 'damage' => '1.8% por fuego (Continuo)', 'desc' => 'Mantén X para expulsar un flujo constante y denso de fuego ardiente. El fuego empuja al oponente y acumula daño.'],
+            'Lateral (⬅️/➡️)' => ['name' => 'Envite Ígneo (Flare Blitz)', 'damage' => '16.8% (+ 50% Recoil: 8.4%)', 'desc' => 'Se envuelve en llamas incandescentes y sale proyectado contra el rival. Ya no tiene invulnerabilidad, su knockback es más contenido y sufre un 50% del daño infligido como retroceso (8.4%).'],
+            'Arriba (⬆️)' => ['name' => 'Vuelo (Fly / Super Armor)', 'damage' => '12%', 'desc' => 'Aleteo ascendente giratorio con Super Armor en el despegue, cortando el aire en espiral hacia arriba para recuperar altura.'],
+            'Abajo (⬇️)' => ['name' => 'Golpe Roca (Rock Smash / Super Armor)', 'damage' => '12.8% (+ Esquirlas: 4%)', 'desc' => 'Invoca un gigantesco peñasco y lo hace añicos con su cabeza con Super Armor, lanzando esquirlas afiladas que causan daño adicional.']
         ]
     ],
     1 => [
@@ -529,6 +550,7 @@ $pokemon_items = [
         </div>
         <div class="deck-buttons-row roster-select-row" id="p1-quick-select" style="margin-bottom: 12px;">
           <button class="btn-deck roster-btn active" data-p1-dex="25" title="Peso Oficial: 6.0 kg (Ligero)">⚡ Pikachu (6.0kg)</button>
+          <button class="btn-deck roster-btn" data-p1-dex="6" title="Peso Oficial: 90.5 kg (Pesado)">🔥 Charizard (90.5kg)</button>
           <button class="btn-deck roster-btn" data-p1-dex="1" title="Peso Oficial: 6.9 kg (Medio)">🌿 Bulbasaur (6.9kg)</button>
           <button class="btn-deck roster-btn" data-p1-dex="312" title="Peso Oficial: 4.2 kg (Pluma)">🔋 Minun/Plusle (4.2kg)</button>
           <button class="btn-deck roster-btn" data-p1-dex="94" title="Peso Oficial: 40.5 kg (Pesado)">👻 Gengar (40.5kg)</button>
@@ -538,6 +560,7 @@ $pokemon_items = [
         <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px;">CPU / Rival:</div>
         <div class="deck-buttons-row roster-select-row" id="dummy-quick-select" style="margin-bottom: 14px;">
           <button class="btn-deck roster-btn" data-dummy-dex="25" title="Peso Oficial: 6.0 kg (Ligero)">⚡ Pikachu (6.0kg)</button>
+          <button class="btn-deck roster-btn" data-dummy-dex="6" title="Peso Oficial: 90.5 kg (Pesado)">🔥 Charizard (90.5kg)</button>
           <button class="btn-deck roster-btn active" data-dummy-dex="1" title="Peso Oficial: 6.9 kg (Medio)">🌿 Bulbasaur (6.9kg)</button>
           <button class="btn-deck roster-btn" data-dummy-dex="312" title="Peso Oficial: 4.2 kg (Pluma)">🔋 Minun/Plusle (4.2kg)</button>
           <button class="btn-deck roster-btn" data-dummy-dex="94" title="Peso Oficial: 40.5 kg (Pesado)">👻 Gengar (40.5kg)</button>
@@ -545,7 +568,7 @@ $pokemon_items = [
         </div>
 
         <div class="deck-buttons-row">
-          <button class="btn-deck highlight" onclick="document.getElementById('match-setup-modal').classList.add('open')">
+          <button class="btn-deck highlight" onclick="(window.ensureFullscreenModal && window.ensureFullscreenModal('match-setup-modal')), document.getElementById('match-setup-modal').classList.add('open')">
             ⚔️ Abrir Menú Completo de Partida / Dificultad
           </button>
         </div>
@@ -721,10 +744,14 @@ $pokemon_items = [
           <img src="assets/pokemon/94/Idle.png" alt="Gengar" class="start-roster-sprite">
           <span class="start-roster-name">Gengar</span>
         </div>
-        <div class="start-roster-item new-fighter-showcase" title="¡NUEVO LUCHADOR! Jigglypuff">
-          <div class="new-pill retro-font">¡NUEVO!</div>
+        <div class="start-roster-item" title="Jigglypuff">
           <img src="assets/pokemon/39/Idle.png" alt="Jigglypuff" class="start-roster-sprite">
           <span class="start-roster-name" style="color: #f472b6;">Jigglypuff</span>
+        </div>
+        <div class="start-roster-item new-fighter-showcase" title="¡NUEVO LUCHADOR! Charizard">
+          <div class="new-pill retro-font">¡NUEVO!</div>
+          <img src="assets/pokemon/6/Idle.png" alt="Charizard" class="start-roster-sprite">
+          <span class="start-roster-name" style="color: #f97316;">Charizard</span>
         </div>
       </div>
 
@@ -825,6 +852,11 @@ $pokemon_items = [
             <img src="assets/pokemon/39/Idle.png" alt="Jigglypuff">
             <span class="fighter-preselect-name">Jigglypuff</span>
             <span class="fighter-preselect-tag" style="color: #f472b6;">Normal/Hada · 5.5kg</span>
+          </div>
+          <div class="fighter-preselect-card" data-online-dex="6" data-name="Charizard">
+            <img src="assets/pokemon/6/Idle.png" alt="Charizard">
+            <span class="fighter-preselect-name">Charizard</span>
+            <span class="fighter-preselect-tag" style="color: #f97316;">Fuego/Volador · 90.5kg</span>
           </div>
         </div>
       </div>
@@ -1056,7 +1088,7 @@ $pokemon_items = [
           ⚔️ MENÚ DE PARTIDA · CONFIGURACIÓN
         </h2>
         <div style="display: flex; gap: 8px; align-items: center;">
-          <button id="btn-setup-back-menu" class="btn-compact-retro" onclick="document.getElementById('match-setup-modal').classList.remove('open'); document.getElementById('start-screen').classList.remove('hidden');" title="Volver al Menú Principal">
+          <button id="btn-setup-back-menu" class="btn-compact-retro" onclick="document.getElementById('match-setup-modal').classList.remove('open'); (window.ensureFullscreenModal && window.ensureFullscreenModal('start-screen')), document.getElementById('start-screen').classList.remove('hidden');" title="Volver al Menú Principal">
             🏠 Inicio
           </button>
           <button class="modal-close" id="btn-close-setup-modal">✕</button>
@@ -1141,7 +1173,7 @@ $pokemon_items = [
 
         <!-- Step 1 Navigation Footer -->
         <div class="step-nav-footer">
-          <button type="button" class="btn-compact-retro" onclick="document.getElementById('match-setup-modal').classList.remove('open'); document.getElementById('start-screen').classList.remove('hidden');">
+          <button type="button" class="btn-compact-retro" onclick="document.getElementById('match-setup-modal').classList.remove('open'); (window.ensureFullscreenModal && window.ensureFullscreenModal('start-screen')), document.getElementById('start-screen').classList.remove('hidden');">
             🏠 Inicio
           </button>
           <button type="button" class="btn-step-next retro-font" onclick="window.game && window.game.goToSetupStep(2)">
@@ -1211,128 +1243,277 @@ $pokemon_items = [
            PASO 3: SELECCIÓN DE PERSONAJES & OBJETOS
            ===================================================================== -->
       <div id="setup-step-fighters" class="setup-step-screen">
-        <div class="step-screen-title retro-font">🥊 PASO 3: LUCHADORES Y EQUIPAMIENTO</div>
-        <p class="step-screen-desc">Elige a tu Pokémon, al rival de la CPU y equipa objetos de la mochila si están activados.</p>
+        <div class="step-screen-title retro-font">🥊 PASO 3: SELECCIÓN DE LUCHADORES (SMASH ULTIMATE)</div>
+        <p class="step-screen-desc">Elige a tu Pokémon, al rival y pulsa en cualquier luchador para inspeccionar sus estadísticas y demostraciones gráficas de moveset en tiempo real.</p>
 
-        <!-- Fighter Selection Columns -->
-        <div class="fighters-select-container">
-          <!-- Player 1 Roster -->
-          <div class="roster-column">
-            <label class="setup-label">Tu Pokémon (Jugador 1)</label>
+        <!-- SSBU Ultimate Selection Screen Container -->
+        <div class="ssbu-screen-container">
 
-            <!-- Control de Jugador 1: Humano o CPU -->
-            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em;">
-              Control de Jugador 1:
-            </div>
-            <div class="deck-buttons-row" style="margin-bottom: 10px; display: flex; gap: 8px;">
-              <button type="button" class="btn-deck p1-control-toggle-btn active" data-p1-control="HUMAN" style="flex: 1; padding: 7px 10px; font-weight: 700; font-size: 12px; border-radius: 8px;">
-                🎮 Humano (Tú)
+          <!-- SSBU Target Selector Header -->
+          <div class="ssbu-header-row">
+            <div class="ssbu-targets-group">
+              <button type="button" id="ssbu-toggle-target-p1" class="ssbu-target-pill target-p1 active" title="Asignar el Pokémon que elijas al Jugador 1">
+                🔴 Jugador 1 (Tú)
               </button>
-              <button type="button" class="btn-deck p1-control-toggle-btn" data-p1-control="CPU" style="flex: 1; padding: 7px 10px; font-weight: 700; font-size: 12px; border-radius: 8px;">
-                🤖 CPU (Auto)
+              <button type="button" id="ssbu-toggle-target-cpu" class="ssbu-target-pill target-cpu" title="Asignar el Pokémon que elijas al Rival">
+                🔵 Oponente (CPU / J2)
               </button>
             </div>
+            <div id="ssbu-active-target-hint" class="ssbu-target-hint">
+              <span style="color:#ef4444; font-weight:800;">[🔴 JUGADOR 1 ACTIVO]</span> Selecciona tu Pokémon en la cuadrícula para combatir y ver sus estadísticas:
+            </div>
+          </div>
 
-            <!-- Selector de Nivel de CPU para J1 si es CPU -->
-            <div id="p1-cpu-diff-container" style="display: none; margin-bottom: 12px; background: rgba(15,23,42,0.65); padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(56, 189, 248, 0.3);">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                <span style="font-size: 11px; color: var(--text-muted); font-weight: 700;">Dificultad CPU Jugador 1:</span>
-                <span id="p1-difficulty-level-label" class="retro-font" style="font-size: 10px; color: #38bdf8;">Nivel 5: Intermedio</span>
+          <!-- SSBU Unified Roster Grid (6 Fighters) -->
+          <div class="ssbu-roster-grid">
+            <?php
+              $ssbu_order = [25, 6, 1, 312, 94, 39];
+              foreach ($ssbu_order as $dex):
+                $f = $fighters[$dex];
+            ?>
+              <div class="ssbu-fighter-tile <?= $dex === 25 ? 'selected-p1' : ($dex === 1 ? 'selected-cpu' : '') ?>" 
+                   data-dex="<?= $dex ?>" 
+                   data-roster-p1="<?= $dex ?>"
+                   data-roster-cpu="<?= $dex ?>"
+                   title="Haz clic para seleccionar a <?= htmlspecialchars($f['name']) ?> y ver sus estadísticas">
+                
+                <!-- Token Indicators (P1 & CPU Coin Badges) -->
+                <div class="ssbu-token-container">
+                  <span class="ssbu-token ssbu-token-p1" style="<?= $dex === 25 ? 'display:flex;' : 'display:none;' ?>">P1</span>
+                  <span class="ssbu-token ssbu-token-cpu" style="<?= $dex === 1 ? 'display:flex;' : 'display:none;' ?>">CPU</span>
+                </div>
+
+                <span class="ssbu-tile-dex">#<?= str_pad($dex, 3, '0', STR_PAD_LEFT) ?></span>
+
+                <div class="ssbu-tile-avatar-wrap" data-avatar-dex="<?= $dex ?>" <?= $dex === 312 ? 'data-partner-dex="311"' : '' ?>>
+                  <img src="assets/pokemon/<?= $dex ?>/Idle.png" alt="<?= htmlspecialchars($f['name']) ?>">
+                </div>
+
+                <div class="ssbu-tile-name"><?= htmlspecialchars($f['name']) ?></div>
+                <div class="ssbu-tile-type" style="color: <?= $f['type_color'] ?>;"><?= htmlspecialchars($f['type']) ?></div>
+                <div class="ssbu-tile-weight">⚖️ <?= htmlspecialchars($f['weight']) ?></div>
+                <div class="ssbu-tile-inspect-hint">📊 Stats & Moves ➔</div>
               </div>
-              <input type="range" id="p1-difficulty-slider" min="1" max="9" step="1" value="5" class="custom-range difficulty-slider">
-              <div class="slider-ticks-row">
-                <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span>
+            <?php endforeach; ?>
+          </div>
+
+          <!-- SSBU Bottom Fighter Showcase Pods -->
+          <div class="ssbu-showcase-container">
+            <!-- P1 Fighter Pod -->
+            <div class="ssbu-fighter-pod pod-p1">
+              <div class="ssbu-pod-header">
+                <span class="ssbu-pod-slot-badge p1-badge">P1 · JUGADOR 1</span>
+                <!-- Control Humano / CPU para P1 -->
+                <div class="deck-buttons-row" style="margin: 0; display: flex; gap: 4px;">
+                  <button type="button" class="btn-deck p1-control-toggle-btn active" data-p1-control="HUMAN" style="padding: 4px 8px; font-size: 10px;">
+                    🎮 Humano
+                  </button>
+                  <button type="button" class="btn-deck p1-control-toggle-btn" data-p1-control="CPU" style="padding: 4px 8px; font-size: 10px;">
+                    🤖 CPU
+                  </button>
+                </div>
+              </div>
+
+              <!-- Selector de Dificultad para P1 si es CPU -->
+              <div id="p1-cpu-diff-container" style="display: none; background: rgba(15,23,42,0.65); padding: 6px 10px; border-radius: 6px; border: 1px solid rgba(239, 68, 68, 0.4);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                  <span style="font-size: 10px; color: #94a3b8; font-weight: 700;">Dificultad CPU P1:</span>
+                  <span id="p1-difficulty-level-label" class="retro-font" style="font-size: 9px; color: #f87171;">Nivel 5: Intermedio</span>
+                </div>
+                <input type="range" id="p1-difficulty-slider" min="1" max="9" step="1" value="5" class="custom-range difficulty-slider" style="accent-color: #ef4444;">
+              </div>
+
+              <div class="ssbu-pod-main-row">
+                <div class="ssbu-showcase-canvas-wrap">
+                  <canvas id="ssbu-p1-showcase-canvas" width="120" height="95" class="ssbu-showcase-canvas"></canvas>
+                </div>
+                <div class="ssbu-pod-info">
+                  <div id="ssbu-p1-pod-name" class="ssbu-pod-name">PIKACHU</div>
+                  <div id="ssbu-p1-pod-type" class="ssbu-pod-type" style="color: #facc15;">Eléctrico</div>
+                  <div id="ssbu-p1-pod-weight" class="ssbu-pod-weight">⚖️ 6.0 kg · Ligero</div>
+                  <button type="button" class="btn-inspect-stats-moves" id="btn-inspect-p1-moves">
+                    📊 Ver Stats & Moveset ➔
+                  </button>
+                </div>
               </div>
             </div>
 
-            <div class="roster-grid" id="p1-modal-roster">
-              <div class="roster-card active" data-roster-p1="25">
-                <div class="roster-card-avatar" data-avatar-dex="25"></div>
-                <div class="roster-card-name">Pikachu</div>
-                <div class="roster-card-type" style="color: #facc15;">Eléctrico</div>
-                <div class="roster-card-weight">⚖️ 6.0 kg · Ligero</div>
+            <!-- CPU / P2 Fighter Pod -->
+            <div class="ssbu-fighter-pod pod-cpu">
+              <div class="ssbu-pod-header">
+                <span class="ssbu-pod-slot-badge cpu-badge">CPU · OPONENTE</span>
+                <!-- Control CPU / Humano J2 -->
+                <div class="deck-buttons-row" style="margin: 0; display: flex; gap: 4px;">
+                  <button type="button" class="btn-deck p2-control-toggle-btn active" data-p2-control="CPU" style="padding: 4px 8px; font-size: 10px;">
+                    🤖 CPU
+                  </button>
+                  <button type="button" class="btn-deck p2-control-toggle-btn" data-p2-control="HUMAN" style="padding: 4px 8px; font-size: 10px;">
+                    👥 J2 Local
+                  </button>
+                </div>
               </div>
-              <div class="roster-card" data-roster-p1="1">
-                <div class="roster-card-avatar" data-avatar-dex="1"></div>
-                <div class="roster-card-name">Bulbasaur</div>
-                <div class="roster-card-type" style="color: #10b981;">Planta / Veneno</div>
-                <div class="roster-card-weight">⚖️ 6.9 kg · Medio</div>
+
+              <div id="p2-human-hint" style="display: none; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 6px; padding: 4px 8px; font-size: 10px; color: #bae6fd;">
+                🎮 <strong>J2 Local:</strong> Flechas (Mov/Salto), Numpad 1/U (Ataque), Numpad 2/I (Especial), Numpad 3/O (Escudo) y Numpad 0/P (Agarre).
               </div>
-              <div class="roster-card" data-roster-p1="312">
-                <div class="roster-card-avatar" data-avatar-dex="312" data-partner-dex="311"></div>
-                <div class="roster-card-name">Minun y Plusle</div>
-                <div class="roster-card-type" style="color: #38bdf8;">Eléctrico (Dúo)</div>
-                <div class="roster-card-weight">⚖️ 4.2 kg · Pluma</div>
-              </div>
-              <div class="roster-card" data-roster-p1="94">
-                <div class="roster-card-avatar" data-avatar-dex="94"></div>
-                <div class="roster-card-name">Gengar</div>
-                <div class="roster-card-type" style="color: #a855f7;">Fantasma / Veneno</div>
-                <div class="roster-card-weight">⚖️ 40.5 kg · Pesado</div>
-              </div>
-              <div class="roster-card" data-roster-p1="39">
-                <div class="roster-card-avatar" data-avatar-dex="39"></div>
-                <div class="roster-card-name">Jigglypuff</div>
-                <div class="roster-card-type" style="color: #f472b6;">Normal / Hada</div>
-                <div class="roster-card-weight">⚖️ 5.5 kg · Floaty</div>
+
+              <div class="ssbu-pod-main-row">
+                <div class="ssbu-showcase-canvas-wrap">
+                  <canvas id="ssbu-cpu-showcase-canvas" width="120" height="95" class="ssbu-showcase-canvas"></canvas>
+                </div>
+                <div class="ssbu-pod-info">
+                  <div id="ssbu-cpu-pod-name" class="ssbu-pod-name">BULBASAUR</div>
+                  <div id="ssbu-cpu-pod-type" class="ssbu-pod-type" style="color: #10b981;">Planta / Veneno</div>
+                  <div id="ssbu-cpu-pod-weight" class="ssbu-pod-weight">⚖️ 6.9 kg · Medio</div>
+                  <button type="button" class="btn-inspect-stats-moves" id="btn-inspect-cpu-moves">
+                    📊 Ver Stats & Moveset ➔
+                  </button>
+                </div>
               </div>
             </div>
           </div>
 
-          <!-- CPU / Player 2 Roster -->
-          <div class="roster-column">
-            <label class="setup-label">Oponente (Jugador 2 / CPU)</label>
+        </div>
 
-            <!-- Control de Jugador 2: CPU o Humano (Local) -->
-            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em;">
-              Control de Jugador 2:
+        <!-- ===================================================================
+             📊 SLIDER DRAWER: STATS Y MOVESET CON DEMOSTRACIÓN GRÁFICA
+             =================================================================== -->
+        <div id="ssbu-drawer-backdrop" class="ssbu-drawer-backdrop"></div>
+        <div id="ssbu-fighter-drawer" class="ssbu-fighter-drawer">
+          <!-- Drawer Header -->
+          <div class="ssbu-drawer-header">
+            <div class="ssbu-drawer-title-group">
+              <span id="ssbu-drawer-fighter-dex" class="ssbu-drawer-dex">#025</span>
+              <h2 id="ssbu-drawer-fighter-name" class="ssbu-drawer-name">PIKACHU</h2>
+              <div id="ssbu-drawer-fighter-title" class="ssbu-drawer-title">El Ratón Eléctrico</div>
+              <div class="ssbu-drawer-badges-row">
+                <span id="ssbu-drawer-fighter-type" class="ssbu-drawer-type-badge" style="color: #facc15; border-color: #facc15;">Eléctrico</span>
+                <span id="ssbu-drawer-fighter-tier" class="ssbu-drawer-tier-badge">S Tier · Agilidad</span>
+                <span id="ssbu-drawer-fighter-weight" class="ssbu-drawer-weight-badge">⚖️ 6.0 kg · Ligero</span>
+              </div>
             </div>
-            <div class="deck-buttons-row" style="margin-bottom: 10px; display: flex; gap: 8px;">
-              <button type="button" class="btn-deck p2-control-toggle-btn active" data-p2-control="CPU" style="flex: 1; padding: 7px 10px; font-weight: 700; font-size: 12px; border-radius: 8px;">
-                🤖 CPU (Auto)
+
+            <div class="ssbu-drawer-actions">
+              <button type="button" id="btn-drawer-assign-p1" class="btn-drawer-assign p1">
+                🔴 P1
               </button>
-              <button type="button" class="btn-deck p2-control-toggle-btn" data-p2-control="HUMAN" style="flex: 1; padding: 7px 10px; font-weight: 700; font-size: 12px; border-radius: 8px;">
-                👥 Jugador 2 (Local)
+              <button type="button" id="btn-drawer-assign-cpu" class="btn-drawer-assign cpu">
+                🔵 CPU
               </button>
+              <button type="button" id="btn-close-ssbu-drawer" class="ssbu-drawer-close" title="Cerrar detalles">✕</button>
+            </div>
+          </div>
+
+          <!-- Drawer Body (Scrollable) -->
+          <div class="ssbu-drawer-content">
+
+            <!-- Sección 1: Variables y Parámetros del Luchador (Engine Stats) -->
+            <div>
+              <div class="ssbu-drawer-section-title">
+                📊 VARIABLES Y PARÁMETROS DEL LUCHADOR (ENGINE STATS)
+              </div>
+              <div class="ssbu-stats-grid">
+                <div class="ssbu-stat-row">
+                  <div class="ssbu-stat-label-wrap">
+                    <span>🚶 Velocidad al Andar (walkSpeed):</span>
+                    <span id="stat-walk-val" class="ssbu-stat-val-text">4.80 px/f</span>
+                  </div>
+                  <div class="ssbu-stat-bar-trough">
+                    <div id="stat-walk-fill" class="ssbu-stat-fill" style="width: 96%;"></div>
+                  </div>
+                </div>
+
+                <div class="ssbu-stat-row">
+                  <div class="ssbu-stat-label-wrap">
+                    <span>🏎️ Velocidad en Carrera (dashSpeed):</span>
+                    <span id="stat-dash-val" class="ssbu-stat-val-text">8.20 px/f</span>
+                  </div>
+                  <div class="ssbu-stat-bar-trough">
+                    <div id="stat-dash-fill" class="ssbu-stat-fill" style="width: 95%;"></div>
+                  </div>
+                </div>
+
+                <div class="ssbu-stat-row">
+                  <div class="ssbu-stat-label-wrap">
+                    <span>🦘 Fuerza de Salto (jumpForce / aéreo):</span>
+                    <span id="stat-jump-val" class="ssbu-stat-val-text">13.80 / 12.20</span>
+                  </div>
+                  <div class="ssbu-stat-bar-trough">
+                    <div id="stat-jump-fill" class="ssbu-stat-fill" style="width: 100%;"></div>
+                  </div>
+                </div>
+
+                <div class="ssbu-stat-row">
+                  <div class="ssbu-stat-label-wrap">
+                    <span>⚖️ Peso del Pokémon (pokedexWeight):</span>
+                    <span id="stat-weight-val" class="ssbu-stat-val-text">6.0 kg (Ligero)</span>
+                  </div>
+                  <div class="ssbu-stat-bar-trough">
+                    <div id="stat-weight-fill" class="ssbu-stat-fill" style="width: 7%;"></div>
+                  </div>
+                </div>
+
+                <div class="ssbu-stat-row">
+                  <div class="ssbu-stat-label-wrap">
+                    <span>🪽 Saltos Totales (maxJumps):</span>
+                    <span id="stat-jumps-val" class="ssbu-stat-val-text">2 saltos (1 suelo + 1 aire)</span>
+                  </div>
+                  <div class="ssbu-stat-bar-trough">
+                    <div id="stat-jumps-fill" class="ssbu-stat-fill" style="width: 40%;"></div>
+                  </div>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px; font-size: 11px;">
+                  <span style="color: #94a3b8; font-weight: 700;">Dificultad de Uso:</span>
+                  <span id="stat-difficulty-val" style="color: #facc15; font-weight: 800;">Intermedio (⭐⭐)</span>
+                </div>
+              </div>
+
+              <!-- Signature Traits Chips -->
+              <div id="ssbu-drawer-traits-list" class="ssbu-traits-grid"></div>
             </div>
 
-            <!-- Aviso de controles cuando J2 es humano -->
-            <div id="p2-human-hint" style="display: none; margin-bottom: 10px; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 8px; padding: 8px 12px; font-size: 11.5px; color: #bae6fd;">
-              🎮 <strong>Modo Multijugador Local:</strong> El Jugador 2 usará Flechas (Moverse/Saltar/Bajar), Numpad 1/U (Ataque), Numpad 2/I (Especial), Numpad 3/O (Escudo) y Numpad 0/P/Enter (Agarre).
+            <!-- Sección 2: Moveset & Demostración Gráfica Interactiva -->
+            <div>
+              <div class="ssbu-drawer-section-title">
+                ⚔️ DEMOSTRACIÓN GRÁFICA & MOVESET EN VIVO
+              </div>
+
+              <!-- Moveset Tabs -->
+              <div class="ssbu-cat-tabs-row">
+                <button type="button" id="ssbu-tab-specials" class="ssbu-cat-tab active">
+                  ⭐ Ataques Especiales [X]
+                </button>
+                <button type="button" id="ssbu-tab-normals" class="ssbu-cat-tab">
+                  ⚔️ Ataques Básicos & Smash [Z]
+                </button>
+              </div>
+
+              <div class="ssbu-demo-split-view">
+                <!-- Live Graphic Demonstration Viewport -->
+                <div class="ssbu-demo-canvas-card">
+                  <canvas id="ssbu-demo-canvas" width="360" height="190" class="ssbu-demo-canvas"></canvas>
+                  <div class="ssbu-demo-controls-bar">
+                    <button type="button" id="btn-replay-demo-move" class="btn-replay-demo">
+                      🔄 Reiniciar Ataque
+                    </button>
+                    <span id="ssbu-demo-move-input" class="ssbu-demo-input-badge">[X] Neutral</span>
+                  </div>
+                  <div class="ssbu-demo-move-details">
+                    <div id="ssbu-demo-move-name" class="ssbu-demo-move-title">¡Trueno! (Rayo Descendente)</div>
+                    <div id="ssbu-demo-move-dmg" class="ssbu-demo-move-dmg">Daño: 6% (Rayo) / 14% (Descarga)</div>
+                    <div id="ssbu-demo-move-desc" class="ssbu-demo-move-desc">Invoca un relámpago que cae desde el cielo...</div>
+                  </div>
+                </div>
+
+                <!-- Interactive Move Cards List -->
+                <div id="ssbu-drawer-moves-container" class="ssbu-moves-list"></div>
+              </div>
             </div>
 
-            <div class="roster-grid" id="cpu-modal-roster">
-              <div class="roster-card" data-roster-cpu="25">
-                <div class="roster-card-avatar" data-avatar-dex="25"></div>
-                <div class="roster-card-name">Pikachu</div>
-                <div class="roster-card-type" style="color: #facc15;">Eléctrico</div>
-                <div class="roster-card-weight">⚖️ 6.0 kg · Ligero</div>
-              </div>
-              <div class="roster-card active" data-roster-cpu="1">
-                <div class="roster-card-avatar" data-avatar-dex="1"></div>
-                <div class="roster-card-name">Bulbasaur</div>
-                <div class="roster-card-type" style="color: #10b981;">Planta / Veneno</div>
-                <div class="roster-card-weight">⚖️ 6.9 kg · Medio</div>
-              </div>
-              <div class="roster-card" data-roster-cpu="312">
-                <div class="roster-card-avatar" data-avatar-dex="312" data-partner-dex="311"></div>
-                <div class="roster-card-name">Minun y Plusle</div>
-                <div class="roster-card-type" style="color: #38bdf8;">Eléctrico (Dúo)</div>
-                <div class="roster-card-weight">⚖️ 4.2 kg · Pluma</div>
-              </div>
-              <div class="roster-card" data-roster-cpu="94">
-                <div class="roster-card-avatar" data-avatar-dex="94"></div>
-                <div class="roster-card-name">Gengar</div>
-                <div class="roster-card-type" style="color: #a855f7;">Fantasma / Veneno</div>
-                <div class="roster-card-weight">⚖️ 40.5 kg · Pesado</div>
-              </div>
-              <div class="roster-card" data-roster-cpu="39">
-                <div class="roster-card-avatar" data-avatar-dex="39"></div>
-                <div class="roster-card-name">Jigglypuff</div>
-                <div class="roster-card-type" style="color: #f472b6;">Normal / Hada</div>
-                <div class="roster-card-weight">⚖️ 5.5 kg · Floaty</div>
-              </div>
-            </div>
+            <button type="button" class="btn-drawer-confirm retro-font" onclick="window.SSBURoster && window.SSBURoster.closeDrawer()">
+              ✓ Listo / Volver a la Selección
+            </button>
           </div>
         </div>
 
@@ -1776,6 +1957,11 @@ $pokemon_items = [
               <td>Proyectiles, Stun, Recuperación, Tóxico</td>
               <td><button class="keybind-code-btn">X</button></td>
             </tr>
+            <tr data-rebind-action="smash">
+              <td>Cargar Ataque Smash</td>
+              <td>Mantener tecla + Dirección para cargar Ataque Smash</td>
+              <td><button class="keybind-code-btn">Ctrl Izq</button></td>
+            </tr>
             <tr data-rebind-action="shield">
               <td>Escudo (C)</td>
               <td>Bloquear impactos y proyectiles</td>
@@ -1790,6 +1976,65 @@ $pokemon_items = [
               <td>Usar Objeto / Poción (1)</td>
               <td>Consumir Poción, SuperPoción o HiperPoción</td>
               <td><button class="keybind-code-btn">1</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Gamepad Mapping Section -->
+      <div class="settings-section">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <div class="settings-section-title" style="margin-bottom: 0;">🎮 Mapeo de Botones en Mando (Gamepad)</div>
+          <button id="btn-reset-gamepad-binds" class="btn-deck" style="padding: 4px 10px; font-size: 11px;">
+            🔄 Restablecer Mando
+          </button>
+        </div>
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 10px;">
+          Conecta tu mando (Xbox, PlayStation, Switch Pro o USB), haz clic en un botón de la tabla y presiona el botón físico deseado en el mando para reasignarlo:
+        </p>
+        <table class="keybinds-table" id="gamepad-binds-table">
+          <thead>
+            <tr>
+              <th>Acción</th>
+              <th>Función</th>
+              <th>Botón de Mando</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr data-rebind-gp-action="jump">
+              <td>Salto</td>
+              <td>Salto Corto / Salto Alto / Saltos Aéreos</td>
+              <td><button class="gp-bind-code-btn keybind-code-btn">A / ✕ o Y / △</button></td>
+            </tr>
+            <tr data-rebind-gp-action="attack">
+              <td>Ataque Básico (Z)</td>
+              <td>Jab, Tilts, Aéreos, Meteor Spike</td>
+              <td><button class="gp-bind-code-btn keybind-code-btn">X / □</button></td>
+            </tr>
+            <tr data-rebind-gp-action="special">
+              <td>Movimiento Especial (X)</td>
+              <td>Proyectiles, Recuperación, Movimientos Especiales</td>
+              <td><button class="gp-bind-code-btn keybind-code-btn">B / ○</button></td>
+            </tr>
+            <tr data-rebind-gp-action="smash">
+              <td>Cargar Ataque Smash</td>
+              <td>Mantener botón + Dirección para cargar Ataque Z</td>
+              <td><button class="gp-bind-code-btn keybind-code-btn">R3 (Stick Der)</button></td>
+            </tr>
+            <tr data-rebind-gp-action="shield">
+              <td>Escudo</td>
+              <td>Bloquear impactos y proyectiles</td>
+              <td><button class="gp-bind-code-btn keybind-code-btn">LB / L1 o LT / L2</button></td>
+            </tr>
+            <tr data-rebind-gp-action="grab">
+              <td>Agarrar (Grab)</td>
+              <td>Atraviesa escudos y permite lanzamientos</td>
+              <td><button class="gp-bind-code-btn keybind-code-btn">RB / R1 o RT / R2</button></td>
+            </tr>
+            <tr data-rebind-gp-action="item">
+              <td>Usar Objeto / Poción</td>
+              <td>Consumir Poción o Baya equipada</td>
+              <td><button class="gp-bind-code-btn keybind-code-btn">Select / Share</button></td>
             </tr>
           </tbody>
         </table>
@@ -2016,8 +2261,13 @@ $pokemon_items = [
   <script src="js/fighters/minun_plusle.js?v=<?= $v ?>"></script>
   <script src="js/fighters/gengar.js?v=<?= $v ?>"></script>
   <script src="js/fighters/jigglypuff.js?v=<?= $v ?>"></script>
+  <script src="js/fighters/charizard.js?v=<?= $v ?>"></script>
   <script src="js/ui/hud.js?v=<?= $v ?>"></script>
   <script src="js/engine/online.js?v=<?= $v ?>"></script>
+  <script>
+    window.POKE_FIGHTERS = <?= json_encode($fighters, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+  </script>
+  <script src="js/ui/ssbu_roster.js?v=<?= $v ?>"></script>
   <script src="js/game.js?v=<?= $v ?>"></script>
 
 </body>

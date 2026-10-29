@@ -184,6 +184,7 @@ class Stage {
   }
 
   setStage(stageId) {
+    this.time = 0;
     if (stageId === 'CINNABAR_ISLAND') {
       this.stageId = 'CINNABAR_ISLAND';
     } else if (stageId === 'POWER_PLANT') {
@@ -1675,34 +1676,52 @@ class Stage {
         }
       }
     } else if (this.stageId === 'BATTLEFIELD') {
-      // Rayo matutino principal desde el cuadrante del sol
-      const sunRay1X = 720 - (y / this.height) * 160 + Math.sin(this.time * 0.3) * 45;
-      const dist1 = Math.abs(x - sunRay1X);
-      if (dist1 < 125) {
-        const a = (1 - dist1 / 125) * 0.26;
-        totalAlpha += a;
-        r += 254 * a; g += 240 * a; b += 138 * a; // #fef08a
-      }
+      // 3 Rayos Volumétricos de Pueblo Paleta (Geometría exacta de haz trapezoidal coincidente con drawGodRay)
+      const beamH = this.height * 1.5;
 
-      // Rayo cálido secundario sobre el centro y plataforma izquierda
-      const sunRay2X = 360 - (y / this.height) * 110 + Math.sin(this.time * 0.25) * 35;
-      const dist2 = Math.abs(x - sunRay2X);
-      if (dist2 < 115) {
-        const a = (1 - dist2 / 115) * 0.22;
-        totalAlpha += a;
-        r += 250 * a; g += 204 * a; b += 21 * a; // #facc15
-      }
+      const evalBeam = (startX, startY, baseAngle, speed, amp, colorR, colorG, colorB, maxA) => {
+        const angle = baseAngle + Math.sin(this.time * speed) * amp;
+        const dx = x - startX;
+        const dy = y - startY;
+        const u = dx * Math.sin(angle) + dy * Math.cos(angle);
+        if (u < 0 || u > beamH) return;
 
-      // Resplandor ambiental de las plataformas móviles (cyan izquierda, rosa derecha)
+        const v = dx * Math.cos(angle) - dy * Math.sin(angle);
+        const halfW = 25 + (190 - 25) * (u / beamH);
+        const distRatio = Math.abs(v) / halfW;
+        if (distRatio < 1.0) {
+          // Suave atenuación cosinusoidal transversal
+          const crossFade = Math.cos(distRatio * (Math.PI * 0.5));
+          // Atenuación longitudinal suave (más luminoso en el aire y en altura)
+          const lengthFade = Math.max(0.2, 1.0 - (u / beamH) * 0.65);
+          // Bonificación de claridad en el aire (precisión aérea)
+          const airClarity = 1.0 + Math.max(0, (430 - y) / 430) * 0.20;
+          const a = crossFade * lengthFade * maxA * airClarity;
+
+          totalAlpha += a;
+          r += colorR * a;
+          g += colorG * a;
+          b += colorB * a;
+        }
+      };
+
+      // Rayo izquierdo cyan: (180, -20)
+      evalBeam(180, -20, 0.22, 0.35, 0.08, 56, 189, 248, 0.22);
+      // Rayo derecho ruby: (840, -20)
+      evalBeam(840, -20, -0.22, 0.38, 0.08, 244, 63, 94, 0.22);
+      // Rayo central solar cálido: (512, -30)
+      evalBeam(512, -30, 0, 0.28, 0.05, 250, 204, 21, 0.26);
+
+      // Resplandor ambiental suave de las plataformas flotantes
       for (const plat of this.semiSolidPlatforms) {
         const dPlat = Math.hypot(x - (plat.x + plat.width / 2), y - plat.y);
         if (dPlat < 85) {
-          const a = (1 - dPlat / 85) * 0.16;
+          const a = (1 - dPlat / 85) * 0.12;
           totalAlpha += a;
           if (plat.id === 'plat_left') {
-            r += 56 * a; g += 189 * a; b += 248 * a; // #38bdf8
+            r += 56 * a; g += 189 * a; b += 248 * a;
           } else {
-            r += 244 * a; g += 63 * a; b += 94 * a; // #f43f5e
+            r += 244 * a; g += 63 * a; b += 94 * a;
           }
         }
       }
@@ -1756,7 +1775,8 @@ class Stage {
 
     return {
       color: `rgb(${normR}, ${normG}, ${normB})`,
-      alpha: Math.min(0.28, totalAlpha)
+      alpha: Math.min(0.28, totalAlpha),
+      rgb: { r: normR, g: normG, b: normB }
     };
   }
 

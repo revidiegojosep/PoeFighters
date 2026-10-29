@@ -31,8 +31,8 @@ class Fighter {
     this.runDirection = 0;
     this.jumpForce = config.jumpForce || 13.5;
     this.doubleJumpForce = config.doubleJumpForce || 12.0;
-    this.maxJumps = 2;
-    this.jumpsLeft = 2;
+    this.maxJumps = config.maxJumps !== undefined ? config.maxJumps : 2;
+    this.jumpsLeft = this.maxJumps;
     this.upSpecialUsed = false;
 
     // State
@@ -117,6 +117,12 @@ class Fighter {
     this.smashMaxHoldTime = 3.0;      // Límite de seguridad mientras se mantenga Z
     this.smashChargeDir = 'side';
     this.smashMaxNotified = false;
+
+    // Smooth lighting fade interpolation
+    this.lightFadeAlpha = 0;
+    this.lightFadeR = 250;
+    this.lightFadeG = 204;
+    this.lightFadeB = 21;
 
     // Jump & Platform dynamics
     this.isJumping = false;
@@ -296,6 +302,22 @@ class Fighter {
     this.parryWindowTimer = Math.max(0, this.parryWindowTimer - dt);
     this.parryFlashTimer = Math.max(0, this.parryFlashTimer - dt);
     this.ledgeCooldown = Math.max(0, this.ledgeCooldown - dt);
+
+    // Smooth Environmental Lighting Lerp (Gentle fade in & fade out, eliminating abrupt pop-in)
+    const currentStage = stage || (window.game && window.game.stage);
+    let targetLight = null;
+    if (currentStage && typeof currentStage.getLightingAt === 'function') {
+      targetLight = currentStage.getLightingAt(this.x, this.y);
+    }
+    const targetAlpha = targetLight ? targetLight.alpha : 0;
+    const fadeSpeed = targetAlpha > this.lightFadeAlpha ? 4.5 : 3.5;
+    this.lightFadeAlpha += (targetAlpha - this.lightFadeAlpha) * Math.min(1.0, dt * fadeSpeed);
+
+    if (targetLight && targetLight.rgb) {
+      this.lightFadeR += (targetLight.rgb.r - this.lightFadeR) * Math.min(1.0, dt * fadeSpeed);
+      this.lightFadeG += (targetLight.rgb.g - this.lightFadeG) * Math.min(1.0, dt * fadeSpeed);
+      this.lightFadeB += (targetLight.rgb.b - this.lightFadeB) * Math.min(1.0, dt * fadeSpeed);
+    }
 
     // Ledge Climb State (Subir de borde suavemente SIN teleport)
     if (this.state === 'LEDGE_CLIMB') {
@@ -544,7 +566,7 @@ class Fighter {
     if (this.isGrounded) {
       if (this.state === 'AIR_DODGE') {
         this.state = 'IDLE';
-        this.actionLockTimer = 0.08;
+        this.actionLockTimer = 0.04;
         this.anim.loop('Idle', 1.0);
       }
       this.airDodgeUsed = false;
@@ -558,8 +580,8 @@ class Fighter {
         this.anim.loop('Idle', 1.0);
       }
     } else if (this.state === 'AIR_DODGE') {
-      this.vx *= 0.92;
-      this.vy *= 0.92;
+      this.vx *= 0.96;
+      this.vy *= 0.96;
       if (this.actionLockTimer <= 0) {
         this.state = 'IDLE';
         this.anim.loop('Walk', 0.8);
@@ -611,13 +633,18 @@ class Fighter {
       if (this.grabStartupTimer > 0.03 && this.grabStartupTimer < 0.18 && opponent) {
         this._checkGrabConnection(opponent);
       }
-      if (this.actionLockTimer <= 0) {
+      if (this.state === 'GRAB_START' && this.actionLockTimer <= 0) {
         this.state = 'IDLE';
       }
     } else if (this.state === 'GRABBING') {
       this._updateGrabbing(dt, opponent);
     } else if (this.state === 'GRABBED') {
       this._updateGrabbed(dt);
+    }
+
+    // Safety recovery: if attack finishes without currentAttack object
+    if (this.state === 'ATTACK' && !this.currentAttack && this.actionLockTimer <= 0) {
+      this.state = 'IDLE';
     }
 
     // Update Physics
@@ -627,7 +654,7 @@ class Fighter {
     // Releasing Space early while rising cuts upward velocity for a smaller jump. Holding it reaches maximum jump height.
     if (this.isJumping && this.vy < 0) {
       if (!this.input.jump) {
-        const shortHopCap = -this.jumpForce * 0.50;
+        const shortHopCap = -this.jumpForce * 0.36; // Reduced short hop height on quick tap (hold jump retains full height)
         if (this.vy < shortHopCap) {
           this.vy = shortHopCap;
         }
@@ -795,9 +822,10 @@ class Fighter {
         }
       }
 
-      // AL SOLTAR Z: Se ejecuta el ataque cargado!
+      // AL SOLTAR Z o Ctrl (input.smash): Se ejecuta el ataque cargado!
       // (O si se alcanza el límite de retención de 3.0s)
-      if (!this.input.attack || this.smashChargeTimer >= (this.smashMaxHoldTime || 3.0)) {
+      const isHoldActive = this.input.attack || this.input.smash;
+      if (!isHoldActive || this.smashChargeTimer >= (this.smashMaxHoldTime || 3.0)) {
         this.releaseSmashAttack(chargeRatio);
       }
       return;
@@ -834,6 +862,24 @@ class Fighter {
     if (this.input.grabPressed && this.canAct() && this.isGrounded) {
       this.input.grabPressed = false;
       this.attemptGrab();
+      return;
+    }
+
+    // 💥 Ctrl + Dirección: Cargar Ataque Smash directamente manteniendo la tecla Smash (Ctrl)
+    if (this.isGrounded && this.canAct() && this.input.smash) {
+      let smashDir = 'side';
+      if (this.input.up) {
+        smashDir = 'up';
+      } else if (this.input.down) {
+        smashDir = 'down';
+      } else if (this.input.left) {
+        smashDir = 'side';
+        this.facing = -1;
+      } else if (this.input.right) {
+        smashDir = 'side';
+        this.facing = 1;
+      }
+      this.startSmashCharge(smashDir);
       return;
     }
 
@@ -1010,23 +1056,23 @@ class Fighter {
     this.runDirection = 0;
     this.state = 'AIR_DODGE';
     this.airDodgeUsed = true;
-    this.invulnTimer = 0.35; // ~21 frames de invencibilidad (Eframes)
-    this.actionLockTimer = 0.38;
+    this.invulnTimer = 0.28; // ~17 frames de invencibilidad (Eframes)
+    this.actionLockTimer = 0.28; // Reducido notablemente (antes 0.38) para eliminar el lag excesivo
 
-    // Directional drift
+    // Directional drift con mayor movilidad para reposicionarse
     let driftX = 0;
     let driftY = 0;
-    if (this.input.left) driftX = -4.8;
-    else if (this.input.right) driftX = 4.8;
-    if (this.input.up) driftY = -3.8;
-    else if (this.input.down) driftY = 3.8;
+    if (this.input.left) driftX = -6.2;
+    else if (this.input.right) driftX = 6.2;
+    if (this.input.up) driftY = -4.5;
+    else if (this.input.down) driftY = 4.5;
 
     if (driftX !== 0 || driftY !== 0) {
       this.vx = driftX;
       this.vy = driftY;
     } else {
-      this.vx *= 0.35;
-      this.vy *= 0.35;
+      this.vx *= 0.65; // Menor penalización de parada en esquive neutral
+      this.vy *= 0.65;
     }
 
     this.anim.play('Hurt', { speed: 0.1 });
@@ -1421,21 +1467,23 @@ class Fighter {
     return finalHitbox;
   }
 
-  performBasicAttack() {
-    if (this.attackCooldown > 0 || this.actionLockTimer > 0) return;
+  performBasicAttack(forcedDir = null, forcedIsAir = null) {
+    if (!forcedDir && (this.attackCooldown > 0 || this.actionLockTimer > 0)) return;
     if (!this.checkItemCanUseAttack('basic')) return;
 
     this.isRunning = false;
     this.runDirection = 0;
 
-    let dir = 'neutral';
-    if (this.input.up) dir = 'up';
-    else if (this.input.down) dir = 'down';
-    else if (this.input.left) { dir = 'side'; this.facing = -1; }
-    else if (this.input.right) { dir = 'side'; this.facing = 1; }
-    else dir = 'neutral';
+    let dir = forcedDir;
+    if (!dir) {
+      if (this.input.up) dir = 'up';
+      else if (this.input.down) dir = 'down';
+      else if (this.input.left) { dir = 'side'; this.facing = -1; }
+      else if (this.input.right) { dir = 'side'; this.facing = 1; }
+      else dir = 'neutral';
+    }
 
-    const isAir = !this.isGrounded;
+    const isAir = (forcedIsAir !== null && forcedIsAir !== undefined) ? forcedIsAir : !this.isGrounded;
     const attackDef = this.getBasicAttackDef(dir, isAir) || this.getUniversalBasicAttackDef(dir, isAir);
     if (!attackDef) return;
 
@@ -1473,21 +1521,27 @@ class Fighter {
     if (attackDef.onStart) attackDef.onStart(this);
   }
 
-  performSpecialMove() {
-    if (this.specialCooldown > 0 || this.actionLockTimer > 0) return;
+  performSpecialMove(forcedDir = null) {
+    if (!forcedDir && (this.specialCooldown > 0 || this.actionLockTimer > 0)) return;
     if (!this.checkItemCanUseAttack('special')) return;
 
     // 4 distinct moves for X: Up, Down, Side (Left/Right), and Neutral (NO direction)
-    let dir = 'neutral';
-    if (this.input.up) dir = 'up';
-    else if (this.input.down) dir = 'down';
-    else if (this.input.left) { dir = 'side'; this.facing = -1; }
-    else if (this.input.right) { dir = 'side'; this.facing = 1; }
-    else dir = 'neutral'; // Neutral X: strictly when no arrow key is held!
+    let dir = forcedDir;
+    if (!dir) {
+      if (this.input.up) dir = 'up';
+      else if (this.input.down) dir = 'down';
+      else if (this.input.left) { dir = 'side'; this.facing = -1; }
+      else if (this.input.right) { dir = 'side'; this.facing = 1; }
+      else dir = 'neutral'; // Neutral X: strictly when no arrow key is held!
+    }
 
-    if (dir === 'up' && this.upSpecialUsed) return;
+    if (dir === 'up' && this.upSpecialUsed && !forcedDir) return;
 
     const moveDef = this.getSpecialMoveDef(dir);
+    if (!moveDef) {
+      this.state = 'IDLE';
+      return;
+    }
     const wasRunning = this.isRunning || (Math.abs(this.vx) > this.walkSpeed * 1.05);
     const wasWalking = !wasRunning && ((this.input.left || this.input.right) || Math.abs(this.vx) > 0.4);
     this.wasRunningOnAttack = wasRunning;
@@ -1853,6 +1907,22 @@ class Fighter {
     if (attacker && window.game) {
       window.game.registerHit(attacker, this, dmg);
     }
+
+    // 🌐 Online Hit Synchronization: Si golpeamos al rival online en nuestra pantalla,
+    // notificamos inmediatamente a OnlineManager para replicar el impacto autoritativo en su máquina
+    if (window.game && window.game.isOnlineMatch && window.game.onlineManager && this === window.game.dummy) {
+      window.game.onlineManager.recordRivalHit({
+        hitId: Date.now() + Math.random(),
+        damage: dmg,
+        totalPercent: this.percent,
+        knockbackX: Math.round(this.vx * 10) / 10,
+        knockbackY: Math.round(this.vy * 10) / 10,
+        hitstun: Math.round((this.hitstun || 0.25) * 100) / 100,
+        hitlag: this.hitstop || 6,
+        sfx: sfxName,
+        hitType: hitbox.type || 'normal'
+      });
+    }
   }
 
   onBlastZoneKO(stage) {
@@ -1983,29 +2053,29 @@ class Fighter {
 
     this.anim.draw(ctx, this.x, this.y, { flash: isHitFlashing });
 
-    // Dynamic Environmental Lighting on Characters (Luz ambiental y focos reflejados)
-    const currentStage = (opts && opts.stage) || (window.game && window.game.stage);
-    if (currentStage && typeof currentStage.getLightingAt === 'function') {
-      const light = currentStage.getLightingAt(this.x, this.y);
-      if (light && (light.intensity > 0 || light.alpha > 0)) {
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
-        const lightGrad = ctx.createRadialGradient(
-          this.x,
-          this.y - this.height * 0.5,
-          4,
-          this.x,
-          this.y - this.height * 0.5,
-          this.height * 0.85
-        );
-        lightGrad.addColorStop(0, light.color);
-        lightGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-        ctx.fillStyle = lightGrad;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y - this.height * 0.5, this.height * 0.85, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      }
+    // Dynamic Environmental Lighting on Characters (Luz ambiental con fade suave cinematográfico)
+    if (this.lightFadeAlpha > 0.008) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const lr = Math.round(this.lightFadeR || 250);
+      const lg = Math.round(this.lightFadeG || 204);
+      const lb = Math.round(this.lightFadeB || 21);
+      const lightGrad = ctx.createRadialGradient(
+        this.x,
+        this.y - this.height * 0.5,
+        4,
+        this.x,
+        this.y - this.height * 0.5,
+        this.height * 0.85
+      );
+      lightGrad.addColorStop(0, `rgba(${lr}, ${lg}, ${lb}, ${(this.lightFadeAlpha * 0.85).toFixed(3)})`);
+      lightGrad.addColorStop(0.55, `rgba(${lr}, ${lg}, ${lb}, ${(this.lightFadeAlpha * 0.35).toFixed(3)})`);
+      lightGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = lightGrad;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y - this.height * 0.5, this.height * 0.85, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
     }
 
     if (this.state === 'SHIELD') {
@@ -2477,8 +2547,16 @@ class Fighter {
         this.state = 'GRABBING';
         this.grabbedOpponent = opponent;
         this.grabHoldTimer = 0;
-        this.actionLockTimer = 0;
+        this.actionLockTimer = 0.15;
         this.vx = 0;
+        this.vy = 0;
+
+        // Limpiar inputs previos para no lanzar accidentalmente en el frame 0 de contacto
+        this.input.leftPressed = false;
+        this.input.rightPressed = false;
+        this.input.upPressed = false;
+        this.input.downPressed = false;
+        this.input.attackPressed = false;
 
         opponent.getGrabbedBy(this);
 
@@ -2560,33 +2638,42 @@ class Fighter {
     this.vy = 0;
 
     // 4 Lanzamientos direccionales (El jugador tiene 2 segundos para elegir)
+    // Se acepta pulsación directa (Pressed) en cualquier momento o mantener dirección tras 0.10s (6 frames)
+    const holdThreshold = 0.10;
+
     // 1. Lanzamiento Arriba (⬆️)
-    if (this.input.upPressed || this.input.up) {
+    if (this.input.upPressed || (this.grabHoldTimer > holdThreshold && (this.input.up || this.input.upPressed))) {
       this.input.upPressed = false;
+      this.input.up = false;
       this.performThrow('up');
       return;
     }
     // 2. Lanzamiento Abajo (⬇️)
-    if (this.input.downPressed || this.input.down) {
+    if (this.input.downPressed || (this.grabHoldTimer > holdThreshold && (this.input.down || this.input.downPressed))) {
       this.input.downPressed = false;
+      this.input.down = false;
       this.performThrow('down');
       return;
     }
     // 3. Lanzamiento Adelante (Dirección hacia la que mira)
-    const isForward = (this.facing === 1 && (this.input.rightPressed || this.input.right)) ||
-                      (this.facing === -1 && (this.input.leftPressed || this.input.left));
-    if (isForward) {
+    const isForwardPressed = (this.facing === 1 && this.input.rightPressed) || (this.facing === -1 && this.input.leftPressed);
+    const isForwardHeld = this.grabHoldTimer > holdThreshold && ((this.facing === 1 && this.input.right) || (this.facing === -1 && this.input.left));
+    if (isForwardPressed || isForwardHeld) {
       this.input.rightPressed = false;
       this.input.leftPressed = false;
+      this.input.right = false;
+      this.input.left = false;
       this.performThrow('forward');
       return;
     }
     // 4. Lanzamiento Atrás (Dirección opuesta a la que mira)
-    const isBack = (this.facing === 1 && (this.input.leftPressed || this.input.left)) ||
-                   (this.facing === -1 && (this.input.rightPressed || this.input.right));
-    if (isBack) {
+    const isBackPressed = (this.facing === 1 && this.input.leftPressed) || (this.facing === -1 && this.input.rightPressed);
+    const isBackHeld = this.grabHoldTimer > holdThreshold && ((this.facing === 1 && this.input.left) || (this.facing === -1 && this.input.right));
+    if (isBackPressed || isBackHeld) {
       this.input.leftPressed = false;
       this.input.rightPressed = false;
+      this.input.left = false;
+      this.input.right = false;
       this.performThrow('back');
       return;
     }
@@ -2627,7 +2714,7 @@ class Fighter {
     let baseKb = 28;
     let kbScale = 1.0;
     let angle = 45;
-    let throwName = 'Forward Throw';
+    let throwName = 'Forward Throw ➡️';
 
     if (direction === 'up') {
       dmg = 8.5;
@@ -2650,13 +2737,14 @@ class Fighter {
     } else if (direction === 'back') {
       this.facing = -this.facing; // Turn around!
       this.anim.setFacing(this.facing);
+      opp.x = this.x + this.facing * 24; // Swing opponent to the other side
       dmg = 11.0;
       baseKb = 34; // Lethal high knockback back-throw!
       kbScale = 1.15;
       angle = 42;
       throwName = 'Back Throw ⬅️';
       if (window.particleManager) {
-        window.particleManager.spawnRadialBurst(this.x, this.y - this.height * 0.5, '#f43f5e', 'slash', 40);
+        window.particleManager.spawnRadialBurst(this.x, this.y - this.height * 0.5, '#f43f5e', 'electric', 40);
       }
     } else { // forward
       dmg = 9.0;
@@ -2665,7 +2753,7 @@ class Fighter {
       angle = 40;
       throwName = 'Forward Throw ➡️';
       if (window.particleManager) {
-        window.particleManager.spawnRadialBurst(this.x, this.y - this.height * 0.5, '#f59e0b', 'impact', 35);
+        window.particleManager.spawnRadialBurst(this.x, this.y - this.height * 0.5, '#f59e0b', 'electric', 35);
       }
     }
 
@@ -2679,6 +2767,10 @@ class Fighter {
     };
 
     opp.takeHit(throwHitbox, this);
+    this.anim.play('Attack', { speed: 1.5 }, () => {
+      this.state = 'IDLE';
+      this.currentAttack = null;
+    });
     if (window.soundEngine) window.soundEngine.playSfx('throw');
     if (window.particleManager) {
       window.particleManager.spawnFloatingText(opp.x, opp.y - opp.height - 20, throwName, '#facc15', 18);

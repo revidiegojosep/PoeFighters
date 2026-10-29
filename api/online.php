@@ -40,19 +40,56 @@ function sanitizeRoom($room) {
 
 function getRoomFile($roomsDir, $code) {
     $cleanCode = preg_replace('/[^0-9]/', '', (string)$code);
+    if (strlen($cleanCode) > 0 && strlen($cleanCode) < 4) {
+        $cleanCode = sprintf("%04d", (int)$cleanCode);
+    }
     if (strlen($cleanCode) !== 4) return null;
     return $roomsDir . '/' . $cleanCode . '.json';
 }
 
 function loadRoom($file) {
     if (!$file || !file_exists($file)) return null;
-    $content = file_get_contents($file);
-    return json_decode($content, true);
+
+    // Reintentar lectura en caso de bloqueo concurrente (Windows errno 13)
+    $attempts = 0;
+    while ($attempts < 5) {
+        $fp = @fopen($file, 'rb');
+        if ($fp) {
+            @flock($fp, LOCK_SH);
+            $content = '';
+            while (!feof($fp)) {
+                $content .= fread($fp, 8192);
+            }
+            @flock($fp, LOCK_UN);
+            @fclose($fp);
+            if ($content !== '') {
+                $data = json_decode($content, true);
+                if (is_array($data)) return $data;
+            }
+        }
+        $attempts++;
+        usleep(15000); // 15ms
+    }
+
+    $content = @file_get_contents($file);
+    return $content ? json_decode($content, true) : null;
 }
 
 function saveRoom($file, $room) {
+    if (!$file) return;
     $room['updated_at'] = microtime(true);
-    file_put_contents($file, json_encode($room, JSON_PRETTY_PRINT), LOCK_EX);
+    $data = json_encode($room, JSON_PRETTY_PRINT);
+    
+    // Escritura segura atómica para Windows
+    $tmp = $file . '.' . uniqid('w_', true);
+    if (@file_put_contents($tmp, $data, LOCK_EX) !== false) {
+        if (!@rename($tmp, $file)) {
+            @copy($tmp, $file);
+            @unlink($tmp);
+        }
+    } else {
+        @file_put_contents($file, $data, LOCK_EX);
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -60,7 +97,7 @@ function saveRoom($file, $room) {
 // -----------------------------------------------------------------------------
 if ($action === 'create_room' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $dex = (int)($payload['dex'] ?? 25);
-    $validDex = [25, 1, 312, 94, 39];
+    $validDex = [25, 6, 1, 312, 94, 39];
     if (!in_array($dex, $validDex)) $dex = 25;
 
     // Generar código único aleatorio de 4 dígitos
@@ -152,7 +189,7 @@ if ($action === 'join_room' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $dex = (int)($payload['dex'] ?? 1);
-    $validDex = [25, 1, 312, 94, 39];
+    $validDex = [25, 6, 1, 312, 94, 39];
     if (!in_array($dex, $validDex)) $dex = 1;
 
     $guestToken = bin2hex(random_bytes(16));
@@ -185,7 +222,11 @@ if ($action === 'join_room' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 if ($action === 'get_room') {
     $code = $_GET['code'] ?? $payload['code'] ?? '';
     $token = $_GET['token'] ?? $payload['token'] ?? '';
-    $file = getRoomFile($roomsDir, $code);
+    $cleanCode = preg_replace('/[^0-9]/', '', (string)$code);
+    if (strlen($cleanCode) > 0 && strlen($cleanCode) < 4) {
+        $cleanCode = sprintf("%04d", (int)$cleanCode);
+    }
+    $file = getRoomFile($roomsDir, $cleanCode);
     $room = loadRoom($file);
 
     if (!$room) {
@@ -209,7 +250,7 @@ if ($action === 'get_room') {
     if (in_array($room['status'], ['lobby', 'item_draft', 'playing'])) {
         $p1Seen = $room['p1']['last_seen'] ?? 0;
         $p2Seen = $room['p2']['last_seen'] ?? 0;
-        $timeout = 4.5; // 4.5 segundos sin señales
+        $timeout = 25.0; // 25 segundos de tolerancia para redes móviles e Internet
 
         if ($room['status'] === 'playing' || $room['status'] === 'item_draft') {
             if ($p1Seen > 0 && ($now - $p1Seen > $timeout)) {
@@ -276,6 +317,45 @@ if ($action === 'update_settings' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // -----------------------------------------------------------------------------
+// 4.5. SELECCIONAR / CAMBIAR LUCHADOR (Host o Guest)
+// -----------------------------------------------------------------------------
+if ($action === 'select_fighter' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $code = $payload['code'] ?? '';
+    $token = $payload['token'] ?? '';
+    $dex = (int)($payload['dex'] ?? 25);
+    $validDex = [25, 6, 1, 312, 94, 39];
+    if (!in_array($dex, $validDex)) $dex = 25;
+
+    $file = getRoomFile($roomsDir, $code);
+    $room = loadRoom($file);
+
+    if (!$room) {
+        http_response_code(404);
+        echo json_encode(['success' => false, 'error' => 'Sala no encontrada']);
+        exit;
+    }
+
+    $isHost = ($room['host_token'] === $token);
+    $isGuest = ($room['guest_token'] === $token);
+    if (!$isHost && !$isGuest) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'error' => 'Token inválido']);
+        exit;
+    }
+
+    if ($isHost && isset($room['p1'])) {
+        $room['p1']['dex'] = $dex;
+    } elseif ($isGuest && isset($room['p2'])) {
+        $room['p2']['dex'] = $dex;
+    }
+
+    saveRoom($file, $room);
+
+    echo json_encode(['success' => true, 'room' => sanitizeRoom($room)]);
+    exit;
+}
+
+// -----------------------------------------------------------------------------
 // 5. INICIAR COMBATE (Solo Anfitrión)
 // -----------------------------------------------------------------------------
 if ($action === 'start_game' && $_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -294,6 +374,15 @@ if ($action === 'start_game' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         http_response_code(400);
         echo json_encode(['success' => false, 'error' => 'No puedes iniciar sin un oponente conectado.']);
         exit;
+    }
+
+    // Actualizar dex del anfitrión si se envió en el payload al iniciar
+    if (isset($payload['dex'])) {
+        $dex = (int)$payload['dex'];
+        $validDex = [25, 6, 1, 312, 94, 39];
+        if (in_array($dex, $validDex) && isset($room['p1'])) {
+            $room['p1']['dex'] = $dex;
+        }
     }
 
     $now = microtime(true);
@@ -408,14 +497,24 @@ if ($action === 'signal' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // -----------------------------------------------------------------------------
-// 8. FALLBACK SYNC & ANTI-CHEAT VALIDATION
+// 8. FALLBACK SYNC & ANTI-CHEAT VALIDATION (Atomic Dedicated State Files)
 // -----------------------------------------------------------------------------
-if ($action === 'sync' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-    $code = $payload['code'] ?? '';
-    $token = $payload['token'] ?? '';
+if ($action === 'sync') {
+    $code = $payload['code'] ?? $_GET['code'] ?? $_POST['code'] ?? '';
+    $token = $payload['token'] ?? $_GET['token'] ?? $_POST['token'] ?? '';
     $state = $payload['state'] ?? [];
 
-    $file = getRoomFile($roomsDir, $code);
+    $cleanCode = preg_replace('/[^0-9]/', '', (string)$code);
+    if (strlen($cleanCode) > 0 && strlen($cleanCode) < 4) {
+        $cleanCode = sprintf("%04d", (int)$cleanCode);
+    }
+    if (strlen($cleanCode) !== 4) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'Código de sala no válido']);
+        exit;
+    }
+
+    $file = getRoomFile($roomsDir, $cleanCode);
     $room = loadRoom($file);
     if (!$room) {
         http_response_code(404);
@@ -444,17 +543,33 @@ if ($action === 'sync' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $now = microtime(true);
-    if ($isHost) {
-        $room['battle_state']['p1_state'] = $state;
-        if (isset($room['p1'])) $room['p1']['last_seen'] = $now;
-    } else {
-        $room['battle_state']['p2_state'] = $state;
-        if (isset($room['p2'])) $room['p2']['last_seen'] = $now;
+    $myFile = $roomsDir . '/' . $cleanCode . ($isHost ? '_p1.json' : '_p2.json');
+    $rivalFile = $roomsDir . '/' . $cleanCode . ($isHost ? '_p2.json' : '_p1.json');
+
+    // 1. Guardar de forma atómica y aislada el estado del jugador en su archivo dedicado
+    if (!empty($state)) {
+        file_put_contents($myFile, json_encode([
+            't' => $now,
+            'state' => $state
+        ]), LOCK_EX);
     }
 
-    // Verificar si la sala ya fue abandonada
+    // 2. Leer atómicamente el estado del rival sin colisiones de escritura
+    $rivalState = null;
+    $rivalSeen = 0;
+    if (file_exists($rivalFile)) {
+        $rivalContent = @file_get_contents($rivalFile);
+        if ($rivalContent) {
+            $rivalData = json_decode($rivalContent, true);
+            if ($rivalData && isset($rivalData['state'])) {
+                $rivalState = $rivalData['state'];
+                $rivalSeen = (float)($rivalData['t'] ?? 0);
+            }
+        }
+    }
+
+    // Verificar si la sala fue abandonada
     if ($room['status'] === 'abandoned') {
-        saveRoom($file, $room);
         echo json_encode([
             'success' => false,
             'status' => 'abandoned',
@@ -464,9 +579,8 @@ if ($action === 'sync' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
-    // Verificar si el rival se desconectó (> 4.5 segundos)
-    $rivalSeen = $isHost ? ($room['p2']['last_seen'] ?? 0) : ($room['p1']['last_seen'] ?? 0);
-    if ($rivalSeen > 0 && ($now - $rivalSeen > 4.5)) {
+    // Verificar desconexión prolongada del rival (> 35 segundos para acomodar sesiones P2P de WebRTC)
+    if ($rivalSeen > 0 && ($now - $rivalSeen > 35.0)) {
         $room['status'] = 'abandoned';
         $room['abandoned_by'] = $isHost ? 'p2' : 'p1';
         saveRoom($file, $room);
@@ -479,11 +593,9 @@ if ($action === 'sync' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
-    saveRoom($file, $room);
-
     echo json_encode([
         'success' => true,
-        'rival_state' => $isHost ? $room['battle_state']['p2_state'] : $room['battle_state']['p1_state'],
+        'rival_state' => $rivalState,
         'status' => $room['status']
     ]);
     exit;
@@ -495,6 +607,7 @@ if ($action === 'sync' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 if ($action === 'leave_room') {
     $code = $payload['code'] ?? $_GET['code'] ?? '';
     $token = $payload['token'] ?? $_GET['token'] ?? '';
+    $cleanCode = preg_replace('/[^0-9]/', '', (string)$code);
 
     $file = getRoomFile($roomsDir, $code);
     $room = loadRoom($file);
@@ -508,6 +621,11 @@ if ($action === 'leave_room') {
             $room['abandoned_by'] = $isHost ? 'p1' : 'p2';
             saveRoom($file, $room);
         }
+    }
+
+    if (strlen($cleanCode) === 4) {
+        @unlink($roomsDir . '/' . $cleanCode . '_p1.json');
+        @unlink($roomsDir . '/' . $cleanCode . '_p2.json');
     }
 
     echo json_encode(['success' => true, 'status' => 'abandoned']);

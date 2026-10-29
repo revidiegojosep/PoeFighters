@@ -31,12 +31,16 @@ class OnlineAntiCheat {
   validateState(incomingState, currentLocalFighter) {
     if (!incomingState || typeof incomingState !== 'object') return null;
 
-    // 1. Verificación de Secuencia de Paquetes (Anti-Replay Attack)
+    // 1. Verificación de Secuencia de Paquetes (Anti-Replay Attack con tolerancia a fluctuaciones P2P/HTTP)
     if (incomingState.seq !== undefined) {
       if (incomingState.seq <= this.lastPacketSeq && this.lastPacketSeq !== -1) {
-        return null;
+        // Permitir paquetes que contengan eventos críticos de acción o impacto aunque haya jitter
+        if (!incomingState.action && !incomingState.hitEvent && (this.lastPacketSeq - incomingState.seq > 3)) {
+          return null;
+        }
+      } else {
+        this.lastPacketSeq = incomingState.seq;
       }
-      this.lastPacketSeq = incomingState.seq;
     }
 
     const sanitized = Object.assign({}, incomingState);
@@ -48,9 +52,6 @@ class OnlineAntiCheat {
       else if (s > 3) {
         sanitized.stocks = 3;
         this._flagSuspicious('Stock tampering: stocks > 3');
-      }
-      if (currentLocalFighter && sanitized.stocks > currentLocalFighter.stocks && currentLocalFighter.stocks > 0) {
-        sanitized.stocks = currentLocalFighter.stocks;
       }
     }
 
@@ -70,15 +71,28 @@ class OnlineAntiCheat {
         const dy = sanitized.y - this.lastY;
         const dist = Math.hypot(dx, dy);
 
-        // Tolerancia física dinámica: base 95px + velocidad máxima posible en dt
-        const maxAllowed = Math.max(95, 620 * dt);
-        const isLegitTeleport = (sanitized.state === 'SPECIAL_UP' || sanitized.state === 'RESPAWN' || sanitized.state === 'KO' || sanitized.state === 'LEDGE_CLIMB');
+        // Tolerancia física amplia para permitir carreras, ataques dinámicos y knockbacks
+        const maxAllowed = Math.max(350, 1600 * dt);
+        const isLegitMovement = (
+          sanitized.state === 'SPECIAL_UP' ||
+          sanitized.state === 'SPECIAL' ||
+          sanitized.state === 'ATTACK' ||
+          sanitized.state === 'RESPAWN' ||
+          sanitized.state === 'KO' ||
+          sanitized.state === 'HURT' ||
+          sanitized.state === 'LEDGE_CLIMB' ||
+          sanitized.state === 'ROLL' ||
+          sanitized.state === 'AIR_DODGE' ||
+          (sanitized.hitstun && sanitized.hitstun > 0)
+        );
 
-        if (dist > maxAllowed && !isLegitTeleport) {
-          this._flagSuspicious(`Speed anomaly: dist=${dist.toFixed(1)}px (dt=${dt.toFixed(3)}s)`);
-          const angle = Math.atan2(dy, dx);
-          sanitized.x = this.lastX + Math.cos(angle) * maxAllowed;
-          sanitized.y = this.lastY + Math.sin(angle) * maxAllowed;
+        if (dist > maxAllowed && !isLegitMovement) {
+          if (dist > 900) {
+            this._flagSuspicious(`Extreme anomaly: dist=${dist.toFixed(1)}px (dt=${dt.toFixed(3)}s)`);
+            const angle = Math.atan2(dy, dx);
+            sanitized.x = this.lastX + Math.cos(angle) * maxAllowed;
+            sanitized.y = this.lastY + Math.sin(angle) * maxAllowed;
+          }
         }
       }
       this.lastX = sanitized.x;
@@ -131,6 +145,7 @@ class OnlineManager {
     this.peerConnection = null;
     this.dataChannel = null;
     this.isRtcConnected = false;
+    this.lastRtcPacketTime = 0;
     this.addedCandidates = new Set();
 
     // Sincronización HTTP (No superpuesta)
@@ -149,12 +164,35 @@ class OnlineManager {
 
     // Manejador de desconexión antes de cerrar pestaña
     window.addEventListener('beforeunload', () => {
-      this._notifyLeaveBeacon();
+      // Solo notificar leave en salas de espera o lobby; durante 'playing' dejar que actúe el heartbeat
+      if (this.status === 'waiting' || this.status === 'lobby') {
+        this._notifyLeaveBeacon();
+      }
     });
   }
 
-  setSelectedFighter(dex) {
+  async setSelectedFighter(dex) {
     this.selectedDex = parseInt(dex, 10) || 25;
+    if (this.roomCode && this.token) {
+      try {
+        const res = await fetch(`${this.apiBase}?action=select_fighter`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            code: this.roomCode,
+            token: this.token,
+            dex: this.selectedDex
+          })
+        });
+        const data = await res.json();
+        if (data.success && data.room) {
+          this.room = data.room;
+          if (window.onOnlineRoomUpdated) window.onOnlineRoomUpdated(this.room, this.ping);
+        }
+      } catch (e) {
+        console.warn('[OnlineManager] Error al sincronizar selección de luchador:', e);
+      }
+    }
   }
 
   /**
@@ -268,13 +306,15 @@ class OnlineManager {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           code: this.roomCode,
-          token: this.token
+          token: this.token,
+          dex: this.selectedDex
         })
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error || 'Error al iniciar la partida');
 
       this.room = data.room;
+      this.status = this.room.status;
       this._handleRoomStatusTransition(this.room.status);
     } catch (err) {
       console.error('[OnlineManager] startGame error:', err);
@@ -300,6 +340,7 @@ class OnlineManager {
       const data = await res.json();
       if (data.success) {
         this.room = data.room;
+        this.status = data.room.status;
         if (data.room.status === 'playing') {
           this._handleRoomStatusTransition('playing');
         }
@@ -363,6 +404,8 @@ class OnlineManager {
   }
 
   _handleRoomStatusTransition(newStatus) {
+    this.status = newStatus;
+    if (this.room) this.room.status = newStatus;
     if (newStatus === 'item_draft') {
       this._startItemDraft();
     } else if (newStatus === 'playing') {
@@ -405,6 +448,10 @@ class OnlineManager {
       clearInterval(this.draftInterval);
       this.draftInterval = null;
     }
+
+    this.antiCheat.reset();
+    this.lastRtcPacketTime = 0;
+    this.packetSeq = 0;
 
     if (window.onOnlineBattleStart) {
       window.onOnlineBattleStart({
@@ -474,8 +521,13 @@ class OnlineManager {
 
     this.dataChannel.onopen = () => {
       this.isRtcConnected = true;
+      this.lastRtcPacketTime = performance.now();
       console.log('[🌐 Online WebRTC] ¡DataChannel P2P Abierto con éxito a 60 FPS!');
       if (window.onOnlineNetStatus) window.onOnlineNetStatus('p2p', 8);
+
+      try {
+        this.dataChannel.send(JSON.stringify({ type: 'rtc_ping', t: performance.now() }));
+      } catch (e) {}
     };
 
     this.dataChannel.onclose = () => {
@@ -554,6 +606,11 @@ class OnlineManager {
     }, 16);
   }
 
+  recordRivalHit(hitInfo) {
+    this.pendingHitEvent = hitInfo;
+    this.pendingHitFramesLeft = 6;
+  }
+
   /**
    * Envía los datos locales al rival
    */
@@ -563,11 +620,48 @@ class OnlineManager {
     if (!localFighter) return;
 
     this.packetSeq++;
+    const curAnim = localFighter.anim ? (localFighter.anim.curAnim || localFighter.anim.currentAnimName || 'Idle') : 'Idle';
+    const aimDir = localFighter.anim ? (localFighter.anim.aimDir || 'center') : 'center';
+
+    // Detección y emisión de eventos de acción ofensiva / defensiva
+    let actionPayload = null;
+    if (
+      localFighter.state === 'ATTACK' ||
+      localFighter.state === 'SPECIAL' ||
+      localFighter.state === 'SMASH_CHARGE' ||
+      localFighter.state === 'SMASH_ATTACK' ||
+      localFighter.state === 'GRAB_START' ||
+      localFighter.state === 'ROLL' ||
+      localFighter.state === 'AIR_DODGE'
+    ) {
+      if (this.lastSentLocalState !== localFighter.state) {
+        this.localActionSeq = (this.localActionSeq || 0) + 1;
+        this.currentActionPayload = {
+          id: this.localActionSeq,
+          type: localFighter.state,
+          dir: aimDir !== 'center' ? aimDir : (localFighter.input?.up ? 'up' : localFighter.input?.down ? 'down' : (localFighter.input?.left || localFighter.input?.right) ? 'side' : 'neutral'),
+          isAir: !localFighter.isGrounded,
+          animName: curAnim
+        };
+        this.currentActionFramesLeft = 8;
+      }
+    }
+    this.lastSentLocalState = localFighter.state;
+
+    if (this.currentActionPayload && this.currentActionFramesLeft > 0) {
+      actionPayload = this.currentActionPayload;
+      this.currentActionFramesLeft--;
+    }
+
     const payload = {
       seq: this.packetSeq,
       t: performance.now(),
       role: this.role,
       slot: this.role === 'host' ? 1 : 2,
+      dex: localFighter.dex || this.selectedDex,
+      platId: localFighter.groundedPlat ? (localFighter.groundedPlat.id || null) : null,
+      isGrounded: !!localFighter.isGrounded,
+      stageTime: (this.game && this.game.stage) ? Math.round(this.game.stage.time * 100) / 100 : 0,
       x: Math.round(localFighter.x * 10) / 10,
       y: Math.round(localFighter.y * 10) / 10,
       vx: Math.round(localFighter.vx * 10) / 10,
@@ -576,9 +670,12 @@ class OnlineManager {
       facing: localFighter.facing,
       percent: Math.round(localFighter.percent * 10) / 10,
       stocks: localFighter.stocks,
-      shield: Math.round(localFighter.shieldHealth || 0),
+      shield: Math.round(localFighter.shield !== undefined ? localFighter.shield : (localFighter.shieldHealth || 100)),
       hitstun: Math.round((localFighter.hitstun || 0) * 100) / 100,
-      animName: localFighter.anim?.currentAnimName || 'Idle',
+      animName: curAnim,
+      aimDir: aimDir,
+      action: actionPayload,
+      hitEvent: this.pendingHitEvent || null,
       heldItem: localFighter.heldItem ? localFighter.heldItem.id : null,
       input: {
         left: !!localFighter.input?.left,
@@ -602,39 +699,73 @@ class OnlineManager {
       }
     };
 
-    // 1. Envío prioritario vía WebRTC DataChannel (0-5ms)
-    if (this.isRtcConnected && this.dataChannel && this.dataChannel.readyState === 'open') {
+    if (this.pendingHitEvent) {
+      this.pendingHitFramesLeft = (this.pendingHitFramesLeft || 6) - 1;
+      if (this.pendingHitFramesLeft <= 0) {
+        this.pendingHitEvent = null;
+      }
+    }
+
+    // 1. Envío prioritario vía WebRTC DataChannel (P2P directo a 60 FPS sin saturar HTTP)
+    const now = performance.now();
+    const isWebRtcLive = this.isRtcConnected && 
+                         this.dataChannel && 
+                         this.dataChannel.readyState === 'open' &&
+                         (now - this.lastRtcPacketTime < 2500);
+
+    if (isWebRtcLive) {
       try {
         this.dataChannel.send(JSON.stringify(payload));
+        if (window.onOnlineNetStatus) window.onOnlineNetStatus('p2p', this.ping || 6);
+
+        // En modo P2P a 60 FPS, solo enviamos un ping HTTP liviano cada 5 segundos para mantener viva la sala PHP
+        if (!this.isHttpInFlight && (now - this.lastHttpSendTime >= 5000)) {
+          this.lastHttpSendTime = now;
+          this._httpSync(payload, true);
+        }
         return;
       } catch (err) {
         this.isRtcConnected = false;
       }
+    } else if (this.dataChannel && this.dataChannel.readyState === 'open') {
+      try {
+        this.dataChannel.send(JSON.stringify(payload));
+      } catch (e) {}
     }
 
-    // 2. HTTP Fallback Sync: Garantiza no superposición de peticiones (Max 14 req/s)
-    const now = performance.now();
-    if (!this.isHttpInFlight && (now - this.lastHttpSendTime >= 65)) {
+    // 2. HTTP Fallback Sync: ~13 req/s (intervalo de 75ms)
+    // Reduce las peticiones más de un 50% frente a los 35ms anteriores sin perder fluidez física
+    if (!this.isHttpInFlight && (now - this.lastHttpSendTime >= 75)) {
       this.lastHttpSendTime = now;
-      this._httpSync(payload);
+      this._httpSync(payload, false);
     }
   }
 
-  async _httpSync(payload) {
-    if (this.isHttpInFlight) return;
+  async _httpSync(payload, isHeartbeat = false) {
+    if (this.isHttpInFlight || !this.roomCode || !this.token) return;
     this.isHttpInFlight = true;
 
+    const t0 = performance.now();
     try {
-      const res = await fetch(`${this.apiBase}?action=sync`, {
+      const url = `${this.apiBase}?action=sync&code=${encodeURIComponent(this.roomCode)}&token=${encodeURIComponent(this.token)}`;
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           code: this.roomCode,
           token: this.token,
-          state: payload
+          state: payload,
+          heartbeat: isHeartbeat
         })
       });
+
+      if (!res.ok) {
+        console.warn('[OnlineManager] HTTP sync status:', res.status);
+        return;
+      }
+
       const data = await res.json();
+      this.ping = Math.round(performance.now() - t0);
 
       if (data.status === 'abandoned' || data.abandoned) {
         this.handleRoomAbandoned(data.abandoned_by);
@@ -642,9 +773,16 @@ class OnlineManager {
       }
 
       if (data.success && data.rival_state) {
-        this._applyRivalState(data.rival_state);
+        // Si WebRTC está activo a 60 FPS, no sobreescribir el estado P2P con HTTP retrasado
+        if (!this.isRtcConnected) {
+          this._applyRivalState(data.rival_state);
+          if (window.onOnlineNetStatus) {
+            window.onOnlineNetStatus('http', this.ping);
+          }
+        }
       }
     } catch (e) {
+      console.warn('[OnlineManager] HTTP sync error:', e);
     } finally {
       this.isHttpInFlight = false;
     }
@@ -653,80 +791,203 @@ class OnlineManager {
   _handleIncomingPacket(raw) {
     try {
       const packet = JSON.parse(raw);
+      this.lastRtcPacketTime = performance.now();
+      this.isRtcConnected = true;
+
+      if (packet.type === 'rtc_ping') {
+        try {
+          this.dataChannel.send(JSON.stringify({ type: 'rtc_pong', t: packet.t }));
+        } catch (e) {}
+        return;
+      }
+      if (packet.type === 'rtc_pong') {
+        this.ping = Math.max(1, Math.round(performance.now() - packet.t));
+        if (window.onOnlineNetStatus) window.onOnlineNetStatus('p2p', this.ping);
+        return;
+      }
+
+      if (window.onOnlineNetStatus) window.onOnlineNetStatus('p2p', 8);
       this._applyRivalState(packet);
     } catch (e) {}
   }
 
   /**
-   * Aplica el estado del rival en tiempo real con validación Anti-Cheat e interpolación física suave
+   * Aplica el estado del rival en tiempo real con validación Anti-Cheat e interpolación física reactiva
    */
   _applyRivalState(incomingPacket) {
     if (!this.game) return;
     const rivalFighter = this.game.dummy;
-    if (!rivalFighter) return;
+    const localPlayer = this.game.player;
+    if (!rivalFighter || !localPlayer) return;
 
     // 🛡️ Filtro y validación Anti-Cheat
     const safe = this.antiCheat.validateState(incomingPacket, rivalFighter);
     if (!safe) return;
 
-    // 1. Sincronizar inputs del rival (movimiento continuo y acciones inmediatas)
-    if (safe.input) {
-      rivalFighter.input.left = !!safe.input.left;
-      rivalFighter.input.right = !!safe.input.right;
-      rivalFighter.input.up = !!safe.input.up;
-      rivalFighter.input.down = !!safe.input.down;
-      rivalFighter.input.jump = !!safe.input.jump;
-      rivalFighter.input.attack = !!safe.input.attack;
-      rivalFighter.input.special = !!safe.input.special;
-      rivalFighter.input.shield = !!safe.input.shield;
-      rivalFighter.input.grab = !!safe.input.grab;
-
-      if (safe.input.leftPressed) rivalFighter.input.leftPressed = true;
-      if (safe.input.rightPressed) rivalFighter.input.rightPressed = true;
-      if (safe.input.upPressed) rivalFighter.input.upPressed = true;
-      if (safe.input.downPressed) rivalFighter.input.downPressed = true;
-      if (safe.input.jumpPressed) rivalFighter.input.jumpPressed = true;
-      if (safe.input.attackPressed) rivalFighter.input.attackPressed = true;
-      if (safe.input.specialPressed) rivalFighter.input.specialPressed = true;
-      if (safe.input.shieldPressed) rivalFighter.input.shieldPressed = true;
-      if (safe.input.grabPressed) rivalFighter.input.grabPressed = true;
+    // 0. Sincronización del reloj de escenario (elimina desincronización de plataformas móviles)
+    if (safe.stageTime !== undefined && this.role === 'guest' && this.game.stage) {
+      this.game.stage.time = safe.stageTime;
     }
 
-    // 2. Orientación y Estado de Animación
+    // Sincronización dinámica de luchador si difiere del paquete de red recibido
+    if (safe.dex && rivalFighter.dex !== safe.dex && typeof this.game.swapRivalFighter === 'function') {
+      this.game.swapRivalFighter(safe.dex);
+    }
+
+    // 1. Sincronizar eventos de impacto / daño recibido autoritativo
+    if (safe.hitEvent && safe.hitEvent.hitId && safe.hitEvent.hitId !== this.lastReceivedHitId) {
+      this.lastReceivedHitId = safe.hitEvent.hitId;
+      if (localPlayer.state !== 'RESPAWN' && localPlayer.invulnTimer <= 0) {
+        const targetPercent = Math.min(999, Math.max(localPlayer.percent, safe.hitEvent.totalPercent || (localPlayer.percent + safe.hitEvent.damage)));
+        localPlayer.percent = targetPercent;
+        localPlayer.state = 'HURT';
+        localPlayer.vx = safe.hitEvent.knockbackX;
+        localPlayer.vy = safe.hitEvent.knockbackY;
+        localPlayer.hitstun = Math.max(localPlayer.hitstun || 0, safe.hitEvent.hitstun || 0.25);
+        localPlayer.hitstop = Math.max(localPlayer.hitstop || 0, safe.hitEvent.hitlag || 6);
+
+        if (window.soundEngine && safe.hitEvent.sfx) {
+          window.soundEngine.playSfx(safe.hitEvent.sfx);
+        }
+        if (window.particleManager) {
+          window.particleManager.spawnHitSparks(
+            localPlayer.x,
+            localPlayer.y - localPlayer.height * 0.5,
+            safe.hitEvent.damage || 6,
+            safe.hitEvent.hitType || 'normal'
+          );
+          window.particleManager.spawnFloatingText(
+            localPlayer.x,
+            localPlayer.y - localPlayer.height - 10,
+            `+${safe.hitEvent.damage}%`,
+            '#ff4444',
+            18
+          );
+        }
+      }
+    }
+
+    // 2. Sincronizar porcentaje y stocks del rival:
+    // El daño acumulado NUNCA se restablece a 0 a menos que el rival reaparezca (RESPAWN/KO)
+    if (typeof safe.percent === 'number') {
+      if (safe.state === 'RESPAWN' || safe.state === 'KO') {
+        rivalFighter.percent = 0;
+      } else if (safe.percent < rivalFighter.percent && (rivalFighter.percent - safe.percent) <= 3) {
+        // Curación pasiva legítima (Restos / Leftovers)
+        rivalFighter.percent = safe.percent;
+      } else {
+        rivalFighter.percent = Math.max(rivalFighter.percent, safe.percent);
+      }
+    }
+
+    if (typeof safe.stocks === 'number') {
+      rivalFighter.stocks = Math.min(rivalFighter.stocks, safe.stocks);
+    }
+
+    // 3. Replicación inmediata de acciones ofensivas y defensivas (Ataques, Especiales, Smash, Agarres, Esquives)
+    if (safe.action && safe.action.id && safe.action.id !== this.lastAppliedRivalActionId) {
+      this.lastAppliedRivalActionId = safe.action.id;
+      const act = safe.action;
+      if (act.type === 'ATTACK') {
+        rivalFighter.performBasicAttack(act.dir || 'neutral', act.isAir);
+      } else if (act.type === 'SPECIAL') {
+        rivalFighter.performSpecialMove(act.dir || 'neutral');
+      } else if (act.type === 'SMASH_CHARGE') {
+        rivalFighter.startSmashCharge(act.dir || 'side');
+      } else if (act.type === 'SMASH_ATTACK') {
+        rivalFighter.releaseSmashAttack(1.0);
+      } else if (act.type === 'GRAB_START') {
+        rivalFighter.attemptGrab();
+      } else if (act.type === 'ROLL') {
+        rivalFighter.performRoll(act.dir === 'side' ? rivalFighter.facing : 1);
+      } else if (act.type === 'AIR_DODGE') {
+        rivalFighter.performAirDodge();
+      }
+    }
+
+    // 4. Orientación, Apuntado y Estados de Animación continuos
     if (safe.facing !== undefined) {
       rivalFighter.facing = safe.facing;
       if (rivalFighter.anim) rivalFighter.anim.setFacing(safe.facing);
     }
+    if (safe.aimDir && rivalFighter.anim) {
+      rivalFighter.anim.setAim(safe.aimDir);
+    }
 
-    if (safe.state !== undefined && rivalFighter.state !== safe.state) {
-      rivalFighter.state = safe.state;
-      if (safe.animName && rivalFighter.anim && rivalFighter.anim.currentAnimName !== safe.animName) {
-        rivalFighter.anim.play(safe.animName);
+    // Si el rival no está en un ataque activo, sincronizar su animación de postura
+    if (rivalFighter.state !== 'ATTACK' && rivalFighter.state !== 'SPECIAL' && rivalFighter.state !== 'SMASH_CHARGE') {
+      if (safe.state !== undefined) {
+        rivalFighter.state = safe.state;
+      }
+
+      if (rivalFighter.anim) {
+        if (safe.state === 'IDLE') {
+          rivalFighter.anim.loop('Idle', 1.0);
+        } else if (safe.state === 'WALK') {
+          rivalFighter.anim.loop('Walk', 1.25);
+        } else if (safe.state === 'DASH') {
+          rivalFighter.anim.loop('Walk', 1.85);
+        } else if (safe.state === 'CROUCH') {
+          rivalFighter.anim.loop('Idle', 0.6);
+        } else if (safe.state === 'SHIELD') {
+          rivalFighter.anim.loop('Idle', 0.55);
+        } else if (safe.state === 'HURT') {
+          rivalFighter.anim.loop('Hurt', 1.0);
+        } else if (safe.state === 'RESPAWN') {
+          rivalFighter.anim.loop('Idle', 1.0);
+        } else if (safe.animName && rivalFighter.anim.curAnim !== safe.animName) {
+          rivalFighter.anim.play(safe.animName);
+        }
       }
     }
 
-    // 3. Suavizado e Interpolación Física de Posición
-    if (typeof safe.x === 'number' && typeof safe.y === 'number') {
-      const dx = safe.x - rivalFighter.x;
-      const dy = safe.y - rivalFighter.y;
-      const dist = Math.hypot(dx, dy);
+    // 5. Suavizado e Interpolación Física de Posición con anclaje exacto a plataformas
+    let lockedToPlat = false;
+    if (safe.isGrounded && safe.platId && this.game.stage) {
+      const targetPlat = (this.game.stage.semiSolidPlatforms || []).find(pl => pl.id === safe.platId) ||
+                         (this.game.stage.solidPlatforms || []).find(pl => pl.id === safe.platId);
+      if (targetPlat) {
+        rivalFighter.y = targetPlat.y;
+        rivalFighter.vy = 0;
+        rivalFighter.isGrounded = true;
+        rivalFighter.groundedPlat = targetPlat;
+        lockedToPlat = true;
+      }
+    }
 
-      if (dist > 130 || safe.state === 'RESPAWN') {
-        // Teletransporte / Reaparición directa
+    if (!lockedToPlat) {
+      rivalFighter.groundedPlat = null;
+      rivalFighter.isGrounded = !!safe.isGrounded;
+    }
+
+    if (typeof safe.x === 'number') {
+      const dx = safe.x - rivalFighter.x;
+      if (Math.abs(dx) > 120 || safe.state === 'RESPAWN' || safe.state === 'KO') {
         rivalFighter.x = safe.x;
-        rivalFighter.y = safe.y;
+      } else if (Math.abs(dx) > 1.0) {
+        rivalFighter.x += dx * 0.70;
       } else {
-        // Interpolación fluida (45% por paquete)
-        rivalFighter.x += dx * 0.45;
-        rivalFighter.y += dy * 0.45;
+        rivalFighter.x = safe.x;
+      }
+    }
+
+    if (!lockedToPlat && typeof safe.y === 'number') {
+      const dy = safe.y - rivalFighter.y;
+      if (Math.abs(dy) > 100 || safe.state === 'RESPAWN' || safe.state === 'KO') {
+        rivalFighter.y = safe.y;
+      } else if (Math.abs(dy) > 1.0) {
+        rivalFighter.y += dy * 0.70;
+      } else {
+        rivalFighter.y = safe.y;
       }
     }
 
     if (typeof safe.vx === 'number') rivalFighter.vx = safe.vx;
     if (typeof safe.vy === 'number') rivalFighter.vy = safe.vy;
-    if (typeof safe.percent === 'number') rivalFighter.percent = safe.percent;
-    if (typeof safe.stocks === 'number') rivalFighter.stocks = safe.stocks;
-    if (typeof safe.shield === 'number') rivalFighter.shieldHealth = safe.shield;
+    if (typeof safe.shield === 'number') {
+      rivalFighter.shield = safe.shield;
+      rivalFighter.shieldHealth = safe.shield;
+    }
   }
 
   /**

@@ -56,6 +56,7 @@ class PokeSmashGame {
       jump: 'Space',
       attack: 'KeyZ',
       special: 'KeyX',
+      smash: 'ControlLeft', // Mantener Ctrl + Dirección para cargar Ataque Smash
       shield: 'KeyC',
       grab: 'ShiftLeft',
       item: 'Digit1'
@@ -67,6 +68,25 @@ class PokeSmashGame {
         Object.assign(this.keybinds, savedKeybinds);
       }
     } catch (e) {}
+
+    // Customizable Gamepad Binds (Mapeo de botones en mando)
+    this.defaultGamepadBinds = {
+      jump: [0, 3],       // A / Y (Xbox) o Cross / Triangle (PS)
+      attack: [2],        // X (Xbox) o Square (PS)
+      special: [1],       // B (Xbox) o Circle (PS)
+      smash: [11],        // R3 (Click stick derecho)
+      shield: [4, 6],     // LB / LT
+      grab: [5, 7],       // RB / RT
+      item: [8]           // Select / View / Share
+    };
+    this.gamepadBinds = Object.assign({}, this.defaultGamepadBinds);
+    try {
+      const savedGpBinds = JSON.parse(localStorage.getItem('pokefighters_gamepad_binds'));
+      if (savedGpBinds && typeof savedGpBinds === 'object') {
+        Object.assign(this.gamepadBinds, savedGpBinds);
+      }
+    } catch (e) {}
+    this.listeningGpAction = null;
 
     this._initGamepadListeners();
 
@@ -94,6 +114,18 @@ class PokeSmashGame {
     this.screenShakeIntensity = 0;
     this.screenShakeDuration = 0;
     this.screenShakeTimer = 0;
+
+    // Slow-motion & Smash Ultimate End Match Cutscene
+    this.slomoTimer = 0;
+    this.slomoFactor = 1.0;
+    this.isDecisiveFinish = false;
+    this.pendingMatchResult = null;
+    this.fatalImpactFlash = 0;
+    this.endCutsceneActive = false;
+    this.endCutsceneTimer = 0;
+    this.endCutsceneDuration = 2.6;
+    this.endCutsceneResult = null;
+    this.cutsceneSlamConnected = false;
 
     // Countdown 3.. 2.. 1.. ¡YA!
     this.countdownTimer = 0;
@@ -170,6 +202,8 @@ class PokeSmashGame {
     switch (parseInt(dex, 10)) {
       case 1:
         return new window.Bulbasaur(config);
+      case 6:
+        return new window.Charizard(config);
       case 39:
         return new window.Jigglypuff(config);
       case 94:
@@ -179,6 +213,35 @@ class PokeSmashGame {
       case 25:
       default:
         return new window.Pikachu(config);
+    }
+  }
+
+  swapRivalFighter(dex) {
+    if (!this.dummy || this.dummy.dex === dex) return;
+    const dexNum = parseInt(dex, 10);
+    console.log(`[🌐 Online] Sincronizando Pokémon del rival a Dex #${dexNum}`);
+    const oldX = this.dummy.x;
+    const oldY = this.dummy.y;
+    const oldFacing = this.dummy.facing;
+    const oldPercent = this.dummy.percent;
+    const oldStocks = this.dummy.stocks;
+    const oldItem = this.dummy.heldItem ? this.dummy.heldItem.id : 'none';
+    const slot = (this.onlineRole === 'guest') ? 1 : 2;
+
+    this.dummy = this.createFighter(dexNum, false, true, oldStocks, oldItem, slot);
+    this.dummy.x = oldX;
+    this.dummy.y = oldY;
+    this.dummy.facing = oldFacing;
+    this.dummy.percent = oldPercent;
+    this.dummyDex = dexNum;
+
+    if (this.dummyController) {
+      this.dummyController.setDummyFighter(this.dummy);
+      this.dummyController.setMode('STAND');
+    }
+
+    if (this.hud) {
+      this.hud.updateFighterInfo(this.player, this.dummy);
     }
   }
 
@@ -251,9 +314,21 @@ class PokeSmashGame {
 
     this.isMatchOver = false;
     this.matchStarted = true;
+    this.isDecisiveFinish = false;
+    this.pendingMatchResult = null;
+    this.slomoTimer = 0;
+    this.slomoFactor = 1.0;
+    this.fatalImpactFlash = 0;
+    this.endCutsceneActive = false;
+    this.endCutsceneTimer = 0;
+    this.cutsceneSlamConnected = false;
+    this.screenShakeIntensity = 0;
+    this.screenShakeDuration = 0;
+    this.screenShakeTimer = 0;
 
     // Set stage in engine
     this.stage.setStage(this.stageId);
+    this.stage.time = 0;
 
     const initialStocks = (this.gameMode === 'BATTLE' || this.gameMode === 'ONLINE') ? this.matchStocks : 99;
 
@@ -376,6 +451,12 @@ class PokeSmashGame {
       const cDex = parseInt(card.getAttribute('data-roster-cpu'), 10);
       card.classList.toggle('active', cDex === this.dummyDex);
     });
+
+    if (window.SSBURoster) {
+      window.SSBURoster.selectedP1Dex = this.playerDex;
+      window.SSBURoster.selectedCpuDex = this.dummyDex;
+      window.SSBURoster.updateUI();
+    }
 
     // Update P1 Control buttons in modal
     document.querySelectorAll('[data-p1-control]').forEach(btn => {
@@ -573,6 +654,11 @@ class PokeSmashGame {
         this.player.input.grabPressed = true;
       }
 
+      // Cargar Smash Attack P1 (Ctrl o tecla smash configurada)
+      if (code === kb.smash || code === 'ControlLeft' || (!isP2Human && code === 'ControlRight')) {
+        this.player.input.smash = true;
+      }
+
       if (code === kb.item || code === 'Digit1' || (!isP2Human && (code === 'Numpad1' || key === '1'))) {
         if (this.player && typeof this.player.useActiveItem === 'function') {
           this.player.useActiveItem();
@@ -598,6 +684,7 @@ class PokeSmashGame {
         if (code === 'Numpad2' || code === 'KeyI' || code === 'Comma') this.dummy.input.special = false;
         if (code === 'Numpad3' || code === 'KeyO' || code === 'Slash' || code === 'Minus') this.dummy.input.shield = false;
         if (code === 'Numpad0' || code === 'KeyP' || code === 'ShiftRight' || code === 'Enter') this.dummy.input.grab = false;
+        if (code === 'ControlRight') this.dummy.input.smash = false;
       }
 
       // Player 1 Keyup
@@ -630,6 +717,9 @@ class PokeSmashGame {
       }
       if (code === kb.grab || code === 'ShiftLeft' || (!isP2Human && code === 'ShiftRight')) {
         this.player.input.grab = false;
+      }
+      if (code === kb.smash || code === 'ControlLeft' || code === 'ControlRight') {
+        this.player.input.smash = false;
       }
     });
   }
@@ -741,6 +831,7 @@ class PokeSmashGame {
 
     if (openMenuBtn && setupModal) {
       openMenuBtn.addEventListener('click', () => {
+        this.ensureFullscreenModal(setupModal);
         this.hud.renderModalAvatars();
         this._updateRosterButtonsUI();
         this.goToSetupStep(1);
@@ -1034,6 +1125,10 @@ class PokeSmashGame {
     const startMatchBtn = document.getElementById('btn-start-configured-match');
     if (startMatchBtn) {
       startMatchBtn.addEventListener('click', () => {
+        if (window.SSBURoster) {
+          selectedP1 = window.SSBURoster.selectedP1Dex || selectedP1;
+          selectedCPU = window.SSBURoster.selectedCpuDex || selectedCPU;
+        }
         this.startMatch({
           mode: selectedMode,
           stocks: selectedStocks,
@@ -1079,6 +1174,7 @@ class PokeSmashGame {
       victoryMenuBtn.addEventListener('click', () => {
         const victoryModal = document.getElementById('victory-modal');
         if (victoryModal) victoryModal.classList.remove('open');
+        this.ensureFullscreenModal(setupModal);
         this.hud.renderModalAvatars();
         this._updateRosterButtonsUI();
         this.goToSetupStep(1);
@@ -1102,6 +1198,7 @@ class PokeSmashGame {
     if (btnPlay) {
       btnPlay.addEventListener('click', () => {
         if (startScreen) startScreen.classList.add('hidden');
+        this.ensureFullscreenModal(setupModal);
         this.hud.renderModalAvatars();
         this._updateRosterButtonsUI();
         this.goToSetupStep(1);
@@ -1112,6 +1209,7 @@ class PokeSmashGame {
 
     if (btnSettings) {
       btnSettings.addEventListener('click', () => {
+        this.ensureFullscreenModal(settingsModal);
         this._updateSettingsUI();
         if (settingsModal) settingsModal.classList.add('open');
         window.soundEngine.playSfx('select');
@@ -1120,6 +1218,7 @@ class PokeSmashGame {
 
     if (btnChangelog) {
       btnChangelog.addEventListener('click', () => {
+        this.ensureFullscreenModal(changelogModal);
         if (changelogModal) changelogModal.classList.add('open');
         window.soundEngine.playSfx('select');
       });
@@ -1127,6 +1226,7 @@ class PokeSmashGame {
 
     if (btnGuide) {
       btnGuide.addEventListener('click', () => {
+        this.ensureFullscreenModal(movesModal);
         if (movesModal) movesModal.classList.add('open');
         window.soundEngine.playSfx('select');
       });
@@ -1137,6 +1237,7 @@ class PokeSmashGame {
         if (setupModal) setupModal.classList.remove('open');
         if (settingsModal) settingsModal.classList.remove('open');
         if (changelogModal) changelogModal.classList.remove('open');
+        this.ensureFullscreenModal(startScreen);
         if (startScreen) startScreen.classList.remove('hidden');
         window.soundEngine.playSfx('select');
       });
@@ -1150,6 +1251,7 @@ class PokeSmashGame {
 
     if (openBtn && changelogModal) {
       openBtn.addEventListener('click', () => {
+        this.ensureFullscreenModal(changelogModal);
         changelogModal.classList.add('open');
         window.soundEngine.playSfx('select');
       });
@@ -1169,6 +1271,7 @@ class PokeSmashGame {
 
     if (openSettingsBtn && settingsModal) {
       openSettingsBtn.addEventListener('click', () => {
+        this.ensureFullscreenModal(settingsModal);
         this._updateSettingsUI();
         settingsModal.classList.add('open');
         window.soundEngine.playSfx('select');
@@ -1248,6 +1351,7 @@ class PokeSmashGame {
 
     // Keybinds Remapper
     this._bindKeybindRemapper();
+    this._bindGamepadRemapper();
 
     // Fullscreen buttons
     const fsBtns = [
@@ -1264,6 +1368,24 @@ class PokeSmashGame {
       }
     });
 
+    const modalIds = [
+      'match-setup-modal',
+      'victory-modal',
+      'settings-modal',
+      'moves-modal',
+      'changelog-modal',
+      'online-modal',
+      'item-draft-modal',
+      'abandoned-room-modal',
+      'start-screen',
+      'ssbu-fighter-drawer',
+      'ssbu-drawer-backdrop'
+    ];
+
+    window.ensureFullscreenModal = (modal) => {
+      this.ensureFullscreenModal(modal);
+    };
+
     const updateFsState = () => {
       const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
       const container = document.getElementById('canvas-container');
@@ -1273,10 +1395,53 @@ class PokeSmashGame {
           b.innerText = isFs ? '🗗 Salir Pantalla Completa' : '⛶ Pantalla Completa';
         }
       });
+
+      // Mover modales y pantallas overlays dentro de canvas-container en fullscreen para que sean visibles
+      modalIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (isFs && container) {
+          if (!container.contains(el)) {
+            container.appendChild(el);
+          }
+        } else {
+          if (el.parentElement === container) {
+            document.body.appendChild(el);
+          }
+        }
+      });
     };
 
     document.addEventListener('fullscreenchange', updateFsState);
     document.addEventListener('webkitfullscreenchange', updateFsState);
+
+    // Observer para capturar cualquier apertura de modal mientras la pantalla completa esté activa
+    try {
+      const modalObserver = new MutationObserver((mutations) => {
+        const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+        const container = document.getElementById('canvas-container');
+        if (!isFs || !container) return;
+        mutations.forEach(m => {
+          const target = m.target;
+          if (target && target.nodeType === 1) {
+            const isOpen = target.classList.contains('open') || (!target.classList.contains('hidden') && target.classList.contains('start-screen-overlay'));
+            if (isOpen && !container.contains(target)) {
+              container.appendChild(target);
+            }
+          }
+        });
+      });
+
+      modalIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+          modalObserver.observe(el, { attributes: true, attributeFilter: ['class'] });
+        }
+      });
+    } catch (e) {}
+
+    // Llamada inicial para sincronizar estado si ya cargó en fullscreen
+    updateFsState();
   }
 
   _bindKeybindRemapper() {
@@ -1300,6 +1465,12 @@ class PokeSmashGame {
         KeyJ: 'J',
         KeyK: 'K',
         KeyL: 'L',
+        ControlLeft: 'Ctrl Izq',
+        ControlRight: 'Ctrl Der',
+        ShiftLeft: 'Shift Izq',
+        ShiftRight: 'Shift Der',
+        AltLeft: 'Alt Izq',
+        AltRight: 'Alt Der',
         Digit1: '1',
         Digit2: '2',
         Digit3: '3',
@@ -1377,6 +1548,87 @@ class PokeSmashGame {
     }
 
     updateTable();
+  }
+
+  _getGamepadButtonName(idx) {
+    const names = {
+      0: 'A / ✕ (Cruz)',
+      1: 'B / ○ (Círculo)',
+      2: 'X / □ (Cuadrado)',
+      3: 'Y / △ (Triángulo)',
+      4: 'LB / L1 (Hombro Izq)',
+      5: 'RB / R1 (Hombro Der)',
+      6: 'LT / L2 (Gatillo Izq)',
+      7: 'RT / R2 (Gatillo Der)',
+      8: 'Select / Share / Back',
+      9: 'Start / Options',
+      10: 'L3 (Click Stick Izq)',
+      11: 'R3 (Click Stick Der)',
+      12: 'D-Pad Arriba',
+      13: 'D-Pad Abajo',
+      14: 'D-Pad Izquierda',
+      15: 'D-Pad Derecha',
+      16: 'Guía / Home'
+    };
+    return names[idx] || `Botón ${idx}`;
+  }
+
+  _bindGamepadRemapper() {
+    const gpRows = document.querySelectorAll('[data-rebind-gp-action]');
+    if (!gpRows.length) return;
+
+    const updateGpTable = () => {
+      gpRows.forEach(row => {
+        const action = row.getAttribute('data-rebind-gp-action');
+        const btn = row.querySelector('.gp-bind-code-btn');
+        if (btn) {
+          if (this.listeningGpAction === action) {
+            btn.innerText = '🎮 Pulsa botón en mando...';
+            btn.classList.add('listening');
+          } else {
+            const btns = (this.gamepadBinds && this.gamepadBinds[action]) || this.defaultGamepadBinds[action] || [];
+            btn.innerText = btns.map(b => this._getGamepadButtonName(b)).join(' o ') || 'No asignado';
+            btn.classList.remove('listening');
+          }
+        }
+      });
+    };
+
+    gpRows.forEach(row => {
+      const action = row.getAttribute('data-rebind-gp-action');
+      const btn = row.querySelector('.gp-bind-code-btn');
+      if (btn) {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.listeningGpAction = action;
+          updateGpTable();
+          if (window.soundEngine) window.soundEngine.playSfx('select');
+        });
+      }
+    });
+
+    const resetGpBtn = document.getElementById('btn-reset-gamepad-binds');
+    if (resetGpBtn) {
+      resetGpBtn.addEventListener('click', () => {
+        this.gamepadBinds = Object.assign({}, this.defaultGamepadBinds);
+        try {
+          localStorage.removeItem('pokefighters_gamepad_binds');
+        } catch (e) {}
+        this.listeningGpAction = null;
+        updateGpTable();
+        if (window.soundEngine) window.soundEngine.playSfx('select');
+      });
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (this.listeningGpAction && e.code === 'Escape') {
+        this.listeningGpAction = null;
+        updateGpTable();
+      }
+    });
+
+    this._updateGpTable = updateGpTable;
+    updateGpTable();
   }
 
   _updateSettingsUI() {
@@ -1465,6 +1717,22 @@ class PokeSmashGame {
     }
   }
 
+  ensureFullscreenModal(modal) {
+    if (typeof modal === 'string') modal = document.getElementById(modal);
+    if (!modal) return;
+    const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    const container = document.getElementById('canvas-container');
+    if (isFs && container) {
+      if (!container.contains(modal)) {
+        container.appendChild(modal);
+      }
+    } else {
+      if (modal.parentElement === container) {
+        document.body.appendChild(modal);
+      }
+    }
+  }
+
   resetDummy() {
     this.dummyController.resetDummy(true);
     if (this.p1Controller) {
@@ -1512,10 +1780,25 @@ class PokeSmashGame {
     // In Battle Mode (3 Stocks), check if anyone reached 0 stocks
     if (this.gameMode === 'BATTLE') {
       if (this.dummy.stocks <= 0) {
-        this.endMatch('PLAYER_WIN');
+        this.triggerDecisiveFinish('PLAYER_WIN');
+        return;
       } else if (this.player.stocks <= 0) {
-        this.endMatch('CPU_WIN');
+        this.triggerDecisiveFinish('CPU_WIN');
+        return;
       }
+    }
+  }
+
+  triggerDecisiveFinish(result) {
+    if (this.isDecisiveFinish || this.isMatchOver) return;
+    this.isDecisiveFinish = true;
+    this.pendingMatchResult = result;
+    this.slomoTimer = 1.35;
+    this.slomoFactor = 0.18;
+    this.fatalImpactFlash = 1.0;
+    this.triggerScreenShake(14, 0.4);
+    if (window.soundEngine) {
+      window.soundEngine.playSfx('heavy_hit');
     }
   }
 
@@ -1523,19 +1806,20 @@ class PokeSmashGame {
     if (this.isMatchOver) return;
     this.isMatchOver = true;
 
+    // Reset screen shake completely to fix persistent screenshake bug
+    this.screenShakeIntensity = 0;
+    this.screenShakeDuration = 0;
+    this.screenShakeTimer = 0;
+
     const isPlayerWin = result === 'PLAYER_WIN';
     if (isPlayerWin) {
       window.soundEngine.playSfx('victory');
       if (window.particleManager) {
         window.particleManager.spawnRadialBurst(512, 280, '#facc15', 'electric', 48);
         window.particleManager.spawnRadialBurst(512, 280, '#38bdf8', 'electric', 36);
-        window.particleManager.spawnFloatingText(512, 200, '¡VICTORIA!', '#38bdf8', 44);
       }
     } else {
       window.soundEngine.playSfx('defeat');
-      if (window.particleManager) {
-        window.particleManager.spawnFloatingText(512, 200, '¡DERROTA!', '#f87171', 44);
-      }
     }
 
     // Save record to database / api
@@ -1551,19 +1835,30 @@ class PokeSmashGame {
       }).catch(() => {});
     }
 
-    // Show victory modal after brief 1.2s delay
-    setTimeout(() => {
-      this.hud.showVictoryModal({
-        isPlayerWin,
-        isCpuVsCpu: this.p1Type === 'CPU',
-        winnerFighter: isPlayerWin ? this.player : this.dummy,
-        playerStocks: this.player.stocks,
-        dummyStocks: this.dummy.stocks,
-        maxCombo: this.dummyController.maxCombo,
-        totalDamage: Math.round(this.dummyController.totalDamageDealt),
-        cpuLevel: this.cpuLevel
-      });
-    }, 1200);
+    // Launch Smash Ultimate "¡FIN!" cutscene
+    this.endCutsceneActive = true;
+    this.endCutsceneTimer = 0;
+    this.endCutsceneDuration = 2.4;
+    this.endCutsceneResult = result;
+    this.cutsceneSlamConnected = false;
+  }
+
+  showFinalVictoryModal() {
+    this.screenShakeIntensity = 0;
+    this.screenShakeDuration = 0;
+    this.screenShakeTimer = 0;
+
+    const isPlayerWin = this.endCutsceneResult === 'PLAYER_WIN';
+    this.hud.showVictoryModal({
+      isPlayerWin,
+      isCpuVsCpu: this.p1Type === 'CPU',
+      winnerFighter: isPlayerWin ? this.player : this.dummy,
+      playerStocks: this.player.stocks,
+      dummyStocks: this.dummy.stocks,
+      maxCombo: this.dummyController.maxCombo,
+      totalDamage: Math.round(this.dummyController.totalDamageDealt),
+      cpuLevel: this.cpuLevel
+    });
   }
 
   loop(currentTime) {
@@ -1581,8 +1876,23 @@ class PokeSmashGame {
       this.lastRenderTime = currentTime;
     }
 
-    const frameTime = (currentTime - this.lastTime) / 1000;
+    let frameTime = (currentTime - this.lastTime) / 1000;
     this.lastTime = currentTime;
+
+    // Slow-motion effect before decisive cutscene
+    if (this.slomoTimer > 0) {
+      this.slomoTimer -= frameTime;
+      frameTime *= this.slomoFactor;
+      if (this.slomoTimer <= 0) {
+        this.slomoTimer = 0;
+        this.slomoFactor = 1.0;
+        if (this.pendingMatchResult) {
+          const res = this.pendingMatchResult;
+          this.pendingMatchResult = null;
+          this.endMatch(res);
+        }
+      }
+    }
 
     // Cap frame time to prevent giant leaps if tab loses focus
     this.accumulator += Math.min(frameTime, 0.1);
@@ -1612,6 +1922,32 @@ class PokeSmashGame {
   }
 
   fixedUpdate(dt) {
+    // 1. Decrement screen shake at the very top so it ALWAYS expires cleanly
+    if (this.screenShakeTimer > 0) {
+      this.screenShakeTimer -= dt;
+      if (this.screenShakeTimer <= 0) {
+        this.screenShakeIntensity = 0;
+        this.screenShakeDuration = 0;
+        this.screenShakeTimer = 0;
+      }
+    }
+
+    // 2. Fatal impact flash decay
+    if (this.fatalImpactFlash > 0) {
+      this.fatalImpactFlash = Math.max(0, this.fatalImpactFlash - dt * 1.5);
+    }
+
+    // 3. End Match Cutscene Progression
+    if (this.endCutsceneActive) {
+      this.endCutsceneTimer += dt;
+      if (this.endCutsceneTimer >= this.endCutsceneDuration) {
+        this.endCutsceneActive = false;
+        this.showFinalVictoryModal();
+      }
+      window.particleManager.update(dt);
+      return;
+    }
+
     if (!this.matchStarted) {
       window.particleManager.update(dt);
       return;
@@ -1667,7 +2003,7 @@ class PokeSmashGame {
         if (window.particleManager) {
           window.particleManager.spawnFloatingText(512, 240, '¡TIEMPO!', '#facc15', 48);
         }
-        this.endMatch(winner);
+        this.triggerDecisiveFinish(winner);
         return;
       }
     }
@@ -1681,20 +2017,16 @@ class PokeSmashGame {
       this.player.handleInputs(this.stage, dt);
     }
 
-    if (this.p2Type === 'HUMAN' || this.p2Type === 'ONLINE_RIVAL') {
+    if (this.p2Type === 'HUMAN') {
       this.dummy.handleInputs(this.stage, dt);
+    } else if (this.p2Type === 'ONLINE_RIVAL') {
+      // ONLINE_RIVAL is driven entirely by OnlineManager network packets.
+      // Do NOT call dummy.handleInputs() because it overwrites remote state and animations with IDLE every frame!
     } else {
       this.dummyController.update(dt, this.player, this.stage);
     }
 
     // 2. Physics & Entities update
-    if (this.screenShakeTimer > 0) {
-      this.screenShakeTimer -= dt;
-      if (this.screenShakeTimer <= 0) {
-        this.screenShakeIntensity = 0;
-        this.screenShakeDuration = 0;
-      }
-    }
 
     this.stage.update(dt);
     this.stage.updateHazards([this.player, this.dummy]);
@@ -1799,6 +2131,198 @@ class PokeSmashGame {
     ctx.restore();
   }
 
+  drawEndMatchCutscene(ctx) {
+    if (!this.endCutsceneActive) return;
+
+    const t = this.endCutsceneTimer;
+    const w = this.width;
+    const h = this.height;
+
+    // Trigger punchy slam impact at t = 0.32s
+    if (!this.cutsceneSlamConnected && t >= 0.32) {
+      this.cutsceneSlamConnected = true;
+      this.triggerScreenShake(12, 0.2);
+      if (window.soundEngine) window.soundEngine.playSfx('heavy_hit');
+      if (window.particleManager) {
+        window.particleManager.spawnRadialBurst(w / 2, h * 0.44, '#facc15', 'electric', 40);
+        window.particleManager.spawnSlash(w / 2, h * 0.44, 0, '#ffffff', 2.2);
+      }
+    }
+
+    ctx.save();
+
+    // 1. Cinematic letterbox bars top & bottom
+    const barProgress = Math.min(1.0, t / 0.3);
+    const barH = 58 * barProgress;
+
+    ctx.fillStyle = '#06080e';
+    ctx.fillRect(0, 0, w, barH);
+    ctx.fillRect(0, h - barH, w, barH);
+
+    // Gold accent divider lines
+    ctx.strokeStyle = '#eab308';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(0, barH);
+    ctx.lineTo(w, barH);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(0, h - barH);
+    ctx.lineTo(w, h - barH);
+    ctx.stroke();
+
+    // 2. Smash Ultimate Diagonal Slash Streaks during entrance
+    if (t < 0.6) {
+      const slashAlpha = Math.max(0, 1.0 - t / 0.6);
+      ctx.save();
+      ctx.globalAlpha = slashAlpha * 0.6;
+      ctx.fillStyle = '#dc2626';
+      ctx.beginPath();
+      ctx.moveTo(-100, 0);
+      ctx.lineTo(w * 0.4, 0);
+      ctx.lineTo(w * 0.2, h);
+      ctx.lineTo(-300, h);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = '#facc15';
+      ctx.beginPath();
+      ctx.moveTo(w * 0.6, 0);
+      ctx.lineTo(w * 1.1, 0);
+      ctx.lineTo(w * 0.9, h);
+      ctx.lineTo(w * 0.4, h);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // 3. Giant Stylized "¡FIN!" Text (Smash Ultimate Slam)
+    let textScale = 1.0;
+    let textAlpha = 1.0;
+
+    if (t < 0.32) {
+      // Zoom in from 3.2 down to 1.0
+      const p = t / 0.32;
+      textScale = 3.2 - (2.2 * Math.sin(p * Math.PI * 0.5));
+      textAlpha = Math.min(1.0, p * 2.5);
+    } else {
+      // Subtle rhythmic breathing
+      const breath = Math.sin((t - 0.32) * 5) * 0.02;
+      textScale = 1.0 + breath;
+      textAlpha = 1.0;
+    }
+
+    const centerX = w / 2;
+    const centerY = h * 0.42;
+
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    ctx.scale(textScale, textScale);
+    ctx.transform(1, 0, -0.15, 1, 0, 0); // Dynamic comic italic skew
+    ctx.globalAlpha = textAlpha;
+
+    ctx.font = '900 115px "Impact", "Arial Black", "Outfit", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    const finText = '¡FIN!';
+
+    // Chromatic Aberration Shadows (Cyan & Magenta offset)
+    ctx.save();
+    ctx.globalAlpha = textAlpha * 0.45;
+    ctx.fillStyle = '#06b6d4';
+    ctx.fillText(finText, -5, -3);
+    ctx.fillStyle = '#ec4899';
+    ctx.fillText(finText, 5, 3);
+    ctx.restore();
+
+    // Deep black 3D dropshadow
+    ctx.fillStyle = '#05070d';
+    for (let offset = 14; offset > 0; offset -= 2) {
+      ctx.fillText(finText, offset, offset);
+    }
+
+    // Thick black outer outline
+    ctx.strokeStyle = '#020617';
+    ctx.lineWidth = 22;
+    ctx.lineJoin = 'miter';
+    ctx.miterLimit = 4;
+    ctx.strokeText(finText, 0, 0);
+
+    // Inner bright gold contour
+    ctx.strokeStyle = '#fbbf24';
+    ctx.lineWidth = 8;
+    ctx.strokeText(finText, 0, 0);
+
+    // Smash Ultimate fiery gradient fill
+    const textGrad = ctx.createLinearGradient(0, -60, 0, 50);
+    textGrad.addColorStop(0.0, '#ffffff');
+    textGrad.addColorStop(0.2, '#fef08a');
+    textGrad.addColorStop(0.5, '#ef4444');
+    textGrad.addColorStop(0.85, '#dc2626');
+    textGrad.addColorStop(1.0, '#7f1d1d');
+    ctx.fillStyle = textGrad;
+    ctx.fillText(finText, 0, 0);
+
+    // Center horizontal light gleam across the text
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-atop';
+    const gleamGrad = ctx.createLinearGradient(0, -10, 0, 10);
+    gleamGrad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+    gleamGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.85)');
+    gleamGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = gleamGrad;
+    ctx.fillRect(-250, -12, 500, 24);
+    ctx.restore();
+
+    ctx.restore(); // restore transform
+
+    // 4. Winner Banner Ribbon underneath ¡FIN!
+    if (t >= 0.38) {
+      const bannerProgress = Math.min(1.0, (t - 0.38) / 0.25);
+      const isPlayerWin = this.endCutsceneResult === 'PLAYER_WIN';
+      const winnerName = isPlayerWin
+        ? (this.p1Type === 'CPU' ? this.player.name : 'JUGADOR 1')
+        : (this.p2Type === 'HUMAN' ? 'JUGADOR 2' : this.dummy.name);
+      const bannerText = `¡VICTORIA DE ${winnerName.toUpperCase()}!`;
+
+      ctx.save();
+      ctx.translate(centerX, h * 0.65);
+      ctx.scale(bannerProgress, bannerProgress);
+      ctx.globalAlpha = bannerProgress;
+
+      // Angled parallelogram ribbon
+      const bW = 540;
+      const bH = 46;
+      const skew = 22;
+
+      ctx.beginPath();
+      ctx.moveTo(-bW / 2 + skew, -bH / 2);
+      ctx.lineTo(bW / 2 + skew, -bH / 2);
+      ctx.lineTo(bW / 2 - skew, bH / 2);
+      ctx.lineTo(-bW / 2 - skew, bH / 2);
+      ctx.closePath();
+
+      ctx.fillStyle = 'rgba(7, 10, 19, 0.92)';
+      ctx.fill();
+
+      ctx.strokeStyle = isPlayerWin ? '#eab308' : '#ef4444';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+
+      ctx.font = '800 21px "Outfit", "Press Start 2P", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = isPlayerWin ? '#fef08a' : '#fecaca';
+      ctx.fillText(bannerText, 0, 1);
+
+      ctx.restore();
+    }
+
+    ctx.restore();
+  }
+
   draw() {
     this.ctx.clearRect(0, 0, this.width, this.height);
 
@@ -1855,6 +2379,21 @@ class PokeSmashGame {
     // 10. Post-Processing Ambient Pass (Ultra cinematic vignette)
     this.stage.drawPostProcessing(this.ctx);
 
+    // 11. Fatal blow slow-motion vignette
+    if (this.fatalImpactFlash > 0) {
+      const grad = this.ctx.createRadialGradient(this.width / 2, this.height / 2, 180, this.width / 2, this.height / 2, 540);
+      grad.addColorStop(0, 'rgba(239, 68, 68, 0)');
+      grad.addColorStop(0.65, `rgba(220, 38, 38, ${this.fatalImpactFlash * 0.35})`);
+      grad.addColorStop(1.0, `rgba(15, 23, 42, ${this.fatalImpactFlash * 0.75})`);
+      this.ctx.fillStyle = grad;
+      this.ctx.fillRect(0, 0, this.width, this.height);
+    }
+
+    // 12. Super Smash Bros Ultimate End Match Cutscene ("¡FIN!")
+    if (this.endCutsceneActive) {
+      this.drawEndMatchCutscene(this.ctx);
+    }
+
     this.ctx.restore();
   }
 
@@ -1899,6 +2438,31 @@ class PokeSmashGame {
     if (!navigator.getGamepads) return;
     const gamepads = navigator.getGamepads();
     if (!gamepads) return;
+
+    // Gamepad Remap Button Capture
+    if (this.listeningGpAction) {
+      for (let i = 0; i < gamepads.length; i++) {
+        const gp = gamepads[i];
+        if (!gp || !gp.connected) continue;
+        for (let b = 0; b < gp.buttons.length; b++) {
+          const btn = gp.buttons[b];
+          const pressed = btn ? (typeof btn === 'object' ? btn.pressed || btn.value > 0.5 : btn > 0.5) : false;
+          if (pressed) {
+            this.gamepadBinds[this.listeningGpAction] = [b];
+            try {
+              localStorage.setItem('pokefighters_gamepad_binds', JSON.stringify(this.gamepadBinds));
+            } catch (err) {}
+            if (window.soundEngine) window.soundEngine.playSfx('select');
+            this.listeningGpAction = null;
+            if (typeof this._updateGpTable === 'function') {
+              this._updateGpTable();
+            }
+            break;
+          }
+        }
+        if (!this.listeningGpAction) break;
+      }
+    }
 
     let gp1 = null;
     let gp2 = null;
@@ -1976,19 +2540,19 @@ class PokeSmashGame {
       fighter.input.down = true;
     }
 
-    // Action buttons:
-    // Jump: Button 0 (A/Cross) or Button 3 (Y/Triangle)
-    const gpJump = isBtn(0) || isBtn(3);
-    // Attack: Button 2 (X/Square)
-    const gpAttack = isBtn(2);
-    // Special: Button 1 (B/Circle)
-    const gpSpecial = isBtn(1);
-    // Shield: Button 4 (L1/LB) or Button 6 (L2/LT)
-    const gpShield = isBtn(4) || isBtn(6);
-    // Grab: Button 5 (R1/RB) or Button 7 (R2/RT)
-    const gpGrab = isBtn(5) || isBtn(7);
-    // Item: Button 8 (Select/Share)
-    const gpItem = isBtn(8);
+    // Action buttons using mapped binds
+    const isAction = (action) => {
+      const binds = (this.gamepadBinds && this.gamepadBinds[action]) || (this.defaultGamepadBinds && this.defaultGamepadBinds[action]) || [];
+      return binds.some(btnIdx => isBtn(btnIdx));
+    };
+
+    const gpJump = isAction('jump');
+    const gpAttack = isAction('attack');
+    const gpSpecial = isAction('special');
+    const gpSmash = isAction('smash');
+    const gpShield = isAction('shield');
+    const gpGrab = isAction('grab');
+    const gpItem = isAction('item');
 
     if (gpJump) {
       if (!prev.jump) fighter.input.jumpPressed = true;
@@ -2001,6 +2565,10 @@ class PokeSmashGame {
     if (gpSpecial) {
       if (!prev.special) fighter.input.specialPressed = true;
       fighter.input.special = true;
+    }
+    if (gpSmash) {
+      if (!prev.smash) fighter.input.smashPressed = true;
+      fighter.input.smash = true;
     }
     if (gpShield) {
       if (!prev.shield) fighter.input.shieldPressed = true;
@@ -2023,6 +2591,7 @@ class PokeSmashGame {
     if (!gpJump && prev.jump && !this._isKeyHeld(playerKey, 'jump')) fighter.input.jump = false;
     if (!gpAttack && prev.attack && !this._isKeyHeld(playerKey, 'attack')) fighter.input.attack = false;
     if (!gpSpecial && prev.special && !this._isKeyHeld(playerKey, 'special')) fighter.input.special = false;
+    if (!gpSmash && prev.smash) fighter.input.smash = false;
     if (!gpShield && prev.shield && !this._isKeyHeld(playerKey, 'shield')) fighter.input.shield = false;
     if (!gpGrab && prev.grab && !this._isKeyHeld(playerKey, 'grab')) fighter.input.grab = false;
     if (!gpItem && prev.item && !this._isKeyHeld(playerKey, 'item')) fighter.input.item = false;
@@ -2036,6 +2605,7 @@ class PokeSmashGame {
       jump: gpJump,
       attack: gpAttack,
       special: gpSpecial,
+      smash: gpSmash,
       shield: gpShield,
       grab: gpGrab,
       item: gpItem
@@ -2343,6 +2913,8 @@ class PokeSmashGame {
   _handleOnlineLobbyUpdate(room, ping) {
     if (!room) return;
 
+    const dexNames = { 25: 'Pikachu', 1: 'Bulbasaur', 312: 'Minun y Plusle', 94: 'Gengar', 39: 'Jigglypuff', 6: 'Charizard' };
+
     if (this.onlineManager.role === 'host') {
       const hostStartBtn = document.getElementById('btn-online-host-start');
       const p2WaitText = document.getElementById('host-slot-p2-waiting-text');
@@ -2350,12 +2922,18 @@ class PokeSmashGame {
       const p2Img = document.getElementById('host-slot-p2-img');
       const p2Name = document.getElementById('host-slot-p2-name');
 
+      if (room.p1) {
+        const hostImg = document.getElementById('host-slot-p1-img');
+        const hostName = document.getElementById('host-slot-p1-name');
+        if (hostImg && room.p1.dex) hostImg.src = `assets/pokemon/${room.p1.dex}/Idle.png`;
+        if (hostName && room.p1.dex) hostName.innerText = dexNames[room.p1.dex] || 'Anfitrión';
+      }
+
       if (room.p2) {
         if (p2WaitText) p2WaitText.style.display = 'none';
         if (p2Content) p2Content.style.display = 'flex';
-        if (p2Img) p2Img.src = `assets/pokemon/${room.p2.dex}/Idle.png`;
-        const dexNames = { 25: 'Pikachu', 1: 'Bulbasaur', 312: 'Minun y Plusle', 94: 'Gengar', 39: 'Jigglypuff' };
-        if (p2Name) p2Name.innerText = dexNames[room.p2.dex] || 'Rival';
+        if (p2Img && room.p2.dex) p2Img.src = `assets/pokemon/${room.p2.dex}/Idle.png`;
+        if (p2Name && room.p2.dex) p2Name.innerText = dexNames[room.p2.dex] || 'Rival';
 
         if (hostStartBtn) {
           hostStartBtn.disabled = false;

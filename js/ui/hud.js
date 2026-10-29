@@ -297,6 +297,18 @@ class GameHUD {
   showVictoryModal(data) {
     if (!this.victoryModalEl) return;
 
+    // Fullscreen support: si la arena está en pantalla completa, garantizar que el modal esté dentro del elemento fullscreen
+    if (window.ensureFullscreenModal) {
+      window.ensureFullscreenModal(this.victoryModalEl);
+    } else {
+      const fsElement = document.fullscreenElement || document.webkitFullscreenElement;
+      const container = document.getElementById('canvas-container');
+      const target = fsElement || (container && container.classList.contains('is-fullscreen') ? container : null);
+      if (target && !target.contains(this.victoryModalEl)) {
+        target.appendChild(this.victoryModalEl);
+      }
+    }
+
     const { isPlayerWin, isCpuVsCpu, winnerFighter, playerStocks, dummyStocks, maxCombo, totalDamage, cpuLevel } = data;
 
     if (this.victoryTitleEl) {

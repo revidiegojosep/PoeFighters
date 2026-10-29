@@ -385,31 +385,17 @@ class Pikachu extends window.Fighter {
         };
 
       case 'down':
-        // Down Special: Thunder
+        // Down Special: Thunder (Rayo que cae desde el cielo, daño reducido, knockback horizontal izquierda o derecha)
         return {
           name: '¡Trueno! (Down X)',
           anim: 'Charge',
-          animSpeed: 0.9,
-          hitboxStart: 10,
-          hitboxEnd: 22,
-          offsetX: 0,
-          offsetY: 24,
-          radius: 46,
-          damage: 14,
-          baseKnockback: 18,
-          knockbackScaling: 1.35,
-          angle: 80,
-          type: 'electric',
-          hitlag: 10,
+          animSpeed: 1.0,
+          hitboxStart: 999, // Handled via descending bolt projectile and Pikachu discharge
+          hitboxEnd: 999,
+          cooldown: 0.65,
           onStart: (p) => {
             window.soundEngine.playSfx('shock');
-            setTimeout(() => {
-              if (window.particleManager) {
-                window.particleManager.spawnLightningBolt(p.x, -40, p.x, p.y - 20, '#ffffff', '#ffff00', 8);
-                window.soundEngine.playSfx('thunder');
-                window.particleManager.spawnHitSparks(p.x, p.y - 24, 12, 'electric');
-              }
-            }, 120);
+            p.spawnThunderBolt();
           }
         };
     }
@@ -493,6 +479,180 @@ class Pikachu extends window.Fighter {
           }
         };
     }
+  }
+
+  /**
+   * Spawns an animated Thunder bolt falling from the sky.
+   * - Descending bolt deals reduced damage (6%) and knocks opponents horizontally left or right (never up).
+   * - Striking Pikachu triggers an electrical discharge burst (13%) that also knocks horizontally away (never up).
+   */
+  spawnThunderBolt() {
+    const p = this;
+    const startX = p.x;
+    const skyY = -140;
+    let currentY = skyY;
+    const fallSpeed = 26; // Descends smoothly and rapidly from the sky
+    const hitOpponents = new Set();
+    let hasStruckPikachu = false;
+
+    // Cloud / sparks at the sky start
+    if (window.particleManager) {
+      window.particleManager.spawnSmoke(startX, 10, '#334155', 8);
+      window.particleManager.spawnHitSparks(startX, 20, 5, 'electric');
+    }
+
+    p.projectiles.push({
+      x: startX,
+      y: skyY,
+      vx: 0,
+      vy: 0,
+      radius: 26,
+      damage: 6, // Reduced damage for falling bolt
+      baseKnockback: 12,
+      knockbackScaling: 0.75,
+      angle: 0, // Strictly horizontal knockback! Never upwards!
+      type: 'electric',
+      hitlag: 6,
+      life: 1.5,
+      isThunder: true,
+      update: function(dt) {
+        currentY += fallSpeed;
+        this.y = currentY;
+
+        // Visual electric sparks along descent
+        if (window.particleManager && Math.random() < 0.65) {
+          window.particleManager.spawnHitSparks(startX + (Math.random() - 0.5) * 18, currentY, 2, 'electric');
+        }
+
+        const opponent = p.lastOpponent || (window.game ? (p === window.game.player1 ? window.game.player2 : window.game.player1) : null);
+
+        // 1. Check falling bolt collision with opponent
+        if (opponent && opponent.state !== 'RESPAWN' && opponent.invulnTimer <= 0 && !hitOpponents.has(opponent)) {
+          const oppHurtboxes = opponent.getHurtboxes ? opponent.getHurtboxes() : [{ x: opponent.x, y: opponent.y - opponent.height * 0.5, radius: opponent.hurtboxRadius || 24 }];
+          for (const hb of oppHurtboxes) {
+            const dx = Math.abs(hb.x - startX);
+            const inY = hb.y >= (currentY - fallSpeed - 24) && hb.y <= (currentY + 24);
+            if (dx < (24 + hb.radius) && inY) {
+              hitOpponents.add(opponent);
+              // Strictly horizontal knockback to left or right (angle 0, NEVER upwards!)
+              const launchDir = hb.x >= startX ? 1 : -1;
+              const fakeAttacker = {
+                facing: launchDir,
+                x: startX,
+                y: currentY,
+                input: { left: false, right: false, up: false, down: false }
+              };
+              opponent.takeHit({
+                damage: 6, // reduced damage
+                angle: 0, // strictly horizontal, never upwards!
+                baseKnockback: 12,
+                knockbackScaling: 0.75,
+                type: 'electric',
+                hitlag: 6
+              }, fakeAttacker);
+              window.soundEngine.playSfx('shock');
+              if (window.particleManager) {
+                window.particleManager.spawnHitSparks(hb.x, hb.y, 8, 'electric');
+              }
+              break;
+            }
+          }
+        }
+
+        // 2. Check if bolt reaches Pikachu (SSBU Thunder absorption & discharge burst)
+        const distToPikachu = Math.hypot(startX - p.x, currentY - (p.y - 18));
+        if (!hasStruckPikachu && (distToPikachu < 38 || currentY >= p.y - 8)) {
+          hasStruckPikachu = true;
+          this.life = 0; // Terminate bolt
+
+          // Big Thunder discharge explosion centered on Pikachu!
+          window.soundEngine.playSfx('thunder');
+          if (window.particleManager) {
+            window.particleManager.spawnRadialBurst(p.x, p.y - 20, '#ffff00', 'electric', 54);
+            window.particleManager.spawnHitSparks(p.x, p.y - 20, 14, 'electric');
+            window.particleManager.spawnSmoke(p.x, p.y, '#facc15', 8);
+          }
+          if (window.game && window.game.triggerScreenShake) {
+            window.game.triggerScreenShake(7, 0.22);
+          }
+
+          // Discharge burst hitbox (around Pikachu) - also strictly horizontal knockback (never upward!)
+          if (opponent && opponent.state !== 'RESPAWN' && opponent.invulnTimer <= 0) {
+            const oppHurtboxes = opponent.getHurtboxes ? opponent.getHurtboxes() : [{ x: opponent.x, y: opponent.y - opponent.height * 0.5, radius: opponent.hurtboxRadius || 24 }];
+            for (const hb of oppHurtboxes) {
+              const dist = Math.hypot(hb.x - p.x, hb.y - (p.y - 20));
+              if (dist <= (52 + hb.radius)) {
+                // Direction strictly horizontal away from Pikachu (left or right, angle 0)
+                const launchDir = hb.x >= p.x ? 1 : -1;
+                const fakeAttacker = {
+                  facing: launchDir,
+                  x: p.x,
+                  y: p.y,
+                  input: { left: false, right: false, up: false, down: false }
+                };
+                opponent.takeHit({
+                  damage: 13,
+                  angle: 0, // strictly horizontal, never upwards!
+                  baseKnockback: 18,
+                  knockbackScaling: 1.35,
+                  type: 'electric',
+                  hitlag: 9
+                }, fakeAttacker);
+                break;
+              }
+            }
+          }
+        }
+
+        // 3. Stage boundary / bottom limit
+        if (currentY > 700) {
+          this.life = 0;
+        }
+      },
+      draw: function(ctx) {
+        ctx.save();
+        ctx.shadowColor = '#00e5ff';
+        ctx.shadowBlur = 18;
+
+        // Draw animated jagged lightning bolt from skyY to currentY
+        const segments = Math.max(4, Math.floor((currentY - skyY) / 24));
+        const dy = (currentY - skyY) / segments;
+
+        ctx.strokeStyle = '#ffff00';
+        ctx.lineWidth = 6;
+        ctx.lineJoin = 'miter';
+        ctx.beginPath();
+        ctx.moveTo(startX, skyY);
+        for (let s = 1; s < segments; s++) {
+          const segY = skyY + s * dy;
+          const jitter = ((s % 2 === 0 ? 1 : -1) * 14) + (Math.random() - 0.5) * 8;
+          ctx.lineTo(startX + jitter, segY);
+        }
+        ctx.lineTo(startX, currentY);
+        ctx.stroke();
+
+        // Inner glowing white core
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(startX, skyY);
+        for (let s = 1; s < segments; s++) {
+          const segY = skyY + s * dy;
+          const jitter = ((s % 2 === 0 ? 1 : -1) * 10) + (Math.random() - 0.5) * 5;
+          ctx.lineTo(startX + jitter, segY);
+        }
+        ctx.lineTo(startX, currentY);
+        ctx.stroke();
+
+        // Glowing spark ball at the head of the bolt
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(startX, currentY, 12, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+      }
+    });
   }
 }
 

@@ -303,6 +303,26 @@ class TrainingDummyController {
           floaty: false
         };
 
+      case 6: // Charizard: Heavyweight powerhouse with armor, Flamethrower, Flare Blitz, Rock Smash
+        return {
+          dex: 6,
+          name: 'Charizard',
+          archetype: 'heavy_powerhouse',
+          preferredDist: 58,
+          minSafeDist: 38,
+          maxPokeDist: 85,
+          hasProjectile: true,
+          projectileType: 'neutral_special', // Lanzallamas (Neutral X)
+          burstMove: 'side_special',          // Envite Ígneo / Flare Blitz (Side X)
+          armorMove: 'down_special',          // Golpe Roca / Rock Smash (Down X)
+          antiAir: 'up_basic',                // Dragon Wing / Up Tilt
+          spike: 'down_basic',               // Meteor Stomp (D-Air)
+          shieldBreaker: 'down_special',      // Boulder shrapnel shreds shields
+          jumpAggression: 0.44,
+          floaty: false,
+          maxJumps: 3
+        };
+
       default:
         return {
           dex: 0,
@@ -323,17 +343,18 @@ class TrainingDummyController {
 
   /**
    * Difficulty Parameters (Smash Bros Levels 1 to 9)
+   * Nivel 9 es agresivo, adaptativo y castiga whiffs sin caer en hábitos defensivos predecibles.
    */
   _getDifficultyParams(level) {
     const l = Math.max(1, Math.min(9, level));
     return {
-      reactionLatency: [0.46, 0.38, 0.31, 0.25, 0.21, 0.17, 0.14, 0.115, 0.095][l - 1],
-      perceptionInterval: [0.25, 0.21, 0.17, 0.14, 0.10, 0.075, 0.055, 0.040, 0.028][l - 1],
-      spacingNoise: [26, 21, 16, 12, 8, 5, 3.5, 2, 0.5][l - 1],
-      errorRate: [0.44, 0.36, 0.28, 0.22, 0.16, 0.11, 0.07, 0.04, 0.02][l - 1],
-      shieldChance: [0.12, 0.22, 0.35, 0.50, 0.65, 0.76, 0.86, 0.92, 0.96][l - 1],
-      whiffPunishChance: [0.15, 0.30, 0.45, 0.60, 0.72, 0.82, 0.90, 0.95, 0.98][l - 1],
-      ledgeTrapSkill: [0.10, 0.22, 0.35, 0.50, 0.65, 0.78, 0.88, 0.94, 0.98][l - 1],
+      reactionLatency: [0.55, 0.46, 0.38, 0.30, 0.20, 0.15, 0.12, 0.095, 0.075][l - 1],
+      perceptionInterval: [0.32, 0.26, 0.22, 0.18, 0.10, 0.075, 0.055, 0.038, 0.024][l - 1],
+      spacingNoise: [34, 28, 22, 17, 8, 4.5, 3.0, 1.5, 0.3][l - 1],
+      errorRate: [0.55, 0.45, 0.36, 0.26, 0.14, 0.09, 0.05, 0.025, 0.01][l - 1],
+      shieldChance: [0.08, 0.15, 0.22, 0.32, 0.45, 0.55, 0.65, 0.72, 0.78][l - 1], // Ajustado para evitar tortuguismo excesivo en niveles 7-9
+      whiffPunishChance: [0.10, 0.20, 0.32, 0.45, 0.65, 0.78, 0.88, 0.94, 0.98][l - 1],
+      ledgeTrapSkill: [0.05, 0.12, 0.22, 0.34, 0.65, 0.80, 0.90, 0.95, 0.98][l - 1],
       maxConsecutiveAttacks: 1 // Strictly 1 attack pulse before moving/spacing to eliminate spam
     };
   }
@@ -368,6 +389,8 @@ class TrainingDummyController {
     this.dummy.input.specialPressed = false;
     this.dummy.input.shield = false;
     this.dummy.input.shieldPressed = false;
+    this.dummy.input.grab = false;
+    this.dummy.input.grabPressed = false;
 
     // Cooldown management
     if (this.projectileCooldown > 0) this.projectileCooldown -= dt;
@@ -397,6 +420,28 @@ class TrainingDummyController {
         }
       }
       this.dummy.handleInputs(stage, dt);
+      return;
+    }
+
+    // 🤼 Grabbed handling for CPU: button mash to escape
+    if (this.dummy.state === 'GRABBED') {
+      this.dummy.grabEscapeTimer -= dt * (0.6 + this.cpuLevel * 0.18);
+      return;
+    }
+
+    // 🤼 Grabbing handling for CPU: brief hold + directional throw!
+    if (this.dummy.state === 'GRABBING') {
+      this.aiTimer += dt;
+      if (this.aiTimer >= 0.25) {
+        this.aiTimer = 0;
+        let choice = 'forward';
+        if (playerFighter && playerFighter.percent > 85) {
+          choice = (this.dummy.x > 512) ? 'back' : 'forward';
+        } else {
+          choice = Math.random() < 0.5 ? 'up' : 'down';
+        }
+        this.dummy.performThrow(choice);
+      }
       return;
     }
 
@@ -636,8 +681,9 @@ class TrainingDummyController {
 
     if (!d.canAct() || d.state === 'ROLL' || d.state === 'AIR_DODGE') return false;
 
-    const isAttackThreat = p.isAttacking && p.dist < (this.cpuLevel >= 7 ? 120 : 90);
-    const isProjThreat = p.hasIncomingProjectile && p.nearestProjectileDist < (this.cpuLevel >= 7 ? 160 : 110);
+    // Solo activar si el ataque/proyectil rival está en rango real de impacto
+    const isAttackThreat = p.isAttacking && p.dist < (d.isGrounded ? (this.cpuLevel >= 7 ? 85 : 70) : 62);
+    const isProjThreat = p.hasIncomingProjectile && p.nearestProjectileDist < (this.cpuLevel >= 7 ? 130 : 90);
 
     if (!isAttackThreat && !isProjThreat) {
       this.pendingDefense = null;
@@ -665,15 +711,30 @@ class TrainingDummyController {
 
     if (Math.random() < diff.shieldChance && d.shield > 20) {
       let chosenAction = 'SHIELD';
-      if (!d.isGrounded && !d.airDodgeUsed && this.cpuLevel >= 4) {
-        chosenAction = 'AIR_DODGE';
-      } else if (d.isGrounded && this.cpuLevel >= 5 && (d.rollCooldown || 0) <= 0 && Math.random() < 0.40) {
-        chosenAction = Math.random() < 0.30 ? 'SPOT_DODGE' : 'ROLL';
+      if (!d.isGrounded) {
+        // En el aire: La IA inteligente NO spamea esquives aéreos que la dejen vendida
+        const jumpsLeft = (d.minunDead && d.partner) ? d.partner.jumpsLeft : d.jumpsLeft;
+        const airRoll = Math.random();
+
+        if (jumpsLeft > 0 && airRoll < (this.cpuLevel >= 6 ? 0.45 : 0.25)) {
+          // Opción 1: Salto de escape aéreo con drift (sin lag de esquive)
+          chosenAction = 'AIR_JUMP_ESCAPE';
+        } else if (this.cpuLevel >= 6 && airRoll < 0.75 && p.dist < 55) {
+          // Opción 2: Contraataque aéreo (interrumpir con ataque aéreo rápido)
+          chosenAction = 'AIR_COUNTER';
+        } else if (!d.airDodgeUsed && p.dist < 65) {
+          // Opción 3: Esquive aéreo direccional solo si es indispensable
+          chosenAction = 'AIR_DODGE';
+        } else {
+          return false;
+        }
+      } else if (d.isGrounded && this.cpuLevel >= 5 && (d.rollCooldown || 0) <= 0 && Math.random() < 0.45) {
+        chosenAction = Math.random() < 0.35 ? 'SPOT_DODGE' : 'ROLL';
       }
 
       this.pendingDefense = {
         action: chosenAction,
-        executeIn: Math.random() * 0.04
+        executeIn: Math.random() * 0.03
       };
       return false;
     }
@@ -683,15 +744,26 @@ class TrainingDummyController {
 
   _executeDefense(action, p) {
     const d = this.dummy;
-    if (action === 'AIR_DODGE') {
+    if (action === 'AIR_JUMP_ESCAPE') {
+      d.input.jumpPressed = true;
+      if (p.distX > 0) d.input.left = true;
+      else d.input.right = true;
+    } else if (action === 'AIR_COUNTER') {
+      d.input.attackPressed = true;
+      if (p.distY < -12) d.input.up = true;
+      else if (p.distX < 0) d.input.left = true;
+      else d.input.right = true;
+    } else if (action === 'AIR_DODGE') {
       d.input.shieldPressed = true;
-      if (this.cpuLevel >= 7) {
-        if (p.distX > 0) d.input.left = true;
-        else d.input.right = true;
-      }
+      // Esquive direccional alejándose del rival para no quedar bajo su vertical
+      if (p.distX > 0) d.input.left = true;
+      else d.input.right = true;
+      if (p.distY < -15) d.input.down = true;
+      else if (p.distY > 15) d.input.up = true;
     } else if (action === 'ROLL') {
       d.input.shield = true;
-      if (Math.random() < 0.6) {
+      const rollCross = (this.cpuLevel >= 7) ? Math.random() < 0.70 : Math.random() < 0.45;
+      if (rollCross) {
         if (p.distX < 0) d.input.left = true;
         else d.input.right = true;
       } else {
@@ -702,7 +774,8 @@ class TrainingDummyController {
       d.input.shield = true;
       d.input.down = true;
     } else {
-      this.shieldHoldTimer = this.cpuLevel >= 8 ? 0.18 : this.cpuLevel >= 5 ? 0.28 : 0.38;
+      // Escudo con soltado rápido en niveles altos para activar ventana de parry
+      this.shieldHoldTimer = this.cpuLevel >= 8 ? 0.12 : this.cpuLevel >= 5 ? 0.22 : 0.32;
       d.input.shield = true;
     }
   }
@@ -978,6 +1051,12 @@ class TrainingDummyController {
     /* --- CLOSE RANGE (absDx <= profile.maxPokeDist): ENGAGEMENT ZONE --- */
     // If opponent is shielding, don't blindly jab!
     if (p.isShielding) {
+      if (Math.abs(p.distX) <= 60 && Math.random() < (0.45 + diff.whiffPunishChance * 0.40)) {
+        this.currentIntent = 'POKE';
+        this.intentMove = { id: 'grab', type: 'grab' };
+        this.intentTimer = 0.28;
+        return;
+      }
       if (profile.shieldBreaker && Math.random() < 0.70) {
         this.currentIntent = 'POKE';
         this.intentMove = { id: 'shield_breaker', type: 'special_side' };
@@ -1269,6 +1348,10 @@ class TrainingDummyController {
           const m = this.intentMove;
 
           switch (m.type) {
+            case 'grab':
+              d.input.grabPressed = true;
+              break;
+
             case 'projectile':
               d.input.specialPressed = true;
               if (profile.dex === 1) { // Bulbasaur Razor Leaf is Side X
