@@ -157,6 +157,65 @@ class PokeSmashGame {
     this._bindStartScreen();
     this._bindChangelogModal();
     this._bindOnlineMultiplayer();
+    this._initBackgroundWorker();
+  }
+
+  /**
+   * Bucle en segundo plano mediante Web Worker (Inmune al throttling de pestañas inactivas)
+   * Garantiza que la simulación física y sincronización de red online NUNCA se congelen al cambiar de pestaña.
+   */
+  _initBackgroundWorker() {
+    try {
+      const code = `
+        let timer = null;
+        self.onmessage = function(e) {
+          if (e.data === 'start') {
+            if (!timer) {
+              timer = setInterval(function() {
+                self.postMessage('tick');
+              }, 16);
+            }
+          } else if (e.data === 'stop') {
+            if (timer) {
+              clearInterval(timer);
+              timer = null;
+            }
+          }
+        };
+      `;
+      const blob = new Blob([code], { type: 'application/javascript' });
+      this.bgWorker = new Worker(URL.createObjectURL(blob));
+      this.bgWorker.onmessage = (e) => {
+        if (e.data === 'tick') {
+          // Si estamos en partida multijugador online y la pestaña está oculta o inactiva,
+          // ejecutamos física continua y sincronización sin retraso ni saltos
+          if (this.isOnlineMatch && document.hidden) {
+            this.fixedUpdate(this.fixedStep);
+            if (this.onlineManager && typeof this.onlineManager._sendLocalFighterState === 'function') {
+              this.onlineManager._sendLocalFighterState();
+            }
+          }
+        }
+      };
+      this.bgWorker.postMessage('start');
+    } catch (err) {
+      console.warn('[Game] Error al inicializar Background Worker:', err);
+    }
+
+    // Reajustar tiempos al restaurar visibilidad de pestaña para eliminar ráfagas acumuladas
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        this.lastTime = performance.now();
+        this.lastRenderTime = performance.now();
+        this.accumulator = 0;
+      }
+    });
+
+    window.addEventListener('focus', () => {
+      this.lastTime = performance.now();
+      this.lastRenderTime = performance.now();
+      this.accumulator = 0;
+    });
   }
 
   goToSetupStep(step) {
@@ -2624,10 +2683,11 @@ class PokeSmashGame {
   }
 
   // =========================================================================
-  // 🌐 MULTIJUGADOR EN LÍNEA: SALAS 1v1, DRAFT 20s Y ANTI-CHEAT
+  // 🌐 MULTIJUGADOR EN LÍNEA: SALAS 1v1, DRAFT Y ANTI-CHEAT
   // =========================================================================
   _bindOnlineMultiplayer() {
     const onlineModal = document.getElementById('online-modal');
+    const charModal = document.getElementById('char-select-modal');
     const draftModal = document.getElementById('item-draft-modal');
     const startScreen = document.getElementById('start-screen');
     const btnOpenOnline = document.getElementById('btn-open-online');
@@ -2639,11 +2699,7 @@ class PokeSmashGame {
       if (startScreen) startScreen.classList.add('hidden');
       if (onlineModal) onlineModal.classList.add('open');
       if (window.soundEngine) window.soundEngine.playSfx('select');
-      // Selección por defecto: Pikachu
-      if (!this.onlineManager.selectedDex) {
-        this.onlineManager.setSelectedFighter(25);
-      }
-      this._updateOnlineRosterUI();
+
       // Inicializar sala de anfitrión por defecto si la pestaña de crear está activa
       const btnTabCreate = document.getElementById('btn-tab-create-room');
       if (btnTabCreate && btnTabCreate.classList.contains('active')) {
@@ -2658,6 +2714,7 @@ class PokeSmashGame {
 
     const closeOnline = () => {
       if (onlineModal) onlineModal.classList.remove('open');
+      if (charModal) charModal.classList.remove('open');
       if (draftModal) draftModal.classList.remove('open');
       if (startScreen) startScreen.classList.remove('hidden');
       this.onlineManager.leaveRoom();
@@ -2666,18 +2723,7 @@ class PokeSmashGame {
     if (btnCloseOnline) btnCloseOnline.addEventListener('click', closeOnline);
     if (btnBackOnline) btnBackOnline.addEventListener('click', closeOnline);
 
-    // 1. Selector Previo de Personaje (Paso 1 Obligatorio)
-    const rosterCards = document.querySelectorAll('#online-roster-grid .fighter-preselect-card');
-    rosterCards.forEach(card => {
-      card.addEventListener('click', () => {
-        const dex = parseInt(card.getAttribute('data-online-dex'), 10) || 25;
-        this.onlineManager.setSelectedFighter(dex);
-        this._updateOnlineRosterUI();
-        if (window.soundEngine) window.soundEngine.playSfx('select');
-      });
-    });
-
-    // 2. Modos de Sala: Crear Sala vs Unirse a Sala
+    // 1. Modos de Sala: Crear Sala vs Unirse a Sala
     const btnTabCreate = document.getElementById('btn-tab-create-room');
     const btnTabJoin = document.getElementById('btn-tab-join-room');
     const viewCreate = document.getElementById('online-view-create');
@@ -2729,7 +2775,7 @@ class PokeSmashGame {
         if (this.onlineManager.role !== 'host') return;
         onlineItemsEnabled = !onlineItemsEnabled;
         itemsToggleBtn.classList.toggle('active', onlineItemsEnabled);
-        itemsToggleBtn.innerText = onlineItemsEnabled ? '✅ Con Objetos (Draft 20s)' : '❌ Sin Objetos';
+        itemsToggleBtn.innerText = onlineItemsEnabled ? '✅ Con Objetos (Draft)' : '❌ Sin Objetos';
         const stageSel = document.getElementById('online-stage-select');
         this.onlineManager.updateSettings(onlineItemsEnabled, stageSel ? stageSel.value : 'BATTLEFIELD');
         if (window.soundEngine) window.soundEngine.playSfx('select');
@@ -2746,20 +2792,10 @@ class PokeSmashGame {
       });
     }
 
-    // Iniciar Partida (Solo Anfitrión)
-    const btnHostStart = document.getElementById('btn-online-host-start');
-    if (btnHostStart) {
-      btnHostStart.addEventListener('click', () => {
-        if (this.onlineManager.role !== 'host') return;
-        this.onlineManager.startGame();
-      });
-    }
-
-    // Unirse a Sala
+    // Unirse a Sala (Guest)
     const joinInput = document.getElementById('join-room-code-input');
     const btnSubmitJoin = document.getElementById('btn-submit-join-room');
     const joinError = document.getElementById('join-error-msg');
-    const joinConnectedCard = document.getElementById('join-connected-card');
 
     if (btnSubmitJoin && joinInput) {
       btnSubmitJoin.addEventListener('click', async () => {
@@ -2773,7 +2809,8 @@ class PokeSmashGame {
         btnSubmitJoin.innerText = '🔑 UNIRSE A LA SALA';
 
         if (res.success) {
-          if (joinConnectedCard) joinConnectedCard.style.display = 'block';
+          const lobbyPanel = document.getElementById('online-lobby-status-panel');
+          if (lobbyPanel) lobbyPanel.scrollIntoView({ behavior: 'smooth' });
           if (window.soundEngine) window.soundEngine.playSfx('select');
         } else {
           if (joinError) {
@@ -2785,13 +2822,120 @@ class PokeSmashGame {
       });
     }
 
-    // 3. Callbacks de Conexión y Estado
+    // 2. Botón interactivo de "DARLE A LISTO"
+    const btnReady = document.getElementById('btn-online-ready');
+    if (btnReady) {
+      btnReady.addEventListener('click', () => {
+        const nextState = !this.onlineManager.isReady;
+        this.onlineManager.setReady(nextState);
+        if (window.soundEngine) window.soundEngine.playSfx('select');
+      });
+    }
+
+    // 3. Selección de Personajes durante la Cuenta Atrás de 30s
+    const charCards = document.querySelectorAll('#char-select-roster-grid .char-card');
+    const myPreviewImg = document.getElementById('my-char-preview-img');
+    const myPreviewName = document.getElementById('my-char-preview-name');
+    const myPreviewDesc = document.getElementById('my-char-preview-desc');
+    const btnConfirmChar = document.getElementById('btn-confirm-char');
+
+    const dexMetadata = {
+      25: { name: 'Pikachu', desc: 'Eléctrico · Peso: 6.0kg' },
+      1: { name: 'Bulbasaur', desc: 'Planta · Peso: 6.9kg' },
+      312: { name: 'Minun & Plusle', desc: 'Dúo Eléctrico · Peso: 4.2kg' },
+      94: { name: 'Gengar', desc: 'Fantasma · Peso: 40.5kg' },
+      39: { name: 'Jigglypuff', desc: 'Normal/Hada · Peso: 5.5kg' },
+      6: { name: 'Charizard', desc: 'Fuego/Volador · Peso: 90.5kg' }
+    };
+
+    charCards.forEach(card => {
+      card.addEventListener('click', () => {
+        if (this.onlineManager.charConfirmed) return;
+        const dex = parseInt(card.getAttribute('data-char-dex'), 10) || 25;
+        charCards.forEach(c => c.classList.remove('active'));
+        card.classList.add('active');
+
+        this.onlineManager.selectCharacter(dex, false);
+
+        const meta = dexMetadata[dex] || { name: 'Pokémon', desc: '' };
+        if (myPreviewImg) myPreviewImg.src = `assets/pokemon/${dex}/Idle.png`;
+        if (myPreviewName) myPreviewName.innerText = meta.name;
+        if (myPreviewDesc) myPreviewDesc.innerText = meta.desc;
+
+        if (window.soundEngine) window.soundEngine.playSfx('select');
+      });
+    });
+
+    if (btnConfirmChar) {
+      btnConfirmChar.addEventListener('click', () => {
+        const currentDex = this.onlineManager.selectedDex || 25;
+        this.onlineManager.selectCharacter(currentDex, true);
+        btnConfirmChar.innerText = '✓ LUCHADOR CONFIRMADO';
+        btnConfirmChar.classList.add('confirmed');
+        btnConfirmChar.disabled = true;
+
+        const myStatusPill = document.getElementById('my-char-status-pill');
+        if (myStatusPill) {
+          myStatusPill.className = 'preview-status-pill confirmed';
+          myStatusPill.innerText = '✓ Confirmado';
+        }
+
+        if (window.soundEngine) window.soundEngine.playSfx('select');
+      });
+    }
+
+    // 4. Callbacks de Conexión y Estado
     window.onOnlineRoomUpdated = (room, ping) => {
       this._handleOnlineLobbyUpdate(room, ping);
     };
 
+    // Inicio de la cuenta atrás de 30s para elegir personaje
+    window.onOnlineStartCharSelect = (sec, room) => {
+      if (onlineModal) onlineModal.classList.remove('open');
+      if (charModal) charModal.classList.add('open');
+      if (window.soundEngine) window.soundEngine.playSfx('countdown_beep');
+
+      const cdTimer = document.getElementById('char-countdown-timer');
+      const badgeTimer = document.getElementById('char-select-badge-timer');
+      const fill = document.getElementById('char-progress-fill');
+      if (cdTimer) cdTimer.innerText = sec;
+      if (badgeTimer) badgeTimer.innerText = sec;
+      if (fill) fill.style.width = '100%';
+
+      // Reset botón de confirmación
+      if (btnConfirmChar) {
+        btnConfirmChar.innerText = '✓ CONFIRMAR LUCHADOR';
+        btnConfirmChar.classList.remove('confirmed');
+        btnConfirmChar.disabled = false;
+      }
+      const myStatusPill = document.getElementById('my-char-status-pill');
+      if (myStatusPill) {
+        myStatusPill.className = 'preview-status-pill selecting';
+        myStatusPill.innerText = 'Eligiendo...';
+      }
+
+      this._handleOnlineLobbyUpdate(room, this.onlineManager.ping);
+    };
+
+    window.onOnlineCharSelectTick = (sec, room) => {
+      const cdTimer = document.getElementById('char-countdown-timer');
+      const badgeTimer = document.getElementById('char-select-badge-timer');
+      const fill = document.getElementById('char-progress-fill');
+      if (cdTimer) cdTimer.innerText = sec;
+      if (badgeTimer) badgeTimer.innerText = sec;
+      if (fill) fill.style.width = `${(sec / 30) * 100}%`;
+
+      if (sec <= 5 && window.soundEngine) {
+        window.soundEngine.playSfx('countdown_beep');
+      }
+
+      this._handleOnlineLobbyUpdate(room, this.onlineManager.ping);
+    };
+
+    // Fase del Draft de Objetos (20 Segundos)
     window.onOnlineStartDraft = (sec) => {
       if (onlineModal) onlineModal.classList.remove('open');
+      if (charModal) charModal.classList.remove('open');
       if (draftModal) draftModal.classList.add('open');
       if (window.soundEngine) window.soundEngine.playSfx('select');
     };
@@ -2803,7 +2947,7 @@ class PokeSmashGame {
       if (fill) fill.style.width = `${(sec / 20) * 100}%`;
     };
 
-    // Selección de Ítem en el Draft de 20s
+    // Selección de Ítem en el Draft
     const draftCards = document.querySelectorAll('#draft-items-container .draft-item-card');
     let currentDraftChoice = 'restos';
     draftCards.forEach(c => {
@@ -2830,8 +2974,10 @@ class PokeSmashGame {
       });
     }
 
+    // Comienzo Oficial de la Batalla
     window.onOnlineBattleStart = (cfg) => {
       if (onlineModal) onlineModal.classList.remove('open');
+      if (charModal) charModal.classList.remove('open');
       if (draftModal) draftModal.classList.remove('open');
       if (startScreen) startScreen.classList.add('hidden');
 
@@ -2890,63 +3036,133 @@ class PokeSmashGame {
     });
   }
 
-  _updateOnlineRosterUI() {
-    const dex = this.onlineManager.selectedDex || 25;
-    const cards = document.querySelectorAll('#online-roster-grid .fighter-preselect-card');
-    cards.forEach(card => {
-      const d = parseInt(card.getAttribute('data-online-dex'), 10);
-      const isSelected = (d === dex);
-      card.classList.toggle('active', isSelected);
-      if (isSelected) {
-        const badge = document.getElementById('online-selected-fighter-badge');
-        const name = card.getAttribute('data-name');
-        if (badge && name) badge.innerText = `⚡ ${name}`;
-
-        const hostImg = document.getElementById('host-slot-p1-img');
-        const hostName = document.getElementById('host-slot-p1-name');
-        if (hostImg) hostImg.src = `assets/pokemon/${dex}/Idle.png`;
-        if (hostName) hostName.innerText = name;
-      }
-    });
-  }
-
   _handleOnlineLobbyUpdate(room, ping) {
     if (!room) return;
 
-    const dexNames = { 25: 'Pikachu', 1: 'Bulbasaur', 312: 'Minun y Plusle', 94: 'Gengar', 39: 'Jigglypuff', 6: 'Charizard' };
+    const dexMetadata = {
+      25: { name: 'Pikachu', desc: 'Eléctrico · Peso: 6.0kg' },
+      1: { name: 'Bulbasaur', desc: 'Planta · Peso: 6.9kg' },
+      312: { name: 'Minun & Plusle', desc: 'Dúo Eléctrico · Peso: 4.2kg' },
+      94: { name: 'Gengar', desc: 'Fantasma · Peso: 40.5kg' },
+      39: { name: 'Jigglypuff', desc: 'Normal/Hada · Peso: 5.5kg' },
+      6: { name: 'Charizard', desc: 'Fuego/Volador · Peso: 90.5kg' }
+    };
 
-    if (this.onlineManager.role === 'host') {
-      const hostStartBtn = document.getElementById('btn-online-host-start');
-      const p2WaitText = document.getElementById('host-slot-p2-waiting-text');
-      const p2Content = document.getElementById('host-slot-p2-connected-content');
-      const p2Img = document.getElementById('host-slot-p2-img');
-      const p2Name = document.getElementById('host-slot-p2-name');
+    // 1. Actualizar código de sala
+    const codeDisplay = document.getElementById('online-host-code-display');
+    if (codeDisplay && room.code) codeDisplay.innerText = room.code;
 
-      if (room.p1) {
-        const hostImg = document.getElementById('host-slot-p1-img');
-        const hostName = document.getElementById('host-slot-p1-name');
-        if (hostImg && room.p1.dex) hostImg.src = `assets/pokemon/${room.p1.dex}/Idle.png`;
-        if (hostName && room.p1.dex) hostName.innerText = dexNames[room.p1.dex] || 'Anfitrión';
+    // 2. Actualizar Slot Jugador 1 (Host)
+    const p1ReadyBadge = document.getElementById('lobby-p1-ready-badge');
+    const p1Name = document.getElementById('host-slot-p1-name');
+    if (room.p1) {
+      if (p1Name) p1Name.innerText = room.p1.name || 'Jugador 1';
+      if (p1ReadyBadge) {
+        const isReady = !!room.p1.ready;
+        p1ReadyBadge.className = `ready-pill ${isReady ? 'ready' : 'not-ready'}`;
+        p1ReadyBadge.innerText = isReady ? '✅ LISTO' : '⏳ NO LISTO';
+      }
+    }
+
+    // 3. Actualizar Slot Jugador 2 (Guest)
+    const p2ReadyBadge = document.getElementById('lobby-p2-ready-badge');
+    const p2Name = document.getElementById('host-slot-p2-name');
+    const p2Conn = document.getElementById('host-slot-p2-conn-text');
+    const p2Avatar = document.getElementById('host-slot-p2-avatar');
+    const btnReady = document.getElementById('btn-online-ready');
+    const statusBanner = document.getElementById('lobby-status-banner');
+
+    const isConnected = !!room.p2;
+
+    if (isConnected) {
+      if (p2Name) p2Name.innerText = room.p2.name || 'Jugador 2 (Rival)';
+      if (p2Conn) {
+        p2Conn.innerText = '🟢 Conectado';
+        p2Conn.style.color = '#10b981';
+      }
+      if (p2Avatar) p2Avatar.innerText = '⚔️';
+
+      if (p2ReadyBadge) {
+        p2ReadyBadge.style.display = 'inline-block';
+        const isReady = !!room.p2.ready;
+        p2ReadyBadge.className = `ready-pill ${isReady ? 'ready' : 'not-ready'}`;
+        p2ReadyBadge.innerText = isReady ? '✅ LISTO' : '⏳ NO LISTO';
       }
 
-      if (room.p2) {
-        if (p2WaitText) p2WaitText.style.display = 'none';
-        if (p2Content) p2Content.style.display = 'flex';
-        if (p2Img && room.p2.dex) p2Img.src = `assets/pokemon/${room.p2.dex}/Idle.png`;
-        if (p2Name && room.p2.dex) p2Name.innerText = dexNames[room.p2.dex] || 'Rival';
+      // Habilitar botón de Listo para ambos jugadores
+      if (btnReady) {
+        btnReady.disabled = false;
+        const myRole = this.onlineManager.role;
+        const myReady = (myRole === 'host') ? !!room.p1?.ready : !!room.p2?.ready;
+        const rivalReady = (myRole === 'host') ? !!room.p2?.ready : !!room.p1?.ready;
 
-        if (hostStartBtn) {
-          hostStartBtn.disabled = false;
-          hostStartBtn.innerText = '⚔️ ¡A LUCHAR! INICIAR PARTIDA';
+        if (myReady) {
+          btnReady.innerText = '✓ ¡ESTÁS LISTO! (CANCELAR)';
+          btnReady.classList.add('is-ready');
+          if (statusBanner) {
+            statusBanner.innerHTML = rivalReady 
+              ? '<span style="color: #10b981; font-weight: 800;">⚔️ ¡Ambos jugadores listos! Iniciando selección de personaje...</span>'
+              : '<span style="color: #facc15; font-weight: 700;">✅ Estás listo. Esperando a que el rival pulse Listo...</span>';
+          }
+        } else {
+          btnReady.innerText = '👍 DARLE A LISTO';
+          btnReady.classList.remove('is-ready');
+          if (statusBanner) {
+            statusBanner.innerHTML = rivalReady
+              ? '<span style="color: #38bdf8; font-weight: 800;">🔔 ¡El rival ya está listo! Pulsa LISTO para comenzar la selección.</span>'
+              : '<span style="color: #34d399; font-weight: 700;">⚔️ ¡Ambos jugadores conectados! Pulsad LISTO para comenzar.</span>';
+          }
         }
-        const hint = document.getElementById('host-start-hint');
-        if (hint) hint.innerHTML = '<span style="color: #10b981; font-weight: 800;">✓ ¡Rival conectado! Puedes comenzar cuando quieras.</span>';
       }
-    } else if (this.onlineManager.role === 'guest') {
-      const itemsBadge = document.getElementById('join-items-rule-badge');
-      if (itemsBadge) {
-        itemsBadge.innerText = room.rules?.itemsEnabled ? '🎒 Con Objetos (Draft 20s)' : '❌ Sin Objetos';
+    } else {
+      if (p2Name) p2Name.innerText = 'Esperando rival...';
+      if (p2Conn) {
+        p2Conn.innerText = 'Introduce el código de 4 dígitos';
+        p2Conn.style.color = '#94a3b8';
       }
+      if (p2Avatar) p2Avatar.innerText = '⏳';
+      if (p2ReadyBadge) p2ReadyBadge.style.display = 'none';
+
+      if (btnReady) {
+        btnReady.disabled = true;
+        btnReady.innerText = '👍 DARLE A LISTO';
+        btnReady.classList.remove('is-ready');
+      }
+      if (statusBanner) {
+        statusBanner.innerHTML = '⏳ Comparte el código de 4 dígitos con tu amigo para que se conecte a la sala...';
+      }
+    }
+
+    // 4. Actualizar Previsualización Dual en la Pantalla de Selección de Personaje (30s)
+    if (room.status === 'char_select' && room.char_select) {
+      const isHost = (this.onlineManager.role === 'host');
+      const myDex = isHost ? (room.char_select.p1_dex || this.onlineManager.selectedDex || 25) : (room.char_select.p2_dex || this.onlineManager.selectedDex || 1);
+      const rivalDex = isHost ? (room.char_select.p2_dex || 1) : (room.char_select.p1_dex || 25);
+      const rivalConfirmed = isHost ? !!room.char_select.p2_confirmed : !!room.char_select.p1_confirmed;
+
+      // Previsualización del rival
+      const rivalImg = document.getElementById('rival-char-preview-img');
+      const rivalName = document.getElementById('rival-char-preview-name');
+      const rivalDesc = document.getElementById('rival-char-preview-desc');
+      const rivalPill = document.getElementById('rival-char-status-pill');
+
+      const rMeta = dexMetadata[rivalDex] || { name: 'Pokémon', desc: '' };
+      if (rivalImg) rivalImg.src = `assets/pokemon/${rivalDex}/Idle.png`;
+      if (rivalName) rivalName.innerText = rMeta.name;
+      if (rivalDesc) rivalDesc.innerText = rMeta.desc;
+      if (rivalPill) {
+        rivalPill.className = `preview-status-pill ${rivalConfirmed ? 'confirmed' : 'selecting'}`;
+        rivalPill.innerText = rivalConfirmed ? '✓ Confirmado' : '⏳ Eligiendo...';
+      }
+
+      // Previsualización propia
+      const myImg = document.getElementById('my-char-preview-img');
+      const myName = document.getElementById('my-char-preview-name');
+      const myDesc = document.getElementById('my-char-preview-desc');
+      const mMeta = dexMetadata[myDex] || { name: 'Pokémon', desc: '' };
+      if (myImg) myImg.src = `assets/pokemon/${myDex}/Idle.png`;
+      if (myName) myName.innerText = mMeta.name;
+      if (myDesc) myDesc.innerText = mMeta.desc;
     }
   }
 

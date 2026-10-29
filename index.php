@@ -805,7 +805,7 @@ $pokemon_items = [
   </div>
 
   <!-- =========================================================================
-       🌐 GIGA UPDATE: MODAL MULTIJUGADOR EN LÍNEA (ONLINE 1v1)
+       🌐 GIGA UPDATE: MODAL MULTIJUGADOR EN LÍNEA (ONLINE 1v1 - SALA & LOBBY)
        ========================================================================= -->
   <div id="online-modal" class="modal-overlay">
     <div class="modal-content online-modal-content">
@@ -821,48 +821,8 @@ $pokemon_items = [
         </div>
       </div>
 
-      <!-- Paso 1: Selección Previa Obligatoria de Personaje -->
-      <div style="margin-bottom: 18px;">
-        <div class="fighter-preselect-title">
-          <span><strong>1. Elige tu Pokémon Luchador</strong> (Requerido antes de crear o unirte):</span>
-          <span id="online-selected-fighter-badge" style="color: #facc15; font-weight: 800;">⚡ Pikachu</span>
-        </div>
-        <div class="fighter-preselect-grid" id="online-roster-grid">
-          <div class="fighter-preselect-card active" data-online-dex="25" data-name="Pikachu">
-            <img src="assets/pokemon/25/Idle.png" alt="Pikachu">
-            <span class="fighter-preselect-name">Pikachu</span>
-            <span class="fighter-preselect-tag" style="color: #facc15;">Eléctrico · 6.0kg</span>
-          </div>
-          <div class="fighter-preselect-card" data-online-dex="1" data-name="Bulbasaur">
-            <img src="assets/pokemon/1/Idle.png" alt="Bulbasaur">
-            <span class="fighter-preselect-name">Bulbasaur</span>
-            <span class="fighter-preselect-tag" style="color: #10b981;">Planta · 6.9kg</span>
-          </div>
-          <div class="fighter-preselect-card" data-online-dex="312" data-name="Minun y Plusle">
-            <img src="assets/pokemon/312/Idle.png" alt="Minun y Plusle">
-            <span class="fighter-preselect-name">Minun & Plusle</span>
-            <span class="fighter-preselect-tag" style="color: #38bdf8;">Eléctrico · 4.2kg</span>
-          </div>
-          <div class="fighter-preselect-card" data-online-dex="94" data-name="Gengar">
-            <img src="assets/pokemon/94/Idle.png" alt="Gengar">
-            <span class="fighter-preselect-name">Gengar</span>
-            <span class="fighter-preselect-tag" style="color: #a855f7;">Fantasma · 40.5kg</span>
-          </div>
-          <div class="fighter-preselect-card" data-online-dex="39" data-name="Jigglypuff">
-            <img src="assets/pokemon/39/Idle.png" alt="Jigglypuff">
-            <span class="fighter-preselect-name">Jigglypuff</span>
-            <span class="fighter-preselect-tag" style="color: #f472b6;">Normal/Hada · 5.5kg</span>
-          </div>
-          <div class="fighter-preselect-card" data-online-dex="6" data-name="Charizard">
-            <img src="assets/pokemon/6/Idle.png" alt="Charizard">
-            <span class="fighter-preselect-name">Charizard</span>
-            <span class="fighter-preselect-tag" style="color: #f97316;">Fuego/Volador · 90.5kg</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Paso 2: Elección de Modo (Crear Sala o Unirse) -->
-      <div class="online-mode-selector-row">
+      <!-- Paso 1: Elección de Modo (Crear Sala o Unirse) -->
+      <div class="online-mode-selector-row" id="online-mode-tabs-row">
         <button type="button" class="btn-online-mode-choice active" id="btn-tab-create-room">
           <span class="online-choice-icon">🏠</span>
           <div style="text-align: left;">
@@ -896,32 +856,6 @@ $pokemon_items = [
           </div>
         </div>
 
-        <!-- Slots de Jugadores en Sala -->
-        <div class="online-lobby-slots-grid">
-          <div class="online-player-slot filled" id="host-slot-p1">
-            <img src="assets/pokemon/25/Idle.png" id="host-slot-p1-img" alt="P1">
-            <div class="online-player-meta">
-              <span class="online-player-role-badge role-host">👑 Anfitrión (P1)</span>
-              <div class="online-player-name" id="host-slot-p1-name">Pikachu</div>
-              <div style="font-size: 10px; color: #10b981;">✓ Conectado</div>
-            </div>
-          </div>
-
-          <div class="online-player-slot waiting" id="host-slot-p2">
-            <div id="host-slot-p2-waiting-text">
-              ⏳ Esperando a que el rival introduzca el código...
-            </div>
-            <div id="host-slot-p2-connected-content" style="display: none; width: 100%; align-items: center; gap: 12px;">
-              <img src="assets/pokemon/1/Idle.png" id="host-slot-p2-img" alt="P2" style="width: 44px; height: 44px; object-fit: contain;">
-              <div class="online-player-meta">
-                <span class="online-player-role-badge role-guest">⚔️ Rival (P2)</span>
-                <div class="online-player-name" id="host-slot-p2-name">Bulbasaur</div>
-                <div style="font-size: 10px; color: #10b981;">✓ Conectado y Listo</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
         <!-- Ajustes de la Partida (Configurados por el Anfitrión) -->
         <div style="background: rgba(15, 23, 42, 0.7); border-radius: 10px; padding: 14px; margin-bottom: 18px; border: 1px solid rgba(255, 255, 255, 0.08);">
           <div style="font-size: 12px; color: #facc15; font-weight: 800; margin-bottom: 10px;">
@@ -939,7 +873,7 @@ $pokemon_items = [
             <div style="display: flex; align-items: center; gap: 10px;">
               <span style="font-size: 12px; color: #cbd5e1;">🎒 Objetos Equipables:</span>
               <button type="button" class="online-toggle-btn active" id="btn-online-items-toggle">
-                ✅ Con Objetos (Draft 20s)
+                ✅ Con Objetos (Draft)
               </button>
             </div>
 
@@ -955,14 +889,6 @@ $pokemon_items = [
               </select>
             </div>
           </div>
-        </div>
-
-        <!-- Botón de Lanzamiento -->
-        <button type="button" class="btn-launch-online" id="btn-online-host-start" disabled>
-          ⚔️ INICIAR BATALLA EN LÍNEA
-        </button>
-        <div id="host-start-hint" style="text-align: center; font-size: 11px; color: #94a3b8; margin-top: 8px;">
-          (El anfitrión podrá comenzar la partida en cuanto el rival se conecte)
         </div>
       </div>
 
@@ -980,21 +906,161 @@ $pokemon_items = [
           </div>
           <div id="join-error-msg" style="color: #f87171; font-size: 11px; margin-top: 10px; display: none;"></div>
         </div>
+      </div>
 
-        <!-- Estado tras unirse -->
-        <div id="join-connected-card" style="display: none; background: rgba(15, 23, 42, 0.7); border-radius: 10px; padding: 16px; border: 1px solid rgba(56, 189, 248, 0.3); text-align: center;">
-          <div style="color: #10b981; font-weight: 800; font-size: 14px; margin-bottom: 8px;">
-            ✓ ¡Conectado con éxito a la sala!
+      <!-- PANEL DE SALA / LOBBY (COMPARTIDO): SLOTS DE AMBOS JUGADORES Y BOTÓN LISTO -->
+      <div id="online-lobby-status-panel" style="margin-top: 14px;">
+        <div style="font-size: 12px; color: #38bdf8; font-weight: 800; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px;">
+          👥 Jugadores en Sala
+        </div>
+
+        <div class="online-lobby-slots-grid">
+          <!-- Jugador 1 (Host) -->
+          <div class="online-player-slot filled" id="host-slot-p1">
+            <div class="online-slot-avatar">👑</div>
+            <div class="online-player-meta">
+              <span class="online-player-role-badge role-host">👑 Anfitrión (P1)</span>
+              <div class="online-player-name" id="host-slot-p1-name">Jugador 1</div>
+              <div style="font-size: 11px; color: #10b981;">🟢 Conectado</div>
+            </div>
+            <div class="online-slot-ready-indicator">
+              <span id="lobby-p1-ready-badge" class="ready-pill not-ready">⏳ NO LISTO</span>
+            </div>
           </div>
-          <div style="color: #cbd5e1; font-size: 12px; margin-bottom: 12px;">
-            Esperando a que el anfitrión inicie la partida...
+
+          <!-- Jugador 2 (Guest) -->
+          <div class="online-player-slot waiting" id="host-slot-p2">
+            <div class="online-slot-avatar" id="host-slot-p2-avatar">⏳</div>
+            <div class="online-player-meta">
+              <span class="online-player-role-badge role-guest">⚔️ Rival (P2)</span>
+              <div class="online-player-name" id="host-slot-p2-name">Esperando rival...</div>
+              <div id="host-slot-p2-conn-text" style="font-size: 11px; color: #94a3b8;">Introduce el código</div>
+            </div>
+            <div class="online-slot-ready-indicator">
+              <span id="lobby-p2-ready-badge" class="ready-pill not-ready" style="display: none;">⏳ NO LISTO</span>
+            </div>
           </div>
-          <div class="online-rules-summary">
-            <span>⚔️ <strong>Reglas Oficiales:</strong> 3 Vidas · 5 Minutos (300s)</span>
-            <span class="online-rules-badge" id="join-items-rule-badge">🎒 Con Objetos</span>
+        </div>
+
+        <!-- Banner de Estado de Conexión y Listo -->
+        <div id="lobby-status-banner" class="lobby-status-banner">
+          ⏳ Esperando a que el rival se conecte a la sala...
+        </div>
+
+        <!-- Botón interactivo de LISTO -->
+        <div style="text-align: center; margin-top: 14px;">
+          <button type="button" class="btn-online-ready" id="btn-online-ready" disabled>
+            👍 DARLE A LISTO
+          </button>
+          <div id="online-ready-hint" style="font-size: 11px; color: #94a3b8; margin-top: 8px;">
+            (Cuando ambos jugadores le den a Listo, comenzará una cuenta atrás de 30 segundos para elegir personaje)
           </div>
         </div>
       </div>
+
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       ⚔️ MODAL: SELECCIÓN DE PERSONAJE (COUNTDOWN DE 30 SEGUNDOS)
+       ========================================================================= -->
+  <div id="char-select-modal" class="modal-overlay">
+    <div class="modal-content char-select-modal-content">
+      <div class="modal-header">
+        <h2 class="retro-font" style="font-size: 15px; color: #facc15; display: flex; align-items: center; gap: 8px;">
+          ⚔️ SELECCIÓN DE LUCHADOR
+        </h2>
+        <div class="online-rules-badge" style="background: rgba(250, 204, 21, 0.2); color: #facc15; border-color: #facc15;">
+          ⏱️ <span id="char-select-badge-timer">30</span> SEGUNDOS
+        </div>
+      </div>
+
+      <!-- Temporizador gigante y barra de progreso -->
+      <div class="char-timer-wrap">
+        <span class="char-countdown-num" id="char-countdown-timer">30</span>
+        <div class="char-progress-bar-bg">
+          <div class="char-progress-bar-fill" id="char-progress-fill"></div>
+        </div>
+        <div style="font-size: 11px; color: #94a3b8; margin-top: 6px;">
+          Elige y confirma tu Pokémon luchador antes de que se agote el tiempo:
+        </div>
+      </div>
+
+      <!-- Grid de 6 Luchadores -->
+      <div class="char-roster-grid" id="char-select-roster-grid">
+        <div class="char-card active" data-char-dex="25" data-name="Pikachu">
+          <img src="assets/pokemon/25/Idle.png" alt="Pikachu">
+          <span class="char-card-name">Pikachu</span>
+          <span class="char-card-tag" style="color: #facc15;">Eléctrico · Ágil</span>
+        </div>
+        <div class="char-card" data-char-dex="1" data-name="Bulbasaur">
+          <img src="assets/pokemon/1/Idle.png" alt="Bulbasaur">
+          <span class="char-card-name">Bulbasaur</span>
+          <span class="char-card-tag" style="color: #10b981;">Planta · Control</span>
+        </div>
+        <div class="char-card" data-char-dex="312" data-name="Minun y Plusle">
+          <img src="assets/pokemon/312/Idle.png" alt="Minun y Plusle">
+          <span class="char-card-name">Minun & Plusle</span>
+          <span class="char-card-tag" style="color: #38bdf8;">Dúo Eléctrico</span>
+        </div>
+        <div class="char-card" data-char-dex="94" data-name="Gengar">
+          <img src="assets/pokemon/94/Idle.png" alt="Gengar">
+          <span class="char-card-name">Gengar</span>
+          <span class="char-card-tag" style="color: #a855f7;">Fantasma · Trampas</span>
+        </div>
+        <div class="char-card" data-char-dex="39" data-name="Jigglypuff">
+          <img src="assets/pokemon/39/Idle.png" alt="Jigglypuff">
+          <span class="char-card-name">Jigglypuff</span>
+          <span class="char-card-tag" style="color: #f472b6;">Normal/Hada · Canto</span>
+        </div>
+        <div class="char-card" data-char-dex="6" data-name="Charizard">
+          <img src="assets/pokemon/6/Idle.png" alt="Charizard">
+          <span class="char-card-name">Charizard</span>
+          <span class="char-card-tag" style="color: #f97316;">Fuego/Volador · Pesado</span>
+        </div>
+      </div>
+
+      <!-- Previsualización Dual en Vivo: Tu Selección vs Selección del Rival -->
+      <div class="char-dual-preview-grid">
+        <!-- Tu Luchador -->
+        <div class="char-preview-box my-box">
+          <div class="char-preview-header">
+            <span class="preview-role-label">Tu Elección</span>
+            <span class="preview-status-pill selecting" id="my-char-status-pill">Eligiendo...</span>
+          </div>
+          <div class="char-preview-body">
+            <img src="assets/pokemon/25/Idle.png" id="my-char-preview-img" alt="Tu Selección">
+            <div>
+              <div class="char-preview-title" id="my-char-preview-name">Pikachu</div>
+              <div class="char-preview-subtitle" id="my-char-preview-desc">Eléctrico · Peso: 6.0kg</div>
+            </div>
+          </div>
+          <button type="button" class="btn-confirm-char" id="btn-confirm-char">
+            ✓ CONFIRMAR LUCHADOR
+          </button>
+        </div>
+
+        <!-- Luchador del Rival (En Vivo) -->
+        <div class="char-preview-box rival-box">
+          <div class="char-preview-header">
+            <span class="preview-role-label">Elección del Rival</span>
+            <span class="preview-status-pill selecting" id="rival-char-status-pill">⏳ Eligiendo...</span>
+          </div>
+          <div class="char-preview-body">
+            <img src="assets/pokemon/1/Idle.png" id="rival-char-preview-img" alt="Selección Rival">
+            <div>
+              <div class="char-preview-title" id="rival-char-preview-name">Bulbasaur</div>
+              <div class="char-preview-subtitle" id="rival-char-preview-desc">Planta · Peso: 6.9kg</div>
+            </div>
+          </div>
+          <div style="font-size: 11px; color: #94a3b8; text-align: center; padding: 10px 0;">
+            Sincronizado en tiempo real
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
 
     </div>
   </div>

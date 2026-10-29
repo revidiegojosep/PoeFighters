@@ -34,8 +34,8 @@ class OnlineAntiCheat {
     // 1. Verificación de Secuencia de Paquetes (Anti-Replay Attack con tolerancia a fluctuaciones P2P/HTTP)
     if (incomingState.seq !== undefined) {
       if (incomingState.seq <= this.lastPacketSeq && this.lastPacketSeq !== -1) {
-        // Permitir paquetes que contengan eventos críticos de acción o impacto aunque haya jitter
-        if (!incomingState.action && !incomingState.hitEvent && (this.lastPacketSeq - incomingState.seq > 3)) {
+        // Permitir paquetes a menos que sean excesivamente antiguos (> 20 secuencias de retraso)
+        if (!incomingState.action && !incomingState.hitEvent && (this.lastPacketSeq - incomingState.seq > 20)) {
           return null;
         }
       } else {
@@ -140,12 +140,14 @@ class OnlineManager {
 
     this.selectedDex = 25; // Pikachu por defecto
     this.selectedItem = null;
+    this.isReady = false;
 
     // WebRTC Peer Connection
     this.peerConnection = null;
     this.dataChannel = null;
     this.isRtcConnected = false;
     this.lastRtcPacketTime = 0;
+    this.lastRtcPacketReceivedTime = 0;
     this.addedCandidates = new Set();
 
     // Sincronización HTTP (No superpuesta)
@@ -156,7 +158,12 @@ class OnlineManager {
     this.packetSeq = 0;
     this.ping = 0;
 
-    // Draft de objetos
+    // Selección de personajes (30 segundos)
+    this.charSelectTimeRemaining = 30.0;
+    this.charSelectInterval = null;
+    this.charConfirmed = false;
+
+    // Draft de objetos (20 segundos)
     this.draftTimeRemaining = 20.0;
     this.draftInterval = null;
 
@@ -171,8 +178,44 @@ class OnlineManager {
     });
   }
 
-  async setSelectedFighter(dex) {
+  /**
+   * Marcar estado de Listo (Ready) en el Lobby
+   */
+  async setReady(isReady = true) {
+    this.isReady = !!isReady;
+    if (this.roomCode && this.token) {
+      try {
+        const res = await fetch(`${this.apiBase}?action=set_ready`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            code: this.roomCode,
+            token: this.token,
+            ready: this.isReady
+          })
+        });
+        const data = await res.json();
+        if (data.success && data.room) {
+          const prevStatus = this.status;
+          this.room = data.room;
+          this.status = data.room.status;
+          if (window.onOnlineRoomUpdated) window.onOnlineRoomUpdated(this.room, this.ping);
+          if (prevStatus !== this.status) {
+            this._handleRoomStatusTransition(this.status);
+          }
+        }
+      } catch (e) {
+        console.warn('[OnlineManager] Error en setReady:', e);
+      }
+    }
+  }
+
+  /**
+   * Seleccionar o confirmar personaje durante la fase de 30s
+   */
+  async selectCharacter(dex, confirmed = false) {
     this.selectedDex = parseInt(dex, 10) || 25;
+    if (confirmed) this.charConfirmed = true;
     if (this.roomCode && this.token) {
       try {
         const res = await fetch(`${this.apiBase}?action=select_fighter`, {
@@ -181,18 +224,28 @@ class OnlineManager {
           body: JSON.stringify({
             code: this.roomCode,
             token: this.token,
-            dex: this.selectedDex
+            dex: this.selectedDex,
+            confirmed: !!confirmed
           })
         });
         const data = await res.json();
         if (data.success && data.room) {
+          const prevStatus = this.status;
           this.room = data.room;
+          this.status = data.room.status;
           if (window.onOnlineRoomUpdated) window.onOnlineRoomUpdated(this.room, this.ping);
+          if (prevStatus !== this.status) {
+            this._handleRoomStatusTransition(this.status);
+          }
         }
       } catch (e) {
         console.warn('[OnlineManager] Error al sincronizar selección de luchador:', e);
       }
     }
+  }
+
+  async setSelectedFighter(dex) {
+    return this.selectCharacter(dex, false);
   }
 
   /**
@@ -406,9 +459,24 @@ class OnlineManager {
   _handleRoomStatusTransition(newStatus) {
     this.status = newStatus;
     if (this.room) this.room.status = newStatus;
-    if (newStatus === 'item_draft') {
+
+    if (newStatus === 'char_select') {
+      this._startCharSelect();
+    } else if (newStatus === 'item_draft') {
+      if (this.charSelectInterval) {
+        clearInterval(this.charSelectInterval);
+        this.charSelectInterval = null;
+      }
       this._startItemDraft();
     } else if (newStatus === 'playing') {
+      if (this.charSelectInterval) {
+        clearInterval(this.charSelectInterval);
+        this.charSelectInterval = null;
+      }
+      if (this.draftInterval) {
+        clearInterval(this.draftInterval);
+        this.draftInterval = null;
+      }
       this._launchOnlineBattle();
     } else if (newStatus === 'abandoned') {
       this.handleRoomAbandoned(this.room?.abandoned_by);
@@ -416,17 +484,49 @@ class OnlineManager {
   }
 
   /**
+   * Fase de Selección de Personajes (Cuenta atrás oficial de 30 Segundos)
+   */
+  _startCharSelect() {
+    const totalDuration = 30.0;
+    const startTime = Date.now();
+    this.charSelectTimeRemaining = totalDuration;
+    this.charConfirmed = false;
+    if (window.onOnlineStartCharSelect) {
+      window.onOnlineStartCharSelect(this.charSelectTimeRemaining, this.room);
+    }
+
+    if (this.charSelectInterval) clearInterval(this.charSelectInterval);
+    this.charSelectInterval = setInterval(() => {
+      const elapsed = (Date.now() - startTime) / 1000;
+      this.charSelectTimeRemaining = Math.max(0, totalDuration - elapsed);
+      if (window.onOnlineCharSelectTick) {
+        window.onOnlineCharSelectTick(Math.ceil(this.charSelectTimeRemaining), this.room);
+      }
+      if (this.charSelectTimeRemaining <= 0) {
+        clearInterval(this.charSelectInterval);
+        this.charSelectInterval = null;
+        if (!this.charConfirmed) {
+          this.selectCharacter(this.selectedDex || 25, true);
+        }
+      }
+    }, 200);
+  }
+
+  /**
    * Fase del Draft de Objetos (20 Segundos)
    */
   _startItemDraft() {
-    this.draftTimeRemaining = 20.0;
+    const totalDuration = 20.0;
+    const startTime = Date.now();
+    this.draftTimeRemaining = totalDuration;
     if (window.onOnlineStartDraft) {
       window.onOnlineStartDraft(this.draftTimeRemaining);
     }
 
     if (this.draftInterval) clearInterval(this.draftInterval);
     this.draftInterval = setInterval(() => {
-      this.draftTimeRemaining = Math.max(0, this.draftTimeRemaining - 0.25);
+      const elapsed = (Date.now() - startTime) / 1000;
+      this.draftTimeRemaining = Math.max(0, totalDuration - elapsed);
       if (window.onOnlineDraftTick) {
         window.onOnlineDraftTick(Math.ceil(this.draftTimeRemaining));
       }
@@ -437,7 +537,7 @@ class OnlineManager {
           this.pickDraftItem('restos');
         }
       }
-    }, 250);
+    }, 200);
   }
 
   /**
@@ -457,8 +557,8 @@ class OnlineManager {
       window.onOnlineBattleStart({
         room: this.room,
         role: this.role,
-        myDex: this.selectedDex,
-        rivalDex: this.role === 'host' ? this.room.p2?.dex : this.room.p1?.dex,
+        myDex: this.role === 'host' ? (this.room?.p1?.dex || this.selectedDex || 25) : (this.room?.p2?.dex || this.selectedDex || 1),
+        rivalDex: this.role === 'host' ? (this.room?.p2?.dex || 1) : (this.room?.p1?.dex || 25),
         stage: this.room.stage || 'BATTLEFIELD',
         itemsEnabled: this.room.rules?.itemsEnabled,
         p1Item: this.room.p1?.item,
@@ -541,6 +641,8 @@ class OnlineManager {
     };
 
     this.dataChannel.onmessage = (event) => {
+      this.lastRtcPacketReceivedTime = performance.now();
+      this.isRtcConnected = true;
       this._handleIncomingPacket(event.data);
     };
   }
@@ -575,16 +677,18 @@ class OnlineManager {
         await this.peerConnection.setRemoteDescription(new RTCSessionDescription(signals.answer));
       }
 
-      // 3. Procesar candidatos ICE sin duplicados
-      const myCandidatesKey = this.role === 'host' ? 'candidates_p2' : 'candidates_p1';
-      if (signals[myCandidatesKey] && Array.isArray(signals[myCandidatesKey])) {
-        for (const c of signals[myCandidatesKey]) {
-          const sig = `${c.candidate}_${c.sdpMid}_${c.sdpMLineIndex}`;
-          if (!this.addedCandidates.has(sig)) {
-            this.addedCandidates.add(sig);
-            try {
-              await this.peerConnection.addIceCandidate(new RTCIceCandidate(c));
-            } catch (err) {}
+      // 3. Procesar candidatos ICE SOLO cuando remoteDescription ya esté establecido
+      if (this.peerConnection.remoteDescription) {
+        const myCandidatesKey = this.role === 'host' ? 'candidates_p2' : 'candidates_p1';
+        if (signals[myCandidatesKey] && Array.isArray(signals[myCandidatesKey])) {
+          for (const c of signals[myCandidatesKey]) {
+            const sig = `${c.candidate}_${c.sdpMid}_${c.sdpMLineIndex}`;
+            if (!this.addedCandidates.has(sig)) {
+              try {
+                await this.peerConnection.addIceCandidate(new RTCIceCandidate(c));
+                this.addedCandidates.add(sig);
+              } catch (err) {}
+            }
           }
         }
       }
@@ -711,17 +815,18 @@ class OnlineManager {
     const isWebRtcLive = this.isRtcConnected && 
                          this.dataChannel && 
                          this.dataChannel.readyState === 'open' &&
-                         (now - this.lastRtcPacketTime < 2500);
+                         this.lastRtcPacketReceivedTime > 0 &&
+                         (now - this.lastRtcPacketReceivedTime < 2500);
 
     if (isWebRtcLive) {
       try {
         this.dataChannel.send(JSON.stringify(payload));
         if (window.onOnlineNetStatus) window.onOnlineNetStatus('p2p', this.ping || 6);
 
-        // En modo P2P a 60 FPS, solo enviamos un ping HTTP liviano cada 5 segundos para mantener viva la sala PHP
-        if (!this.isHttpInFlight && (now - this.lastHttpSendTime >= 5000)) {
+        // En modo P2P a 60 FPS, enviamos HTTP sync periódico cada 200ms para mantener el canal HTTP caliente y redundante
+        if (!this.isHttpInFlight && (now - this.lastHttpSendTime >= 200)) {
           this.lastHttpSendTime = now;
-          this._httpSync(payload, true);
+          this._httpSync(payload, false);
         }
         return;
       } catch (err) {
@@ -733,9 +838,9 @@ class OnlineManager {
       } catch (e) {}
     }
 
-    // 2. HTTP Fallback Sync: ~13 req/s (intervalo de 75ms)
-    // Reduce las peticiones más de un 50% frente a los 35ms anteriores sin perder fluidez física
-    if (!this.isHttpInFlight && (now - this.lastHttpSendTime >= 75)) {
+    // 2. HTTP Fallback Sync: ~15 req/s (intervalo de 65ms)
+    // Garantiza sincronización continua e instantánea en caso de que WebRTC falle
+    if (!this.isHttpInFlight && (now - this.lastHttpSendTime >= 65)) {
       this.lastHttpSendTime = now;
       this._httpSync(payload, false);
     }
@@ -905,6 +1010,11 @@ class OnlineManager {
       }
     }
 
+    // 3.5. Replicar entradas de teclado / mando del rival para fluidez visual completa
+    if (safe.input) {
+      rivalFighter.input = Object.assign({}, safe.input);
+    }
+
     // 4. Orientación, Apuntado y Estados de Animación continuos
     if (safe.facing !== undefined) {
       rivalFighter.facing = safe.facing;
@@ -965,7 +1075,7 @@ class OnlineManager {
       if (Math.abs(dx) > 120 || safe.state === 'RESPAWN' || safe.state === 'KO') {
         rivalFighter.x = safe.x;
       } else if (Math.abs(dx) > 1.0) {
-        rivalFighter.x += dx * 0.70;
+        rivalFighter.x += dx * 0.85;
       } else {
         rivalFighter.x = safe.x;
       }
@@ -976,7 +1086,7 @@ class OnlineManager {
       if (Math.abs(dy) > 100 || safe.state === 'RESPAWN' || safe.state === 'KO') {
         rivalFighter.y = safe.y;
       } else if (Math.abs(dy) > 1.0) {
-        rivalFighter.y += dy * 0.70;
+        rivalFighter.y += dy * 0.85;
       } else {
         rivalFighter.y = safe.y;
       }
@@ -1047,6 +1157,10 @@ class OnlineManager {
     this._stopPolling();
     if (this.syncInterval) clearInterval(this.syncInterval);
     if (this.draftInterval) clearInterval(this.draftInterval);
+    if (this.charSelectInterval) clearInterval(this.charSelectInterval);
+    this.charSelectInterval = null;
+    this.isReady = false;
+    this.charConfirmed = false;
 
     if (this.dataChannel) {
       try { this.dataChannel.close(); } catch (e) {}
@@ -1073,6 +1187,9 @@ class OnlineManager {
 
     const onlineModal = document.getElementById('online-modal');
     if (onlineModal) onlineModal.classList.remove('open');
+
+    const charModal = document.getElementById('char-select-modal');
+    if (charModal) charModal.classList.remove('open');
 
     const draftModal = document.getElementById('item-draft-modal');
     if (draftModal) draftModal.classList.remove('open');

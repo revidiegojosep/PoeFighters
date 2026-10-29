@@ -2913,6 +2913,333 @@ body {
   box-shadow: 0 0 30px rgba(16, 185, 129, 0.65);
 }
 
+/* Avatar Retro en Slot de Sala */
+.online-slot-avatar {
+  font-size: 26px;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.8);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.online-slot-ready-indicator {
+  margin-left: auto;
+}
+
+.ready-pill {
+  font-size: 10px;
+  font-weight: 800;
+  padding: 4px 8px;
+  border-radius: 6px;
+  letter-spacing: 0.5px;
+  display: inline-block;
+  text-transform: uppercase;
+}
+
+.ready-pill.not-ready {
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid #ef4444;
+  color: #f87171;
+}
+
+.ready-pill.ready {
+  background: rgba(16, 185, 129, 0.25);
+  border: 1px solid #10b981;
+  color: #34d399;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+}
+
+/* Banner de Estado en el Lobby */
+.lobby-status-banner {
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 8px;
+  padding: 10px 14px;
+  text-align: center;
+  font-size: 12px;
+  color: #cbd5e1;
+  margin: 12px 0;
+}
+
+/* Botón Interactivo de "Listo" en el Lobby */
+.btn-online-ready {
+  width: 100%;
+  max-width: 320px;
+  padding: 14px 24px;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #ffffff;
+  border: 2px solid #34d399;
+  border-radius: 12px;
+  font-family: 'Press Start 2P', monospace, sans-serif;
+  font-size: 12px;
+  cursor: pointer;
+  box-shadow: 0 0 24px rgba(16, 185, 129, 0.45);
+  transition: all 0.25s ease;
+  animation: pulse-ready-glow 2s infinite ease-in-out;
+}
+
+@keyframes pulse-ready-glow {
+  0%, 100% { box-shadow: 0 0 15px rgba(16, 185, 129, 0.35); transform: scale(1); }
+  50% { box-shadow: 0 0 28px rgba(16, 185, 129, 0.7); transform: scale(1.02); }
+}
+
+.btn-online-ready:disabled {
+  background: #334155 !important;
+  border-color: #475569 !important;
+  color: #94a3b8 !important;
+  cursor: not-allowed !important;
+  box-shadow: none !important;
+  animation: none !important;
+  transform: none !important;
+}
+
+.btn-online-ready.is-ready {
+  background: linear-gradient(135deg, #059669, #047857) !important;
+  border-color: #10b981 !important;
+  color: #ecfdf5 !important;
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.6) !important;
+}
+
+/* ==========================================================================
+   ⚔️ MODAL: SELECCIÓN DE PERSONAJE (CUENTA ATRÁS DE 30 SEGUNDOS)
+   ========================================================================== */
+.char-select-modal-content {
+  max-width: 860px !important;
+  background: #090e1c !important;
+  border: 2px solid #facc15 !important;
+  box-shadow: 0 0 50px rgba(250, 204, 21, 0.35), 0 25px 60px rgba(0, 0, 0, 0.9) !important;
+}
+
+.char-timer-wrap {
+  text-align: center;
+  margin-bottom: 18px;
+}
+
+.char-countdown-num {
+  font-family: 'Press Start 2P', monospace, sans-serif;
+  font-size: 38px;
+  color: #facc15;
+  text-shadow: 0 0 20px rgba(250, 204, 21, 0.8);
+  display: block;
+  margin-bottom: 8px;
+}
+
+.char-progress-bar-bg {
+  width: 100%;
+  height: 8px;
+  background: rgba(15, 23, 42, 0.9);
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid rgba(250, 204, 21, 0.3);
+}
+
+.char-progress-bar-fill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #10b981, #facc15, #ef4444);
+  transition: width 0.25s linear;
+}
+
+/* Roster Grid de 6 Luchadores */
+.char-roster-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.char-card {
+  background: rgba(15, 23, 42, 0.85);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 10px 6px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.char-card:hover {
+  background: rgba(30, 41, 59, 0.9);
+  border-color: #38bdf8;
+  transform: translateY(-3px);
+  box-shadow: 0 6px 18px rgba(56, 189, 248, 0.3);
+}
+
+.char-card.active {
+  border-color: #facc15;
+  background: rgba(250, 204, 21, 0.15);
+  box-shadow: 0 0 20px rgba(250, 204, 21, 0.5);
+}
+
+.char-card.active::after {
+  content: "✓";
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: #facc15;
+  color: #0f172a;
+  font-size: 10px;
+  font-weight: 900;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.char-card img {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  margin-bottom: 6px;
+  transition: transform 0.2s ease;
+}
+
+.char-card:hover img {
+  transform: scale(1.12);
+}
+
+.char-card-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffffff;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.char-card-tag {
+  font-size: 9px;
+  color: #94a3b8;
+  display: block;
+  margin-top: 2px;
+}
+
+/* Previsualización Dual en Vivo */
+.char-dual-preview-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 10px;
+}
+
+.char-preview-box {
+  background: rgba(15, 23, 42, 0.8);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+
+.char-preview-box.my-box {
+  border-color: rgba(56, 189, 248, 0.5);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(56, 189, 248, 0.1));
+}
+
+.char-preview-box.rival-box {
+  border-color: rgba(249, 115, 22, 0.5);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(249, 115, 22, 0.1));
+}
+
+.char-preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.preview-role-label {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #cbd5e1;
+}
+
+.preview-status-pill {
+  font-size: 10px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 5px;
+  text-transform: uppercase;
+}
+
+.preview-status-pill.selecting {
+  background: rgba(250, 204, 21, 0.2);
+  border: 1px solid #facc15;
+  color: #facc15;
+}
+
+.preview-status-pill.confirmed {
+  background: rgba(16, 185, 129, 0.2);
+  border: 1px solid #10b981;
+  color: #34d399;
+}
+
+.char-preview-body {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.char-preview-body img {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.char-preview-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.char-preview-subtitle {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+.btn-confirm-char {
+  width: 100%;
+  padding: 10px;
+  background: linear-gradient(135deg, #facc15, #eab308);
+  color: #0f172a;
+  border: none;
+  border-radius: 8px;
+  font-family: 'Press Start 2P', monospace, sans-serif;
+  font-size: 10px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 0 16px rgba(250, 204, 21, 0.4);
+}
+
+.btn-confirm-char:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 24px rgba(250, 204, 21, 0.65);
+}
+
+.btn-confirm-char.confirmed {
+  background: #10b981 !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.5) !important;
+  cursor: default !important;
+}
+
 /* ==========================================================================
    🎒 DRAFT DE OBJETOS (VENTANA DE 20 SEGUNDOS)
    ========================================================================== */

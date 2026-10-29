@@ -112,7 +112,7 @@ if ($action === 'create_room' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $room = [
         'code' => $code,
-        'status' => 'waiting', // waiting | lobby | item_draft | playing | ended
+        'status' => 'waiting', // waiting | lobby | char_select | item_draft | playing | ended
         'created_at' => time(),
         'updated_at' => microtime(true),
         'host_token' => $hostToken,
@@ -128,7 +128,7 @@ if ($action === 'create_room' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             'name' => 'Jugador 1 (Host)',
             'dex' => $dex,
             'item' => null,
-            'ready' => true,
+            'ready' => false,
             'last_seen' => microtime(true)
         ],
         'p2' => null,
@@ -137,6 +137,14 @@ if ($action === 'create_room' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             'answer' => null,
             'candidates_p1' => [],
             'candidates_p2' => []
+        ],
+        'char_select' => [
+            'started_at' => 0,
+            'duration' => 30, // 30 Segundos
+            'p1_dex' => $dex,
+            'p2_dex' => 1,
+            'p1_confirmed' => false,
+            'p2_confirmed' => false
         ],
         'item_draft' => [
             'started_at' => 0,
@@ -200,9 +208,12 @@ if ($action === 'join_room' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         'name' => 'Jugador 2 (Rival)',
         'dex' => $dex,
         'item' => null,
-        'ready' => true,
+        'ready' => false,
         'last_seen' => microtime(true)
     ];
+    if (isset($room['char_select'])) {
+        $room['char_select']['p2_dex'] = $dex;
+    }
 
     saveRoom($file, $room);
 
@@ -246,19 +257,42 @@ if ($action === 'get_room') {
         $room['p2']['last_seen'] = $now;
     }
 
-    // 🚪 DETECCIÓN DE ABANDONO: Si un jugador se desconecta durante draft o partida
-    if (in_array($room['status'], ['lobby', 'item_draft', 'playing'])) {
+    // 🚪 DETECCIÓN DE ABANDONO: Si un jugador se desconecta prolongadamente
+    if (in_array($room['status'], ['lobby', 'char_select', 'item_draft', 'playing'])) {
         $p1Seen = $room['p1']['last_seen'] ?? 0;
         $p2Seen = $room['p2']['last_seen'] ?? 0;
-        $timeout = 25.0; // 25 segundos de tolerancia para redes móviles e Internet
+        $timeout = 35.0; // 35 segundos de tolerancia para acomodar cambios de pestaña y WebRTC
 
-        if ($room['status'] === 'playing' || $room['status'] === 'item_draft') {
+        if ($room['status'] === 'playing' || $room['status'] === 'item_draft' || $room['status'] === 'char_select') {
             if ($p1Seen > 0 && ($now - $p1Seen > $timeout)) {
                 $room['status'] = 'abandoned';
                 $room['abandoned_by'] = 'p1';
             } elseif ($p2Seen > 0 && ($now - $p2Seen > $timeout)) {
                 $room['status'] = 'abandoned';
                 $room['abandoned_by'] = 'p2';
+            }
+        }
+    }
+
+    // ⏱️ Verificar si la cuenta atrás de 30s de Selección de Personajes ha expirado o ambos confirmaron
+    if ($room['status'] === 'char_select') {
+        $elapsed = $now - ($room['char_select']['started_at'] ?: $now);
+        $bothConfirmed = !empty($room['char_select']['p1_confirmed']) && !empty($room['char_select']['p2_confirmed']);
+        if ($elapsed >= ($room['char_select']['duration'] ?? 30) || $bothConfirmed) {
+            if (isset($room['p1'])) $room['p1']['dex'] = $room['char_select']['p1_dex'] ?? ($room['p1']['dex'] ?? 25);
+            if (isset($room['p2'])) $room['p2']['dex'] = $room['char_select']['p2_dex'] ?? ($room['p2']['dex'] ?? 1);
+
+            if (!empty($room['rules']['itemsEnabled'])) {
+                $room['status'] = 'item_draft';
+                $room['item_draft']['started_at'] = $now;
+                $room['item_draft']['duration'] = 20;
+                $room['item_draft']['p1_choice'] = null;
+                $room['item_draft']['p2_choice'] = null;
+            } else {
+                $room['status'] = 'playing';
+                $room['battle_state']['started_at'] = $now;
+                if (isset($room['p1'])) $room['p1']['item'] = null;
+                if (isset($room['p2'])) $room['p2']['item'] = null;
             }
         }
     }
@@ -317,12 +351,64 @@ if ($action === 'update_settings' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // -----------------------------------------------------------------------------
-// 4.5. SELECCIONAR / CAMBIAR LUCHADOR (Host o Guest)
+// 4.5. DARLE A LISTO / READY (Ambos jugadores deben confirmar para iniciar 30s de selección)
+// -----------------------------------------------------------------------------
+if ($action === 'set_ready' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $code = $payload['code'] ?? '';
+    $token = $payload['token'] ?? '';
+    $ready = !empty($payload['ready']);
+
+    $file = getRoomFile($roomsDir, $code);
+    $room = loadRoom($file);
+
+    if (!$room) {
+        http_response_code(404);
+        echo json_encode(['success' => false, 'error' => 'Sala no encontrada']);
+        exit;
+    }
+
+    $isHost = ($room['host_token'] === $token);
+    $isGuest = ($room['guest_token'] === $token);
+    if (!$isHost && !$isGuest) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'error' => 'Token inválido']);
+        exit;
+    }
+
+    if ($isHost && isset($room['p1'])) {
+        $room['p1']['ready'] = $ready;
+    } elseif ($isGuest && isset($room['p2'])) {
+        $room['p2']['ready'] = $ready;
+    }
+
+    // Si ambos están conectados y ambos le han dado a listo: Inicia la cuenta atrás de 30 segundos
+    if (!empty($room['p1']) && !empty($room['p2']) && !empty($room['p1']['ready']) && !empty($room['p2']['ready'])) {
+        $room['status'] = 'char_select';
+        $now = microtime(true);
+        $room['char_select'] = [
+            'started_at' => $now,
+            'duration' => 30, // 30 Segundos oficiales
+            'p1_dex' => $room['p1']['dex'] ?? 25,
+            'p2_dex' => $room['p2']['dex'] ?? 1,
+            'p1_confirmed' => false,
+            'p2_confirmed' => false
+        ];
+    }
+
+    saveRoom($file, $room);
+
+    echo json_encode(['success' => true, 'room' => sanitizeRoom($room)]);
+    exit;
+}
+
+// -----------------------------------------------------------------------------
+// 4.6. SELECCIONAR / CONFIRMAR LUCHADOR EN LA CUENTA ATRÁS DE 30s (Host o Guest)
 // -----------------------------------------------------------------------------
 if ($action === 'select_fighter' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $code = $payload['code'] ?? '';
     $token = $payload['token'] ?? '';
     $dex = (int)($payload['dex'] ?? 25);
+    $confirmed = !empty($payload['confirmed']);
     $validDex = [25, 6, 1, 312, 94, 39];
     if (!in_array($dex, $validDex)) $dex = 25;
 
@@ -343,10 +429,42 @@ if ($action === 'select_fighter' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    if (!isset($room['char_select']) || !is_array($room['char_select'])) {
+        $room['char_select'] = [
+            'started_at' => microtime(true),
+            'duration' => 30,
+            'p1_dex' => 25,
+            'p2_dex' => 1,
+            'p1_confirmed' => false,
+            'p2_confirmed' => false
+        ];
+    }
+
     if ($isHost && isset($room['p1'])) {
         $room['p1']['dex'] = $dex;
+        $room['char_select']['p1_dex'] = $dex;
+        if ($confirmed) $room['char_select']['p1_confirmed'] = true;
     } elseif ($isGuest && isset($room['p2'])) {
         $room['p2']['dex'] = $dex;
+        $room['char_select']['p2_dex'] = $dex;
+        if ($confirmed) $room['char_select']['p2_confirmed'] = true;
+    }
+
+    // Si ambos ya confirmaron su personaje durante char_select, avanzar inmediatamente
+    if ($room['status'] === 'char_select' && !empty($room['char_select']['p1_confirmed']) && !empty($room['char_select']['p2_confirmed'])) {
+        $now = microtime(true);
+        if (!empty($room['rules']['itemsEnabled'])) {
+            $room['status'] = 'item_draft';
+            $room['item_draft']['started_at'] = $now;
+            $room['item_draft']['duration'] = 20;
+            $room['item_draft']['p1_choice'] = null;
+            $room['item_draft']['p2_choice'] = null;
+        } else {
+            $room['status'] = 'playing';
+            $room['battle_state']['started_at'] = $now;
+            if (isset($room['p1'])) $room['p1']['item'] = null;
+            if (isset($room['p2'])) $room['p2']['item'] = null;
+        }
     }
 
     saveRoom($file, $room);
@@ -410,7 +528,7 @@ if ($action === 'start_game' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 // -----------------------------------------------------------------------------
 // 6. ELEGIR OBJETO EN EL DRAFT DE 20s
 // -----------------------------------------------------------------------------
-if ($action === 'pick_item' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+if (($action === 'pick_item' || $action === 'pick_draft_item') && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $code = $payload['code'] ?? '';
     $token = $payload['token'] ?? '';
     $itemId = $payload['item_id'] ?? '';
@@ -499,7 +617,7 @@ if ($action === 'signal' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 // -----------------------------------------------------------------------------
 // 8. FALLBACK SYNC & ANTI-CHEAT VALIDATION (Atomic Dedicated State Files)
 // -----------------------------------------------------------------------------
-if ($action === 'sync') {
+if ($action === 'sync' || $action === 'sync_state') {
     $code = $payload['code'] ?? $_GET['code'] ?? $_POST['code'] ?? '';
     $token = $payload['token'] ?? $_GET['token'] ?? $_POST['token'] ?? '';
     $state = $payload['state'] ?? [];
@@ -596,6 +714,7 @@ if ($action === 'sync') {
     echo json_encode([
         'success' => true,
         'rival_state' => $rivalState,
+        'rivalState' => $rivalState,
         'status' => $room['status']
     ]);
     exit;

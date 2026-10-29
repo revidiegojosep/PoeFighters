@@ -162,9 +162,14 @@ class PhysicsEngine {
       fighter.vx *= airFric;
     } else {
       // Ground friction: balance update - allow longer roll over distance with shield
-      const groundFriction = fighter.state === 'ROLL' ? 0.80 : this.friction;
-      fighter.vx *= groundFriction;
-      if (Math.abs(fighter.vx) < 0.05) fighter.vx = 0;
+      // Para rivales remotos en línea (ONLINE_RIVAL), no matar su velocidad si están caminando o corriendo
+      const isOnlineRivalMoving = fighter.isDummy && window.game && window.game.p2Type === 'ONLINE_RIVAL' &&
+                                  (fighter.state === 'WALK' || fighter.state === 'DASH' || (fighter.input && (fighter.input.left || fighter.input.right)));
+      if (!isOnlineRivalMoving) {
+        const groundFriction = fighter.state === 'ROLL' ? 0.80 : this.friction;
+        fighter.vx *= groundFriction;
+        if (Math.abs(fighter.vx) < 0.05) fighter.vx = 0;
+      }
     }
 
     // Sincronización vertical continua con plataformas móviles
