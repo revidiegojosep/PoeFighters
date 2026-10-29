@@ -66,7 +66,7 @@ class Charizard extends window.Fighter {
             offsetX: 4,
             offsetY: 48,
             radius: 38,
-            damage: 10.4,
+            damage: 13.5, // +30% Buff
             baseKnockback: 25,
             knockbackScaling: 1.30,
             angle: 88,
@@ -90,7 +90,7 @@ class Charizard extends window.Fighter {
             offsetX: 6,
             offsetY: -10,
             radius: 36,
-            damage: 11.2,
+            damage: 14.6, // +30% Buff
             baseKnockback: 28,
             knockbackScaling: 1.35,
             angle: 270, // True meteor spike!
@@ -117,7 +117,7 @@ class Charizard extends window.Fighter {
             offsetX: 36,
             offsetY: 24,
             radius: 38,
-            damage: 10.0,
+            damage: 13.0, // +30% Buff
             baseKnockback: 26,
             knockbackScaling: 1.20,
             angle: 42,
@@ -141,7 +141,7 @@ class Charizard extends window.Fighter {
             offsetX: -38,
             offsetY: 20,
             radius: 40,
-            damage: 11.6,
+            damage: 15.1, // +30% Buff
             baseKnockback: 30,
             knockbackScaling: 1.30,
             angle: 140, // Knocks behind with massive power!
@@ -167,7 +167,7 @@ class Charizard extends window.Fighter {
             offsetX: 0,
             offsetY: 22,
             radius: 44,
-            damage: 8.0,
+            damage: 10.4, // +30% Buff
             baseKnockback: 20,
             knockbackScaling: 1.05,
             angle: 45,
@@ -195,7 +195,7 @@ class Charizard extends window.Fighter {
           offsetX: 10,
           offsetY: 46,
           radius: 36,
-          damage: 7.6,
+          damage: 9.9, // +30% Buff
           baseKnockback: 23,
           knockbackScaling: 1.10,
           angle: 86,
@@ -219,7 +219,7 @@ class Charizard extends window.Fighter {
           offsetX: 28,
           offsetY: 6,
           radius: 34,
-          damage: 6.8,
+          damage: 11.4, // +30% Buff // +30% Buff
           baseKnockback: 20,
           knockbackScaling: 1.00,
           angle: 25, // Low horizontal trip trajectory
@@ -243,7 +243,7 @@ class Charizard extends window.Fighter {
           offsetX: 34,
           offsetY: 22,
           radius: 38,
-          damage: 8.8,
+          damage: 11.4, // +30% Buff
           baseKnockback: 25,
           knockbackScaling: 1.15,
           angle: 40,
@@ -267,7 +267,7 @@ class Charizard extends window.Fighter {
           offsetX: 26,
           offsetY: 20,
           radius: 32,
-          damage: 5.6,
+          damage: 7.3, // +30% Buff
           baseKnockback: 16,
           knockbackScaling: 0.90,
           angle: 45,
@@ -351,37 +351,37 @@ class Charizard extends window.Fighter {
         };
 
       case 'side':
-        // Side Special: Flare Blitz (Envite Ígneo - Sin invulnerabilidad, knockback nerfeado un 15%, 50% recoil)
+        // Side Special: Flare Blitz (Envite Ígneo - Distancia +30%, Knockback +20%)
         return {
           name: '¡Envite Ígneo! (Side X)',
           anim: 'Charge',
-          animSpeed: 0.90, // Reducido 20% adicional (antes 1.12)
+          animSpeed: 0.90,
           hitboxStart: 5,
-          hitboxEnd: 30,
-          offsetX: 32,
+          hitboxEnd: 39, // Distancia extendida +30% duración de recorrido
+          offsetX: 34,
           offsetY: 22,
-          radius: 46,
+          radius: 48,
           damage: 16.8,
-          baseKnockback: 21.2, // Reducido 15% (antes 25)
-          knockbackScaling: 0.89, // Reducido 15% (antes 1.05)
+          baseKnockback: 25.4, // Knockback aumentado un 20% (antes 21.2)
+          knockbackScaling: 1.07, // Knockback scaling aumentado un 20% (antes 0.89)
           angle: 38,
           type: 'fire',
           hitlag: 10,
           cooldown: 1.05,
           onStart: (p) => {
-            p.superArmorActive = false; // Ya NO es invulnerable
+            p.superArmorActive = false;
             p.flareBlitzActive = true;
             p.flareBlitzHit = false;
-            p.vx = p.facing * 11.8; // Velocidad de embestida reducida ~10%
+            p.vx = p.facing * 14.2; // Velocidad impulsada (+30% distancia efectiva)
             window.soundEngine && window.soundEngine.playSfx('flare_blitz');
             if (window.particleManager) {
-              window.particleManager.spawnRadialBurst(p.x, p.y - 20, '#f97316', 'electric', 42);
+              window.particleManager.spawnRadialBurst(p.x, p.y - 20, '#f97316', 'electric', 46);
             }
           },
           onUpdate: (p, frame) => {
-            p.superArmorActive = false; // Sin armor
-            if (frame < 30 && p.state === 'SPECIAL') {
-              p.vx = p.facing * Math.max(6.5, 11.8 - frame * 0.24);
+            p.superArmorActive = false;
+            if (frame < 39 && p.state === 'SPECIAL') {
+              p.vx = p.facing * Math.max(7.2, 14.2 - frame * 0.20);
               if (window.particleManager && Math.random() < 0.85) {
                 window.particleManager.spawnSmoke(p.x - p.facing * 18, p.y - 14, '#f97316', 9);
                 window.particleManager.spawnHitSparks(p.x, p.y - 20, 3, 'fire');
@@ -525,7 +525,7 @@ class Charizard extends window.Fighter {
           offsetX: 8,
           offsetY: 48,
           radius: 46,
-          damage: 15.2,
+          damage: 19.8, // +30% Buff
           baseKnockback: 32,
           knockbackScaling: 1.45,
           angle: 88,
@@ -550,7 +550,7 @@ class Charizard extends window.Fighter {
           offsetX: 0,
           offsetY: 8,
           radius: 54, // Hits on both sides
-          damage: 13.6,
+          damage: 17.7, // +30% Buff
           baseKnockback: 28,
           knockbackScaling: 1.30,
           angle: 35,
@@ -577,7 +577,7 @@ class Charizard extends window.Fighter {
           offsetX: 40,
           offsetY: 24,
           radius: 48,
-          damage: 17.6,
+          damage: 22.9, // +30% Buff
           baseKnockback: 34,
           knockbackScaling: 1.45,
           angle: 36,

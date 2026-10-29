@@ -171,6 +171,60 @@
         '🎵 Canto somnífero que duerme a rivales terrestres'
       ]
     },
+    773: {
+      dex: 773,
+      name: 'Silvally',
+      title: 'La Quimera Sintética',
+      type: 'Normal',
+      typeColor: '#38bdf8',
+      badgeGradient: 'linear-gradient(135deg, #1e293b, #0284c7)',
+      weight: '100.5 kg',
+      weightCategory: 'Pesado',
+      difficulty: 'Avanzado',
+      difficultyStars: 3,
+      tier: 'S- Tier · Poder Bruto & Control',
+      stats: {
+        walkSpeed: 3.40,
+        dashSpeed: 8.80,
+        jumpForce: 12.80,
+        doubleJumpForce: 9.80,
+        weight: 100.5,
+        maxJumps: 2
+      },
+      traits: [
+        '💿 Tajo Aéreo (Neutral X) con disco que frena y regresa acelerando',
+        '⚡ Multiataque (Side X) instantáneo tras delay o cargándolo >0.3s',
+        '🔊 Alarido (Down X) en área con escalado por cercanía y debuff de -30% Atq',
+        '🌪️ Viento Cortante (Up X) con caída lenta y tornado letal al despegar'
+      ]
+    },
+    398: {
+      dex: 398,
+      name: 'Staraptor',
+      title: 'El Depredador Aéreo',
+      type: 'Normal / Volador',
+      typeColor: '#38bdf8',
+      badgeGradient: 'linear-gradient(135deg, #475569, #0284c7)',
+      weight: '24.9 kg',
+      weightCategory: 'Medio',
+      difficulty: 'Avanzado',
+      difficultyStars: 3,
+      tier: 'A+ Tier · Velocidad & Presión Aérea',
+      stats: {
+        walkSpeed: 4.80,
+        dashSpeed: 10.40,
+        jumpForce: 13.50,
+        doubleJumpForce: 7.80,
+        weight: 24.9,
+        maxJumps: 5
+      },
+      traits: [
+        '🌪️ 5 Saltos ágiles para un dominio aéreo sin precedentes',
+        '🌪️ Torbellino neutral que atrapa al rival en un vórtice cortante',
+        '🦅 Pájaro Osado (Brave Bird) cargable en línea recta sin gravedad',
+        '🛡️ Detección (Detect): contraataque instantáneo al recibir impactos'
+      ]
+    },
     700: {
       dex: 700,
       name: 'Sylveon',
@@ -646,6 +700,26 @@
           animName = 'Attack';
           vfx = 'ghost_claw';
         }
+      } else if (dex === 773) { // Silvally
+        if (isSpecial) {
+          if (this.selectedMoveKey.includes('Neutral')) { animName = 'Shoot'; vfx = 'air_slash_disc'; }
+          else if (this.selectedMoveKey.includes('Lateral')) { animName = 'Attack'; vfx = 'multi_attack'; }
+          else if (this.selectedMoveKey.includes('Arriba')) { animName = 'Charge'; vfx = 'razor_wind'; }
+          else if (this.selectedMoveKey.includes('Abajo')) { animName = 'Shoot'; vfx = 'snarl_roar'; }
+        } else {
+          animName = 'Attack';
+          vfx = 'prismatic_slash';
+        }
+      } else if (dex === 398) { // Staraptor
+        if (isSpecial) {
+          if (this.selectedMoveKey.includes('Neutral')) { animName = 'Shoot'; vfx = 'whirlwind'; }
+          else if (this.selectedMoveKey.includes('Lateral')) { animName = 'Charge'; vfx = 'brave_bird'; }
+          else if (this.selectedMoveKey.includes('Arriba')) { animName = 'Attack'; vfx = 'staraptor_fly'; }
+          else if (this.selectedMoveKey.includes('Abajo')) { animName = 'Charge'; vfx = 'detect'; }
+        } else {
+          animName = 'Attack';
+          vfx = 'feather_slash';
+        }
       } else if (dex === 312) { // Minun & Plusle
         if (isSpecial) {
           if (this.selectedMoveKey.includes('Neutral')) { animName = 'Shoot'; vfx = 'duo_spark'; }
@@ -999,6 +1073,119 @@
           break;
         }
 
+        case 'air_slash_disc': {
+          const cycle = (t * 1.5) % 2;
+          let discX;
+          if (cycle < 1) {
+            discX = fX + 25 + Math.sin(cycle * Math.PI * 0.5) * 85;
+          } else {
+            const ret = cycle - 1;
+            discX = fX + 110 - (ret * ret) * 95;
+          }
+          ctx.strokeStyle = '#38bdf8';
+          ctx.fillStyle = 'rgba(56, 189, 248, 0.85)';
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.ellipse(discX, fY - 24, 18, 9, t * 8, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          break;
+        }
+        case 'multi_attack': {
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.arc(fX + 30, fY - 24, 34, -Math.PI * 0.45, Math.PI * 0.45);
+          ctx.stroke();
+          ctx.strokeStyle = '#f43f5e';
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.arc(fX + 35, fY - 24, 28, -Math.PI * 0.4, Math.PI * 0.4);
+          ctx.stroke();
+          break;
+        }
+        case 'snarl_roar': {
+          const r = (t * 70) % 65;
+          ctx.strokeStyle = 'rgba(168, 85, 247, 0.85)';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(fX, fY - 24, r, 0, Math.PI * 2);
+          ctx.stroke();
+          break;
+        }
+        case 'razor_wind': {
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 2.5;
+          for (let i = 0; i < 3; i++) {
+            const rad = 10 + i * 8;
+            const a = t * 7 + i * 1.4;
+            ctx.beginPath();
+            ctx.arc(fX, fY - 24, rad, a, a + Math.PI * 0.9);
+            ctx.stroke();
+          }
+          break;
+        }
+        case 'prismatic_slash': {
+          ctx.strokeStyle = '#a855f7';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(fX + 24, fY - 24, 28, -Math.PI * 0.35, Math.PI * 0.35);
+          ctx.stroke();
+          break;
+        }
+        case 'whirlwind': {
+          const vX = fX + 45 + Math.sin(t * 3) * 15;
+          ctx.strokeStyle = 'rgba(56, 189, 248, 0.85)';
+          ctx.lineWidth = 2.5;
+          for (let i = 0; i < 4; i++) {
+            const rad = 12 + i * 7;
+            const a = t * 6 + i * 1.2;
+            ctx.beginPath();
+            ctx.arc(vX, fY - 24 + Math.sin(a) * 4, rad, a, a + Math.PI * 1.2);
+            ctx.stroke();
+          }
+          break;
+        }
+        case 'brave_bird': {
+          const dashX = fX + 35 + (t * 80) % 90;
+          ctx.fillStyle = 'rgba(239, 68, 68, 0.35)';
+          ctx.beginPath();
+          ctx.ellipse(dashX, fY - 24, 32, 10, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#ef4444';
+          ctx.lineWidth = 3;
+          ctx.stroke();
+          break;
+        }
+        case 'staraptor_fly': {
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 2;
+          for (let i = 0; i < 3; i++) {
+            const py = fY - ((t * 90 + i * 25) % 80);
+            ctx.beginPath();
+            ctx.moveTo(fX - 16, py);
+            ctx.lineTo(fX + 16, py - 10);
+            ctx.stroke();
+          }
+          break;
+        }
+        case 'detect': {
+          const pulseR = (t * 50) % 40;
+          ctx.strokeStyle = 'rgba(56, 189, 248, 0.8)';
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.arc(fX, fY - 24, pulseR, 0, Math.PI * 2);
+          ctx.stroke();
+          break;
+        }
+        case 'feather_slash': {
+          ctx.strokeStyle = '#94a3b8';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(fX + 22, fY - 24, 26, -Math.PI * 0.4, Math.PI * 0.4);
+          ctx.stroke();
+          break;
+        }
         case 'duo_spark': {
           // Intertwined double electric helix
           for (let i = 0; i < 15; i++) {

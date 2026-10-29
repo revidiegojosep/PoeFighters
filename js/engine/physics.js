@@ -105,7 +105,7 @@ class PhysicsEngine {
    * Updates fighter kinematics and handles stage/platform collisions
    */
   updateFighter(fighter, stage, dt) {
-    if (fighter.state === 'LEDGE' || fighter.state === 'LEDGE_CLIMB' || fighter.state === 'GRABBED' || fighter.state === 'GRABBING') {
+    if (fighter.state === 'LEDGE' || fighter.state === 'LEDGE_CLIMB' || fighter.state === 'GRABBED' || fighter.state === 'GRABBING' || fighter.state === 'RESPAWN' || fighter.state === 'KO') {
       fighter.vx = 0;
       fighter.vy = 0;
       return;
@@ -196,7 +196,7 @@ class PhysicsEngine {
     this.resolveStageCollisions(fighter, stage, oldX, oldY);
 
     // Blast zone check
-    if (stage.isOutsideBlastZone(fighter.x, fighter.y)) {
+    if (fighter.x > -1000 && fighter.y > -1000 && fighter.state !== 'RESPAWN' && fighter.state !== 'KO' && !isNaN(fighter.x) && !isNaN(fighter.y) && stage.isOutsideBlastZone(fighter.x, fighter.y)) {
       fighter.onBlastZoneKO(stage);
     }
   }

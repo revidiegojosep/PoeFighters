@@ -28,6 +28,9 @@ class Bulbasaur extends window.Fighter {
       scale: 2.4,
       ...config
     });
+
+    // Nerf de Defensa: Cuesta sacarle del campo -> Toma +25% de knockback
+    this.knockbackTakenMultiplier = 1.25;
   }
 
   getBasicAttackDef(dir, isAir = false) {
@@ -38,7 +41,7 @@ class Bulbasaur extends window.Fighter {
           return {
             name: 'Látigo Aéreo Elevado (Up Air)',
             anim: 'Attack',
-            animSpeed: 1.35,
+            animSpeed: 1.15,
             hitboxStart: 2,
             hitboxEnd: 9,
             offsetX: 10,
@@ -64,7 +67,7 @@ class Bulbasaur extends window.Fighter {
           return {
             name: 'Látigo Meteoro (Down Air / Spike)',
             anim: 'Attack',
-            animSpeed: 1.3,
+            animSpeed: 1.10,
             hitboxStart: 3,
             hitboxEnd: 11,
             offsetX: 8,
@@ -90,7 +93,7 @@ class Bulbasaur extends window.Fighter {
           return {
             name: 'Látigo Cepa Aéreo (Forward Air)',
             anim: 'Attack',
-            animSpeed: 1.25,
+            animSpeed: 1.06,
             hitboxStart: 3,
             hitboxEnd: 10,
             offsetX: 42,
@@ -117,7 +120,7 @@ class Bulbasaur extends window.Fighter {
           return {
             name: 'Espiral Follaje (Neutral Air)',
             anim: 'Attack',
-            animSpeed: 1.4,
+            animSpeed: 1.19,
             hitboxStart: 2,
             hitboxEnd: 8,
             offsetX: 0,
@@ -147,7 +150,7 @@ class Bulbasaur extends window.Fighter {
         return {
           name: 'Látigo Cepa Frontal (Side Tilt)',
           anim: 'Attack',
-          animSpeed: 1.2,
+          animSpeed: 1.02,
           hitboxStart: 3,
           hitboxEnd: 11,
           offsetX: 48,
@@ -173,7 +176,7 @@ class Bulbasaur extends window.Fighter {
         return {
           name: 'Látigo Superior (Up Tilt)',
           anim: 'Attack',
-          animSpeed: 1.3,
+          animSpeed: 1.10,
           hitboxStart: 2,
           hitboxEnd: 9,
           offsetX: 20,
@@ -198,7 +201,7 @@ class Bulbasaur extends window.Fighter {
         return {
           name: 'Barrido Cepa (Down Tilt)',
           anim: 'Attack',
-          animSpeed: 1.2,
+          animSpeed: 1.02,
           hitboxStart: 3,
           hitboxEnd: 9,
           offsetX: 46,
@@ -224,7 +227,7 @@ class Bulbasaur extends window.Fighter {
         return {
           name: 'Látigo Cepa (Neutral Z)',
           anim: 'Attack',
-          animSpeed: 1.4,
+          animSpeed: 1.19,
           hitboxStart: 2,
           hitboxEnd: 8,
           offsetX: 40,
@@ -255,7 +258,7 @@ class Bulbasaur extends window.Fighter {
         return {
           name: 'Absorber (Neutral X)',
           anim: 'Charge',
-          animSpeed: 1.3,
+          animSpeed: 1.10,
           hitboxStart: 2,
           hitboxEnd: 15,
           offsetX: 18,
@@ -297,7 +300,7 @@ class Bulbasaur extends window.Fighter {
           animSpeed: 1.25,
           hitboxStart: 999,
           hitboxEnd: 999,
-          cooldown: 0.55,
+          cooldown: 1.05, // +0.2s Nerf
           endLag: 0.40, // Lag de 0.4 segundos para poder empezar a moverse
           onStart: (b) => {
             b.actionLockTimer = Math.max(b.actionLockTimer, 0.40); // 0.4s lag
@@ -311,21 +314,21 @@ class Bulbasaur extends window.Fighter {
             // El spread SOLO se hace si el ataque X + lados es ANDANDO.
             // En cambio si es corriendo, aumenta la velocidad pero NO el spread.
             let angles;
-            let speed = 7.8;
+            let speed = 7.02;
             const baseKnockback = 12; // Knockback aumentado un 20%
             const knockbackScaling = 0.96;
 
             if (isWalking) {
               // Andando: SÍ se hace el spread en abanico
               angles = [-0.0456, 0, 0.0456];
-              speed = 7.8;
+              speed = 7.02;
               if (window.particleManager) {
                 window.particleManager.spawnFloatingText(b.x, b.y - b.height - 20, '🌿 ¡HOJAS NAVAJA! (Andando: Spread Activo)', '#22c55e', 15);
               }
             } else if (isRunning) {
               // Corriendo: Aumenta la velocidad +20% (9.36) pero NO el spread (ráfaga recta concentrada)
               angles = [0, 0, 0];
-              speed = 9.36;
+              speed = 8.424;
               if (window.particleManager) {
                 window.particleManager.spawnSmoke(b.x - b.facing * 14, b.y, '#ffffff', 8);
                 window.particleManager.spawnFloatingText(b.x, b.y - b.height - 20, '🌿 ¡RÁFAGA EN CARRERA! (+20% Vel, Sin Spread)', '#22c55e', 15);
@@ -333,7 +336,7 @@ class Bulbasaur extends window.Fighter {
             } else {
               // Parado / neutro: Sin spread, velocidad estándar
               angles = [0, 0, 0];
-              speed = 7.8;
+              speed = 7.02;
             }
 
             angles.forEach((offsetAngle, idx) => {
@@ -345,7 +348,7 @@ class Bulbasaur extends window.Fighter {
                 y: spawnY + (idx - 1) * 6,
                 vx: vx,
                 vy: vy,
-                radius: 14,
+                radius: 11.2,
                 damage: 5,
                 baseKnockback: baseKnockback,
                 knockbackScaling: knockbackScaling,
@@ -463,7 +466,7 @@ class Bulbasaur extends window.Fighter {
             const vx = b.facing * hSpeed;
             const vy = vSpeed;
             const seedDamage = Math.round(11 + chargeRatio * 10);
-            const seedKnockback = Math.round(15 + chargeRatio * 12);
+            const seedKnockback = Math.round((15 + chargeRatio * 12) * 0.85 * 0.80); // Nerf 20% knockback
             const seedRadius = Math.round(12 + chargeRatio * 6);
 
             if (chargeRatio > 0.25 && window.particleManager) {
@@ -485,7 +488,7 @@ class Bulbasaur extends window.Fighter {
               radius: seedRadius,
               damage: seedDamage,
               baseKnockback: seedKnockback,
-              knockbackScaling: 1.25 + chargeRatio * 0.35,
+              knockbackScaling: (1.25 + chargeRatio * 0.35) * 0.85 * 0.80, // Nerf 20% scaling
               angle: 80,
               type: 'grass',
               hitlag: 8 + Math.round(chargeRatio * 4),

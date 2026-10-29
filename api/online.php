@@ -31,10 +31,28 @@ $action = $_GET['action'] ?? '';
 $rawInput = file_get_contents('php://input');
 $payload = json_decode($rawInput, true) ?: [];
 
-function sanitizeRoom($room) {
+function sanitizeRoom($room, $token = null) {
     $copy = $room;
+    $isHost = ($token && isset($copy['host_token']) && $copy['host_token'] === $token);
+    $isGuest = ($token && isset($copy['guest_token']) && $copy['guest_token'] === $token);
+
     unset($copy['host_token']);
     unset($copy['guest_token']);
+
+    // Blind pick (Pick Ciego): Ocultar el Pokémon que está eligiendo el rival durante char_select
+    if (isset($copy['status']) && $copy['status'] === 'char_select') {
+        if ($isHost) {
+            if (isset($copy['p2']['dex'])) $copy['p2']['dex'] = null;
+            if (isset($copy['char_select']['p2_dex'])) $copy['char_select']['p2_dex'] = null;
+        } elseif ($isGuest) {
+            if (isset($copy['p1']['dex'])) $copy['p1']['dex'] = null;
+            if (isset($copy['char_select']['p1_dex'])) $copy['char_select']['p1_dex'] = null;
+        } else {
+            if (empty($copy['char_select']['p1_confirmed']) && isset($copy['p1']['dex'])) $copy['p1']['dex'] = null;
+            if (empty($copy['char_select']['p2_confirmed']) && isset($copy['p2']['dex'])) $copy['p2']['dex'] = null;
+        }
+    }
+
     return $copy;
 }
 
@@ -97,7 +115,7 @@ function saveRoom($file, $room) {
 // -----------------------------------------------------------------------------
 if ($action === 'create_room' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $dex = (int)($payload['dex'] ?? 25);
-    $validDex = [25, 6, 1, 312, 94, 39, 700];
+    $validDex = [25, 6, 1, 312, 94, 39, 700, 398, 773];
     if (!in_array($dex, $validDex)) $dex = 25;
 
     // Generar código único aleatorio de 4 dígitos
@@ -116,12 +134,20 @@ if ($action === 'create_room' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $room = [
         'code' => $code,
+        'match_id' => 1,
         'status' => 'waiting', // waiting | lobby | char_select | item_draft | playing | ended
         'created_at' => time(),
         'updated_at' => microtime(true),
         'host_token' => $hostToken,
         'guest_token' => null,
-        'stage' => $payload['stage'] ?? 'BATTLEFIELD',
+        'stage' => (function() use ($payload) {
+            $validStages = ['BATTLEFIELD', 'CINNABAR_ISLAND', 'POWER_PLANT', 'LUMIOSE_CITY', 'FINAL_DESTINATION', 'LAVENDER_TOWER'];
+            $req = $payload['stage'] ?? 'RANDOM';
+            if ($req === 'RANDOM' || !in_array($req, $validStages)) {
+                return $validStages[array_rand($validStages)];
+            }
+            return $req;
+        })(),
         'rules' => [
             'itemsEnabled' => isset($payload['itemsEnabled']) ? (bool)$payload['itemsEnabled'] : true,
             'timeLimit' => 300, // 5 Minutos (Regla Oficial)
@@ -201,7 +227,7 @@ if ($action === 'join_room' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $dex = (int)($payload['dex'] ?? 1);
-    $validDex = [25, 6, 1, 312, 94, 39, 700];
+    $validDex = [25, 6, 1, 312, 94, 39, 700, 398, 773];
     if (!in_array($dex, $validDex)) $dex = 1;
 
     $guestToken = bin2hex(random_bytes(16));
@@ -317,7 +343,7 @@ if ($action === 'get_room') {
 
     echo json_encode([
         'success' => true,
-        'room' => sanitizeRoom($room),
+        'room' => sanitizeRoom($room, $token),
         'is_host' => $isHost,
         'is_guest' => $isGuest,
         'abandoned' => ($room['status'] === 'abandoned'),
@@ -345,7 +371,13 @@ if ($action === 'update_settings' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $room['rules']['itemsEnabled'] = (bool)$payload['itemsEnabled'];
     }
     if (isset($payload['stage'])) {
-        $room['stage'] = (string)$payload['stage'];
+        $st = (string)$payload['stage'];
+        $validStages = ['BATTLEFIELD', 'CINNABAR_ISLAND', 'POWER_PLANT', 'LUMIOSE_CITY', 'FINAL_DESTINATION', 'LAVENDER_TOWER'];
+        if ($st === 'RANDOM' || !in_array($st, $validStages)) {
+            $room['stage'] = $validStages[array_rand($validStages)];
+        } else {
+            $room['stage'] = $st;
+        }
     }
 
     saveRoom($file, $room);
@@ -408,6 +440,93 @@ if ($action === 'set_ready' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // -----------------------------------------------------------------------------
+// 4.55. SOLICITAR REVANCHA (Ambos jugadores pueden cambiar de personaje)
+// -----------------------------------------------------------------------------
+if ($action === 'rematch' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $code = $payload['code'] ?? '';
+    $token = $payload['token'] ?? '';
+    $file = getRoomFile($roomsDir, $code);
+    $room = loadRoom($file);
+
+    if (!$room) {
+        http_response_code(404);
+        echo json_encode(['success' => false, 'error' => 'Sala no encontrada.']);
+        exit;
+    }
+
+    $isHost = ($room['host_token'] === $token);
+    $isGuest = ($room['guest_token'] === $token);
+
+    if (!$isHost && !$isGuest) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'error' => 'Acceso denegado: token no válido.']);
+        exit;
+    }
+
+    if (!isset($room['rematch']) || !is_array($room['rematch'])) {
+        $room['rematch'] = ['p1' => false, 'p2' => false];
+    }
+
+    if ($isHost) {
+        $room['rematch']['p1'] = true;
+    } elseif ($isGuest) {
+        $room['rematch']['p2'] = true;
+    }
+
+    $cleanCode = preg_replace('/[^0-9]/', '', (string)$code);
+    if (strlen($cleanCode) > 0 && strlen($cleanCode) < 4) {
+        $cleanCode = sprintf("%04d", (int)$cleanCode);
+    }
+
+    // Si ambos han solicitado revancha, reiniciar a selección de personajes desde 0
+    if (!empty($room['rematch']['p1']) && !empty($room['rematch']['p2'])) {
+        $now = microtime(true);
+        $room['status'] = 'char_select';
+
+        // Al hacer revancha se cambia el mapa aleatoriamente a uno distinto
+        $validStages = ['BATTLEFIELD', 'CINNABAR_ISLAND', 'POWER_PLANT', 'LUMIOSE_CITY', 'FINAL_DESTINATION', 'LAVENDER_TOWER'];
+        $currentStage = $room['stage'] ?? 'BATTLEFIELD';
+        $otherStages = array_values(array_diff($validStages, [$currentStage]));
+        $room['match_id'] = ($room['match_id'] ?? 1) + 1;
+        $room['stage'] = !empty($otherStages) ? $otherStages[array_rand($otherStages)] : $validStages[array_rand($validStages)];
+        $room['rematch'] = ['p1' => false, 'p2' => false];
+        $room['char_select'] = [
+            'started_at' => $now,
+            'duration' => 30,
+            'p1_dex' => $room['p1']['dex'] ?? 25,
+            'p2_dex' => $room['p2']['dex'] ?? 1,
+            'p1_confirmed' => false,
+            'p2_confirmed' => false
+        ];
+        if (isset($room['p1'])) {
+            $room['p1']['ready'] = true;
+            $room['p1']['item'] = null;
+        }
+        if (isset($room['p2'])) {
+            $room['p2']['ready'] = true;
+            $room['p2']['item'] = null;
+        }
+        $room['battle_state'] = [
+            'started_at' => 0,
+            'ended_at' => 0,
+            'p1' => ['percent' => 0, 'stocks' => 3],
+            'p2' => ['percent' => 0, 'stocks' => 3]
+        ];
+        @unlink($roomsDir . '/' . $cleanCode . '_p1.json');
+        @unlink($roomsDir . '/' . $cleanCode . '_p2.json');
+    }
+
+    saveRoom($file, $room);
+
+    echo json_encode([
+        'success' => true,
+        'room' => sanitizeRoom($room, $token),
+        'rematch_ready' => ($room['status'] === 'char_select')
+    ]);
+    exit;
+}
+
+// -----------------------------------------------------------------------------
 // 4.6. SELECCIONAR / CONFIRMAR LUCHADOR EN LA CUENTA ATRÁS DE 30s (Host o Guest)
 // -----------------------------------------------------------------------------
 if ($action === 'select_fighter' && $_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -415,7 +534,7 @@ if ($action === 'select_fighter' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $token = $payload['token'] ?? '';
     $dex = (int)($payload['dex'] ?? 25);
     $confirmed = !empty($payload['confirmed']);
-    $validDex = [25, 6, 1, 312, 94, 39, 700];
+    $validDex = [25, 6, 1, 312, 94, 39, 700, 398, 773];
     if (!in_array($dex, $validDex)) $dex = 25;
 
     $file = getRoomFile($roomsDir, $code);
@@ -503,7 +622,7 @@ if ($action === 'start_game' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     // Actualizar dex del anfitrión si se envió en el payload al iniciar
     if (isset($payload['dex'])) {
         $dex = (int)$payload['dex'];
-        $validDex = [25, 6, 1, 312, 94, 39, 700];
+        $validDex = [25, 6, 1, 312, 94, 39, 700, 398, 773];
         if (in_array($dex, $validDex) && isset($room['p1'])) {
             $room['p1']['dex'] = $dex;
         }

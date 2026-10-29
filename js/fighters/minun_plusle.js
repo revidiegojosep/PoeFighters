@@ -718,10 +718,19 @@ class MinunPlusle extends window.Fighter {
     super.performSpecialMove();
   }
 
+  getModifiedHitbox(hitbox, isSpecial = false) {
+    const finalHitbox = super.getModifiedHitbox(hitbox, isSpecial);
+    // Nerf 2.5: Reducción general de daño del 10%
+    if (finalHitbox && finalHitbox.damage) {
+      finalHitbox.damage = Math.max(1, Math.round(finalHitbox.damage * 0.90));
+    }
+    return finalHitbox;
+  }
+
   _updateAttack(dt, opponent) {
     const boostActive = this.refuerzoTimer > 0 && !this.minunDead;
-    // Nerf de todo el daño en un 15% (factor 0.85)
-    const dmgMultiplier = (boostActive ? 1.10 : 1.0) * 0.85;
+    // Nerf 2.5: Daño general reducido un 10% adicional
+    const dmgMultiplier = (boostActive ? 1.10 : 1.0) * 0.765;
 
     if (this.currentAttack) {
       const origDmg = this.currentAttack.damage;
@@ -734,7 +743,7 @@ class MinunPlusle extends window.Fighter {
 
     // Plusle tandem physical melee strike during basic melee attacks
     const p = this.partner;
-    if (this.currentAttack && p && p.respawnTimer <= 0 && p.hitstun <= 0 && p.hitstop <= 0 && this.state === 'ATTACK') {
+    if (this.currentAttack && p && p.respawnTimer <= 0 && p.hitstun <= 0 && p.hitstop <= 0 && (this.state === 'ATTACK' || (this.state === 'SPECIAL' && this.currentAttack.name && this.currentAttack.name.includes('Chispazo')))) {
       const atk = this.currentAttack;
       if (this.attackFrame >= atk.hitboxStart && this.attackFrame <= atk.hitboxEnd && !this.partnerHasHit) {
         const ox = atk.offsetX !== undefined ? atk.offsetX : 28;
@@ -760,6 +769,9 @@ class MinunPlusle extends window.Fighter {
 
           for (const hurtbox of hurtboxes) {
             if (window.physicsEngine.checkHitboxCollision(hitbox, hurtbox)) {
+              if (window.game && window.game.isOnlineMatch && this === window.game.dummy) {
+                break;
+              }
               const finalHitbox = this.getModifiedHitbox(hitbox, false);
               opponent.takeHit(finalHitbox, this, hurtbox.target);
               this.partnerHasHit = true;
@@ -806,6 +818,10 @@ class MinunPlusle extends window.Fighter {
 
         // Collision with opponent
         if (opponent && opponent.state !== 'RESPAWN' && opponent.invulnTimer <= 0) {
+          // En modo online, los proyectiles del rival remoto dummy NO causan daño local al jugador
+          if (window.game && window.game.isOnlineMatch && this === window.game.dummy) {
+            continue;
+          }
           const hurtboxes = opponent.getHurtboxes
             ? opponent.getHurtboxes()
             : [{ x: opponent.x, y: opponent.y - opponent.height * 0.5, radius: opponent.hurtboxRadius, target: null }];
@@ -849,6 +865,24 @@ class MinunPlusle extends window.Fighter {
       p.heldItem = this.heldItem;
       p.balloonPopped = this.balloonPopped;
       p.focusSashActive = this.focusSashActive;
+    }
+
+    // En partidas online, si este luchador es el muñeco rival (dummy), sincronizar a Plusle
+    // directamente según el estado recibido de red por el dueño
+    if (window.game && window.game.isOnlineMatch && this === window.game.dummy) {
+      if (this.onlinePartnerState) {
+        const s = this.onlinePartnerState;
+        p.x = s.x !== undefined ? s.x : p.x;
+        p.y = s.y !== undefined ? s.y : p.y;
+        p.vx = s.vx !== undefined ? s.vx : 0;
+        p.vy = s.vy !== undefined ? s.vy : 0;
+        p.facing = s.facing !== undefined ? s.facing : this.facing;
+        p.state = s.state || 'IDLE';
+        p.anim.setFacing(p.facing);
+        if (s.anim) p.anim.loop(s.anim, 1.0);
+        p.anim.update(dt);
+        return;
+      }
     }
 
     // Sincronización fuera de pantalla con Minun durante RESPAWN (Smash Blast KO)
@@ -986,7 +1020,7 @@ class MinunPlusle extends window.Fighter {
     }
 
     // Blast zone check for partner
-    if (p.respawnTimer <= 0 && stage.isOutsideBlastZone(p.x, p.y)) {
+    if (p.x > -1000 && p.y > -1000 && p.respawnTimer <= 0 && stage.isOutsideBlastZone(p.x, p.y)) {
       if (this.minunDead) {
         this._fullKO(stage);
         return;
@@ -1005,6 +1039,9 @@ class MinunPlusle extends window.Fighter {
 
       // Check active attack hitbox
       if (p.currentAttack && opponent && opponent.state !== 'RESPAWN' && opponent.invulnTimer <= 0) {
+        if (window.game && window.game.isOnlineMatch && this === window.game.dummy) {
+          // No aplicar daño local si es el dummy rival
+        } else 
         p.attackFrame = (p.attackFrame || 0) + dt * 60;
         const atk = p.currentAttack;
         if (p.attackFrame >= atk.hitboxStart && p.attackFrame <= atk.hitboxEnd && !p.hasHitOpponent) {
@@ -1030,6 +1067,9 @@ class MinunPlusle extends window.Fighter {
 
           for (const hurtbox of hurtboxes) {
             if (window.physicsEngine.checkHitboxCollision(hitbox, hurtbox)) {
+              if (window.game && window.game.isOnlineMatch && this === window.game.dummy) {
+                break;
+              }
               const finalHitbox = this.getModifiedHitbox(hitbox, false);
               opponent.takeHit(finalHitbox, this, hurtbox.target);
               p.hasHitOpponent = true;
@@ -1439,19 +1479,48 @@ class MinunPlusle extends window.Fighter {
   getSpecialMoveDef(dir) {
     switch (dir) {
       case 'neutral':
-        // Neutral Special (X): Chispazo Doble (+ y -)
-        // 2x Intertwined Plasma Orbs with 20% reduced radius (13px)
+        // Neutral Special (X): Chispazo (Discharge)
+        // Rework 2.5: Daño en AOE desde cerca
         return {
-          name: 'Chispazo Doble (+ y -)',
+          name: 'Chispazo (Neutral X - AOE)',
           anim: 'Shoot',
-          animSpeed: 1.15,
-          hitboxStart: 999, // Handled via 2x projectiles
-          hitboxEnd: 999,
-          cooldown: 0.74, // 20% reduced CD (from 0.92s)
-          endLag: 0.28,
+          animSpeed: 1.25,
+          hitboxStart: 2,
+          hitboxEnd: 15,
+          offsetX: 0,
+          offsetY: 20,
+          radius: 70, // Daño en área desde cerca
+          damage: 9,
+          baseKnockback: 14,
+          knockbackScaling: 0.95,
+          angle: 55,
+          type: 'electric',
+          hitlag: 7,
+          cooldown: 0.65,
+          endLag: 0.22,
           onStart: (p) => {
             window.soundEngine.playSfx('shock');
-            this.spawnDoubleHelixPlasmaBalls();
+            if (window.particleManager) {
+              window.particleManager.spawnRadialBurst(p.x, p.y - 20, '#00e5ff', 'electric', 55);
+              if (this.partner && this.partner.respawnTimer <= 0) {
+                window.particleManager.spawnRadialBurst(this.partner.x, this.partner.y - 20, '#f43f5e', 'electric', 55);
+              }
+              window.particleManager.spawnFloatingText(p.x, p.y - p.height - 20, '⚡ ¡CHISPAZO! (AOE)', '#00e5ff', 16);
+            }
+          },
+          onUpdate: (p, frame) => {
+            if (window.particleManager && Math.random() < 0.45) {
+              window.particleManager.spawnHitSparks(p.x + (Math.random() - 0.5) * 45, p.y - 20 + (Math.random() - 0.5) * 35, 2, 'electric');
+              if (this.partner && this.partner.respawnTimer <= 0) {
+                window.particleManager.spawnHitSparks(this.partner.x + (Math.random() - 0.5) * 45, this.partner.y - 20 + (Math.random() - 0.5) * 35, 2, 'electric');
+              }
+            }
+          },
+          onHit: (p, opponent) => {
+            window.soundEngine.playSfx('thunder');
+            if (window.particleManager) {
+              window.particleManager.spawnHitSparks(opponent.x, opponent.y - opponent.height * 0.5, 12, 'electric');
+            }
           }
         };
 

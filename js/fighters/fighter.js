@@ -52,6 +52,9 @@ class Fighter {
     this.actionLockTimer = 0;
     this.attackCooldown = 0;
     this.specialCooldown = 0;
+    this.specialCooldowns = { neutral: 0, side: 0, up: 0, down: 0 };
+    this.specialMaxCooldowns = { neutral: 0.55, side: 0.55, up: 0.55, down: 0.55 };
+    this.specialMoveDir = null;
     this.shield = 100;
     this.maxShield = 100;
     this.shieldBreakTimer = 0;
@@ -293,11 +296,31 @@ class Fighter {
         window.particleManager.spawnFloatingText(
           this.x,
           this.y - this.height - 18,
-          '🥺 ¡OJITOS TIERNOS! (-30% VEL)',
+          '🥺 ¡OJITOS TIERNOS! (-40% VEL, -10% ATQ)',
           '#f472b6',
           18
         );
         window.particleManager.spawnHitSparks(this.x, this.y - this.height * 0.5, 8, 'fairy');
+      }
+    } else if (statusName === 'attack_debuff' || statusName === 'snarl') {
+      if (!this.statuses.attackDebuff) {
+        this.statuses.attackDebuff = { active: false, timer: 0, factor: 0.70 };
+      }
+      this.statuses.attackDebuff.active = true;
+      this.statuses.attackDebuff.timer = duration;
+      this.statuses.attackDebuff.factor = 0.70;
+      if (window.soundEngine) {
+        window.soundEngine.playSfx('shadow');
+      }
+      if (window.particleManager) {
+        window.particleManager.spawnFloatingText(
+          this.x,
+          this.y - this.height - 18,
+          '💥 ¡ALARIDO! (-30% ATQ)',
+          '#a855f7',
+          18
+        );
+        window.particleManager.spawnHitSparks(this.x, this.y - this.height * 0.5, 8, 'shadow');
       }
     }
   }
@@ -324,6 +347,12 @@ class Fighter {
     this.actionLockTimer = Math.max(0, this.actionLockTimer - dt);
     this.attackCooldown = Math.max(0, this.attackCooldown - dt);
     this.specialCooldown = Math.max(0, this.specialCooldown - dt);
+    if (this.specialCooldowns) {
+      this.specialCooldowns.neutral = Math.max(0, (this.specialCooldowns.neutral || 0) - dt);
+      this.specialCooldowns.side = Math.max(0, (this.specialCooldowns.side || 0) - dt);
+      this.specialCooldowns.up = Math.max(0, (this.specialCooldowns.up || 0) - dt);
+      this.specialCooldowns.down = Math.max(0, (this.specialCooldowns.down || 0) - dt);
+    }
     this.itemCooldown = Math.max(0, this.itemCooldown - dt);
     this.shieldTapTimer = Math.max(0, this.shieldTapTimer - dt);
     this.parryWindowTimer = Math.max(0, this.parryWindowTimer - dt);
@@ -419,26 +448,36 @@ class Fighter {
 
       // Check collision with opponent
       if (opponent && opponent.state !== 'RESPAWN' && opponent.invulnTimer <= 0) {
-        const hurtboxes = opponent.getHurtboxes
-          ? opponent.getHurtboxes()
-          : [{ x: opponent.x, y: opponent.y - opponent.height * 0.5, radius: opponent.hurtboxRadius, target: null }];
-        const hitbox = { x: proj.x, y: proj.y, radius: proj.radius };
-        let hit = false;
-        for (const hurtbox of hurtboxes) {
-          if (window.physicsEngine.checkHitboxCollision(hitbox, hurtbox)) {
-            const finalHitbox = this.getModifiedHitbox(proj, true);
-            opponent.takeHit(finalHitbox, this, hurtbox.target);
-            if (proj.onHit) proj.onHit(opponent);
-            this.projectiles.splice(i, 1);
-            hit = true;
-            break;
+        // En partidas online, los proyectiles del muñeco rival no aplican daño local al jugador
+        if (window.game && window.game.isOnlineMatch && this === window.game.dummy) {
+          // Simulación visual en pantalla ajena
+        } else {
+          const canHit = proj.canHitOpponent ? proj.canHitOpponent(opponent) : true;
+          if (canHit) {
+            const hurtboxes = opponent.getHurtboxes
+              ? opponent.getHurtboxes()
+              : [{ x: opponent.x, y: opponent.y - opponent.height * 0.5, radius: opponent.hurtboxRadius, target: null }];
+            const hitbox = { x: proj.x, y: proj.y, radius: proj.radius };
+            let hit = false;
+            for (const hurtbox of hurtboxes) {
+              if (window.physicsEngine.checkHitboxCollision(hitbox, hurtbox)) {
+                const finalHitbox = this.getModifiedHitbox(proj, true);
+                opponent.takeHit(finalHitbox, this, hurtbox.target);
+                if (proj.onHit) proj.onHit(opponent);
+                if (!proj.piercing) {
+                  this.projectiles.splice(i, 1);
+                  hit = true;
+                }
+                break;
+              }
+            }
+            if (hit) continue;
           }
         }
-        if (hit) continue;
       }
 
       // Check stage collision (for projectiles that hit floor/walls)
-      if (proj.hitStage) {
+      if (proj.hitStage && stage && stage.solidPlatforms) {
         for (const plat of stage.solidPlatforms) {
           if (
             proj.x >= plat.x &&
@@ -472,26 +511,42 @@ class Fighter {
 
     // Respawn handling (Smash-style blast KO & platform descent)
     if (this.state === 'RESPAWN') {
+      const isOnlineRival = (this.isDummy && window.game && (window.game.gameMode === 'ONLINE' || window.game.isOnlineMatch) && window.game.p2Type === 'ONLINE_RIVAL') ||
+                            (window.game && (window.game.gameMode === 'ONLINE' || window.game.isOnlineMatch) && this === window.game.dummy);
+      if (isOnlineRival) {
+        if (this.anim) this.anim.update(dt);
+        return;
+      }
       this.respawnTimer -= dt;
+
+      const currentStage = stage || (window.game && window.game.stage);
+      const defaultRespawnX = (currentStage && currentStage.respawnX !== undefined) ? currentStage.respawnX : 512;
+      const defaultRespawnY = (currentStage && currentStage.respawnY !== undefined) ? currentStage.respawnY : 190;
 
       // First 0.80s: completely off-screen ("sacado de la pantalla")
       if (this.respawnTimer > 1.2) {
         this.x = -9999;
         this.y = -9999;
-        this.anim.update(dt);
+        if (this.anim) this.anim.update(dt);
         return;
       }
 
       // At 1.2s: Materialize onto the floating revival platform!
       if (!this.respawnPlatformMaterialized) {
         this.respawnPlatformMaterialized = true;
-        this.x = this.respawnStageX || stage.respawnX;
-        this.y = this.respawnStageY || stage.respawnY;
+        this.x = (this.respawnStageX !== undefined && this.respawnStageX > -500) ? this.respawnStageX : defaultRespawnX;
+        this.y = (this.respawnStageY !== undefined && this.respawnStageY > -500) ? this.respawnStageY : defaultRespawnY;
         this.vx = 0;
         this.vy = 0;
         this.isGrounded = false;
-        this.anim.setAim('center');
-        this.anim.loop('Idle', 1.0);
+        if (this.anim) {
+          this.anim.isOnce = false;
+          this.anim.isHold = false;
+          this.anim.isDone = false;
+          this.anim.onFinishCallback = null;
+          this.anim.setAim('center');
+          this.anim.loop('Idle', 1.0);
+        }
         window.soundEngine && window.soundEngine.playSfx('select');
         if (window.particleManager) {
           window.particleManager.spawnRadialBurst(this.x, this.y - 12, '#38bdf8', 'electric', 36);
@@ -499,9 +554,17 @@ class Fighter {
         }
       }
 
+      // Safety check: ensure coordinates are on stage if materialized
+      if (this.x < -500 || this.y < -500 || isNaN(this.x) || isNaN(this.y)) {
+        this.x = (this.respawnStageX !== undefined && this.respawnStageX > -500) ? this.respawnStageX : defaultRespawnX;
+        this.y = (this.respawnStageY !== undefined && this.respawnStageY > -500) ? this.respawnStageY : defaultRespawnY;
+      }
+
       if (this.respawnTimer <= 0) {
         this.state = 'IDLE';
         this.invulnTimer = 2.0; // 2 seconds flashing invulnerability
+        this.x = (this.respawnStageX !== undefined && this.respawnStageX > -500) ? this.respawnStageX : defaultRespawnX;
+        this.y = (this.respawnStageY !== undefined && this.respawnStageY > -500) ? this.respawnStageY : defaultRespawnY;
         this.vx = 0;
         this.vy = 0;
         this.hitstop = 0;
@@ -511,13 +574,20 @@ class Fighter {
         if (this.statuses && this.statuses.poison) this.statuses.poison.active = false;
         if (this.statuses && this.statuses.sleep) this.statuses.sleep.active = false;
         if (this.statuses && this.statuses.slow) this.statuses.slow.active = false;
-        this.anim.setAim('center');
-        this.anim.loop('Idle', 1.0);
+        if (this.statuses && this.statuses.attackDebuff) this.statuses.attackDebuff.active = false;
+        if (this.anim) {
+          this.anim.isOnce = false;
+          this.anim.isHold = false;
+          this.anim.isDone = false;
+          this.anim.onFinishCallback = null;
+          this.anim.setAim('center');
+          this.anim.loop('Idle', 1.0);
+        }
         if (window.particleManager) {
           window.particleManager.spawnSmoke(this.x, this.y, '#ffffff', 10);
         }
       }
-      this.anim.update(dt);
+      if (this.anim) this.anim.update(dt);
       return;
     }
 
@@ -601,6 +671,22 @@ class Fighter {
       }
       if (this.statuses.slow.timer <= 0) {
         this.statuses.slow.active = false;
+      }
+    }
+
+    // Status System: Debuff de Ataque (Alarido / Snarl)
+    if (this.statuses && this.statuses.attackDebuff && this.statuses.attackDebuff.active) {
+      this.statuses.attackDebuff.timer -= dt;
+      if (Math.random() < 0.20 && window.particleManager) {
+        window.particleManager.spawnHitSparks(
+          this.x + (Math.random() - 0.5) * 20,
+          this.y - Math.random() * this.height,
+          1,
+          'shadow'
+        );
+      }
+      if (this.statuses.attackDebuff.timer <= 0) {
+        this.statuses.attackDebuff.active = false;
       }
     }
 
@@ -756,6 +842,10 @@ class Fighter {
   handleInputs(stage = null, dt = 1 / 60) {
     stage = stage || (window.game ? window.game.stage : null);
     dt = (typeof dt === 'number' && dt > 0) ? dt : (1 / 60);
+
+    if (this.state === 'RESPAWN' || this.state === 'KO') {
+      return;
+    }
 
     // 🤼 INMOVILIZACIÓN TOTAL SI NOS TIENEN AGARRADOS:
     if (this.state === 'GRABBED') {
@@ -1009,7 +1099,7 @@ class Fighter {
     }
 
     // Movement (Left / Right): Walking vs Running (Dash)
-    const speedMult = (this.statuses && this.statuses.slow && this.statuses.slow.active) ? 0.70 : 1.0;
+    const speedMult = (this.statuses && this.statuses.slow && this.statuses.slow.active) ? 0.60 : 1.0;
     if (this.input.left && !this.input.right) {
       this.facing = -1;
       const isDash = this.isRunning && this.runDirection === -1;
@@ -1102,8 +1192,8 @@ class Fighter {
     this.runDirection = 0;
     this.state = 'AIR_DODGE';
     this.airDodgeUsed = true;
-    this.invulnTimer = 0.28; // ~17 frames de invencibilidad (Eframes)
-    this.actionLockTimer = 0.28; // Reducido notablemente (antes 0.38) para eliminar el lag excesivo
+    this.invulnTimer = 0.22; // ~13 frames de invencibilidad aérea
+    this.actionLockTimer = 0.18; // Lag tras esquivar en el aire reducido notablemente
 
     // Directional drift con mayor movilidad para reposicionarse
     let driftX = 0;
@@ -1144,8 +1234,8 @@ class Fighter {
     this.facing = dir;
 
     let rollSpeed = 25.5; // Balance Update: Aumentada velocidad de roll para mayor distancia física
-    let actionLock = 0.58;
-    let rollCd = 0.65;
+    let actionLock = 0.40; // Lag tras esquivar reducido notablemente
+    let rollCd = 0.45; // Cooldown entre esquives reducido
     if (this.heldItem === 'escape-rope') {
       rollSpeed *= 1.30; // +30% distancia del roll con Cuerda Huida
       actionLock *= 0.90; // -10% lag entre esquives
@@ -1510,6 +1600,11 @@ class Fighter {
       }
     }
 
+    // Debuff de Ataque (Alarido / Snarl: reduce daño saliente un 30%)
+    if (this.statuses && this.statuses.attackDebuff && this.statuses.attackDebuff.active) {
+      finalHitbox.damage = Math.max(1, Math.round(finalHitbox.damage * (this.statuses.attackDebuff.factor || 0.70) * 10) / 10);
+    }
+
     return finalHitbox;
   }
 
@@ -1553,7 +1648,10 @@ class Fighter {
     }
 
     // Snappy animation speed with 0.20s end lag between attacks
-    const animSpd = (attackDef.animSpeed || 1.25) * 1.30;
+    let animSpd = (attackDef.animSpeed || 1.25) * 1.30;
+    if (this.statuses && this.statuses.slow && this.statuses.slow.active) {
+      animSpd *= 0.90; // Sylveon Ojitos Tiernos debuff: -10% anim speed on basic attacks [Z]
+    }
     const endLag = 0.20; // Nerf: pequeño lag de 0.2 segundos entre ataque
 
     this.anim.play(attackDef.anim || 'Attack', { speed: animSpd }, () => {
@@ -1568,7 +1666,7 @@ class Fighter {
   }
 
   performSpecialMove(forcedDir = null) {
-    if (!forcedDir && (this.specialCooldown > 0 || this.actionLockTimer > 0)) return;
+    if (!forcedDir && this.actionLockTimer > 0) return;
     if (!this.checkItemCanUseAttack('special')) return;
 
     // 4 distinct moves for X: Up, Down, Side (Left/Right), and Neutral (NO direction)
@@ -1581,6 +1679,7 @@ class Fighter {
       else dir = 'neutral'; // Neutral X: strictly when no arrow key is held!
     }
 
+    if (!forcedDir && this.specialCooldowns && (this.specialCooldowns[dir] || 0) > 0) return;
     if (dir === 'up' && this.upSpecialUsed && !forcedDir) return;
 
     const moveDef = this.getSpecialMoveDef(dir);
@@ -1598,7 +1697,13 @@ class Fighter {
     this.currentAttack = moveDef;
     this.attackFrame = 0;
     this.hasHitOpponent = false;
-    this.specialCooldown = moveDef.cooldown ?? 0.55;
+    this.specialMoveDir = dir;
+    const specialCd = moveDef.cooldown ?? 0.55;
+    if (this.specialCooldowns) {
+      this.specialCooldowns[dir] = specialCd;
+      this.specialMaxCooldowns[dir] = Math.max(specialCd, 0.1);
+    }
+    this.specialCooldown = Math.min(0.12, specialCd);
     this.specialChargeTimer = 0;
     if (dir === 'up') this.upSpecialUsed = true;
 
@@ -1617,6 +1722,10 @@ class Fighter {
       this.currentAttack = null;
       this.actionLockTimer = Math.max(this.actionLockTimer, moveDef.endLag ?? 0.02);
       if (moveDef.cooldown !== undefined) {
+        if (this.specialCooldowns && dir) {
+          this.specialCooldowns[dir] = Math.max(this.specialCooldowns[dir] || 0, moveDef.cooldown);
+          this.specialMaxCooldowns[dir] = Math.max(this.specialMaxCooldowns[dir] || 0, moveDef.cooldown);
+        }
         this.specialCooldown = Math.max(this.specialCooldown, moveDef.cooldown);
       }
       this.anim.setAim('center');
@@ -1627,7 +1736,11 @@ class Fighter {
         this.currentAttack = null;
         this.actionLockTimer = Math.max(this.actionLockTimer, moveDef.endLag ?? 0.24);
         if (moveDef.cooldown !== undefined) {
-          this.specialCooldown = Math.max(this.specialCooldown, moveDef.cooldown);
+          if (this.specialCooldowns && dir) {
+          this.specialCooldowns[dir] = Math.max(this.specialCooldowns[dir] || 0, moveDef.cooldown);
+          this.specialMaxCooldowns[dir] = Math.max(this.specialMaxCooldowns[dir] || 0, moveDef.cooldown);
+        }
+        this.specialCooldown = Math.max(this.specialCooldown, moveDef.cooldown);
         }
         this.anim.setAim('center');
       });
@@ -1637,7 +1750,17 @@ class Fighter {
 
   _updateAttack(dt, opponent) {
     if (!this.currentAttack) return;
-    this.attackFrame += dt * 60;
+
+    // En partidas online, el muñeco rival (dummy) es un títere replicado por red.
+    // Solo el jugador local puede golpear al rival en su propia pantalla.
+    // Los golpes del rival remoto se reciben y aplican exclusivamente vía safe.hitEvent por red.
+    if (window.game && window.game.isOnlineMatch && this === window.game.dummy) {
+      return;
+    }
+    const isBasicAttack = (this.state === 'ATTACK');
+    const isSlowed = (this.statuses && this.statuses.slow && this.statuses.slow.active);
+    const timeScale = (isBasicAttack && isSlowed) ? 0.90 : 1.0;
+    this.attackFrame += dt * 60 * timeScale;
     const atk = this.currentAttack;
 
     // Hold-to-charge specials (e.g., Bulbasaur Down+X, Gengar Neutral+X)
@@ -1726,6 +1849,10 @@ class Fighter {
         this.currentAttack = null;
         this.actionLockTimer = Math.max(this.actionLockTimer, atk.endLag ?? 0.02);
         if (atk.cooldown !== undefined) {
+          if (this.specialCooldowns && this.specialMoveDir) {
+            this.specialCooldowns[this.specialMoveDir] = Math.max(this.specialCooldowns[this.specialMoveDir] || 0, atk.cooldown);
+            this.specialMaxCooldowns[this.specialMoveDir] = Math.max(this.specialMaxCooldowns[this.specialMoveDir] || 0, atk.cooldown);
+          }
           this.specialCooldown = Math.max(this.specialCooldown, atk.cooldown);
         }
         this.anim.setAim('center');
@@ -1737,6 +1864,10 @@ class Fighter {
         this.currentAttack = null;
         this.actionLockTimer = Math.max(this.actionLockTimer, atk.endLag ?? 0.18);
         if (atk.cooldown !== undefined) {
+          if (this.specialCooldowns && this.specialMoveDir) {
+            this.specialCooldowns[this.specialMoveDir] = Math.max(this.specialCooldowns[this.specialMoveDir] || 0, atk.cooldown);
+            this.specialMaxCooldowns[this.specialMoveDir] = Math.max(this.specialMaxCooldowns[this.specialMoveDir] || 0, atk.cooldown);
+          }
           this.specialCooldown = Math.max(this.specialCooldown, atk.cooldown);
         }
         this.anim.setAim('center');
@@ -1797,6 +1928,13 @@ class Fighter {
 
   takeHit(hitbox, attacker, target = null) {
     if (this.invulnTimer > 0 || this.state === 'RESPAWN' || this.state === 'ROLL' || this.state === 'AIR_DODGE') return;
+
+    // En modo online, el jugador local NUNCA recibe daño de la simulación local del rival remoto (evita daño duplicado / ghost hits)
+    if (window.game && window.game.isOnlineMatch) {
+      if (this === window.game.player && attacker === window.game.dummy) {
+        return;
+      }
+    }
 
     // 🛡️ Parry Perfecto (Perfect Shield - Super Smash Bros Ultimate)
     // Si sueltas el escudo en los primeros 3 frames de recibir un ataque:
@@ -1927,6 +2065,10 @@ class Fighter {
       hitbox.baseKnockback
     );
 
+    if (this.knockbackTakenMultiplier) {
+      kbSpeed *= this.knockbackTakenMultiplier;
+    }
+
     if (focusBandTriggered) {
       kbSpeed *= 0.25;
     }
@@ -1956,7 +2098,7 @@ class Fighter {
 
     // 🌐 Online Hit Synchronization: Si golpeamos al rival online en nuestra pantalla,
     // notificamos inmediatamente a OnlineManager para replicar el impacto autoritativo en su máquina
-    if (window.game && window.game.isOnlineMatch && window.game.onlineManager && this === window.game.dummy) {
+    if (window.game && (window.game.gameMode === 'ONLINE' || window.game.isOnlineMatch) && window.game.onlineManager && this === window.game.dummy) {
       window.game.onlineManager.recordRivalHit({
         hitId: Date.now() + Math.random(),
         damage: dmg,
@@ -1972,14 +2114,25 @@ class Fighter {
   }
 
   onBlastZoneKO(stage) {
-    if (this.state === 'RESPAWN') return;
+    if (this.state === 'RESPAWN' || this.state === 'KO') return;
 
     window.soundEngine.playSfx('blast_ko');
+    const currentStage = stage || (window.game && window.game.stage);
     if (window.particleManager) {
-      window.particleManager.spawnBlastKO(this.x, this.y, this.color);
+      let fx = this.x;
+      let fy = this.y;
+      if (currentStage && currentStage.blastZones) {
+        fx = Math.max(currentStage.blastZones.left + 24, Math.min(currentStage.blastZones.right - 24, fx));
+        fy = Math.max(currentStage.blastZones.top + 24, Math.min(currentStage.blastZones.bottom - 24, fy));
+      }
+      window.particleManager.spawnBlastKO(fx, fy, this.color);
     }
 
-    this.stocks--;
+    const isOnlineRival = (this.isDummy && window.game && (window.game.gameMode === 'ONLINE' || window.game.isOnlineMatch) && window.game.p2Type === 'ONLINE_RIVAL') ||
+                          (window.game && (window.game.gameMode === 'ONLINE' || window.game.isOnlineMatch) && this === window.game.dummy);
+    if (!isOnlineRival) {
+      this.stocks--;
+    }
     this.percent = 0;
     this.vx = 0;
     this.vy = 0;
@@ -2008,13 +2161,20 @@ class Fighter {
     this.state = 'RESPAWN';
     this.respawnTimer = 2.0; // 0.8s fuera de pantalla + 1.2s en la plataforma de reaparición
     this.respawnPlatformMaterialized = false;
-    this.respawnStageX = stage.respawnX;
-    this.respawnStageY = stage.respawnY;
+    this.respawnStageX = (currentStage && currentStage.respawnX !== undefined) ? currentStage.respawnX : 512;
+    this.respawnStageY = (currentStage && currentStage.respawnY !== undefined) ? currentStage.respawnY : 190;
 
     // Off-screen during initial blast
     this.x = -9999;
     this.y = -9999;
     this.isGrounded = false;
+    if (this.anim) {
+      this.anim.isOnce = false;
+      this.anim.isHold = false;
+      this.anim.isDone = false;
+      this.anim.onFinishCallback = null;
+      this.anim.loop('Idle', 1.0);
+    }
 
     if (window.game) {
       window.game.onFighterKO(this);
@@ -2022,11 +2182,6 @@ class Fighter {
   }
 
   draw(ctx, opts = {}) {
-    // Flickering invulnerability effect after respawn
-    if (this.invulnTimer > 0 && Math.floor(performance.now() / 60) % 2 === 0) {
-      return;
-    }
-
     // Floating Smash Revival Platform
     if (this.state === 'RESPAWN' && this.x > -500) {
       ctx.save();
@@ -2097,7 +2252,17 @@ class Fighter {
       ctx.restore();
     }
 
+    const isInvulnFlicker = (this.invulnTimer > 0 && Math.floor(performance.now() / 70) % 2 === 0);
+    if (isInvulnFlicker) {
+      ctx.save();
+      ctx.globalAlpha = 0.35;
+    }
+
     this.anim.draw(ctx, this.x, this.y, { flash: isHitFlashing });
+
+    if (isInvulnFlicker) {
+      ctx.restore();
+    }
 
     // Dynamic Environmental Lighting on Characters (Luz ambiental con fade suave cinematográfico)
     if (this.lightFadeAlpha > 0.008) {

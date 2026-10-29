@@ -128,6 +128,48 @@ $fighters = [
             'Abajo (⬇️)' => ['name' => '¡Descanso! (Rest / Down-B)', 'damage' => '25% (Devastador)', 'desc' => 'Ataque de contacto directo milimétrico. Si conecta dentro del oponente, desata una explosión colosal con lanzamiento vertical letal y manda a Jigglypuff a dormir.']
         ]
     ],
+    773 => [
+        'name' => 'Silvally',
+        'dex' => 773,
+        'type' => 'Normal',
+        'type_color' => '#38bdf8',
+        'weight' => '100.5 kg',
+        'weight_category' => 'Pesado',
+        'desc' => 'La quimera sintética definitiva creada mediante el Sistema Alfa (RKS). A pesar de sus 100.5 kg de armadura biológica, posee una velocidad devastadora. Dispara un Tajo Aéreo con disco boomerang que frena y regresa acelerando, ejecuta Multiataque de corte instantáneo (cargable), desata Alarido con daño por proximidad y debuff de ataque (-30%), y Viento Cortante con caída lenta y un tornado letal de alto knockback al despegar.',
+        'moves_z' => [
+            'Neutral' => ['name' => 'Corte Quimérico (Suelo) / Giro Pragmático Nair (Aire)', 'damage' => '5.2% / 8%', 'desc' => 'Zarpazos encadenados con mordisco frontal. En el aire un giro completo de garras y cola.'],
+            'Lateral (⬅️/➡️)' => ['name' => 'Garra Férrea (Suelo) / Zarpazo Aéreo Fair (Aire)', 'damage' => '9% / 9.8%', 'desc' => 'Zarpazo de acero frontal de gran impacto. En el aire doble corte en tijera.'],
+            'Arriba (⬆️)' => ['name' => 'Cresta Alfa (Suelo) / Embestida de Cresta Uair (Aire)', 'damage' => '8% / 9.2%', 'desc' => 'Corte ascendente con su cresta de batalla que eleva a los rivales para combos.'],
+            'Abajo (⬇️)' => ['name' => 'Barrido Cola Pez (Suelo) / Pisotón Meteoro Dair (Aire)', 'damage' => '7% / 11.8% (Spike)', 'desc' => 'Barrido a ras de suelo con su cola acuática. En el aire cae en picado con sus garras desatando un poderoso efecto Meteoro vertical.']
+        ],
+        'moves_x' => [
+            'Neutral (Sin dirección)' => ['name' => 'Tajo Aéreo (Air Slash / Boomerang)', 'damage' => '4.5% (Ida) / 7.5% (Vuelta)', 'desc' => 'Dispara un disco azul mediano que frena conforme avanza y luego regresa a gran velocidad hacia su origen sin herir a Silvally.'],
+            'Lateral (⬅️/➡️)' => ['name' => 'Multiataque (Multi-Attack - Cargable)', 'damage' => '21% (Devastador)', 'desc' => 'Corta instantáneamente tras un delay de 0.3s. Mantén X para cargar hasta 0.7s (se suelta solo): si se carga >0.3s, ¡elimina el delay por completo y aumenta el knockback!'],
+            'Arriba (⬆️)' => ['name' => 'Viento Cortante (Razor Wind / Up-X)', 'damage' => '15%', 'desc' => 'Durante 0.5s desciende flotando lentamente, luego se impulsa explosivamente hacia arriba dejando tras de sí un tornado letal (0.5s) capaz de noquear pesados a 100-120%.'],
+            'Abajo (⬇️)' => ['name' => 'Alarido (Snarl / Debuff -30% Atq)', 'damage' => '9% (Mín) - 11.7% (Máx 1.3x)', 'desc' => 'Onda acústica en área mayor que Silvally. Hace más daño (hasta 1.3x) y knockback (1.1x) cuanto más cerca esté el rival, y reduce su ataque un 30% por 4.5 segundos.']
+        ]
+    ],
+    398 => [
+        'name' => 'Staraptor',
+        'dex' => 398,
+        'type' => 'Normal / Volador',
+        'type_color' => '#38bdf8',
+        'weight' => '24.9 kg',
+        'weight_category' => 'Medio',
+        'desc' => 'El temible depredador aéreo de Sinnoh. Posee 5 saltos ágiles, un veloz juego aéreo y gran capacidad de presión. Domina Torbellino para atrapar rivales, Pájaro Osado que se carga y viaja en línea recta horizontal sin gravedad, Vuelo para recuperarse y atacar en ascenso, y Detección para contraatacar golpes cuerpo a cuerpo si es atacado.',
+        'moves_z' => [
+            'Neutral' => ['name' => 'Picotazo Furtivo (Suelo) / Giro Huracán Nair (Aire)', 'damage' => '4% / 7.5%', 'desc' => 'Rápidos picotazos frontales en el suelo. En el aire despliega sus alas en un giro de 360°.'],
+            'Lateral (⬅️/➡️)' => ['name' => 'Golpe de Ala (Suelo) / Corte Fair (Aire)', 'damage' => '8.5% / 9.5%', 'desc' => 'Tajo horizontal con alas afiladas. En el aire golpea hacia adelante.'],
+            'Arriba (⬆️)' => ['name' => 'Cresta Cortante (Suelo) / Vuelo Tijera Uair (Aire)', 'damage' => '7.5% / 9%', 'desc' => 'Eleva su cresta en un corte vertical ascendente. En el aire snap con garras y pico hacia arriba.'],
+            'Abajo (⬇️)' => ['name' => 'Barrido de Garras (Suelo) / Picado Meteoro Dair (Aire)', 'damage' => '6.5% / 11% (Spike)', 'desc' => 'Barrido bajo que tropieza al rival. En el aire cae en picado con sus talones desatando un poderoso efecto Meteoro vertical.']
+        ],
+        'moves_x' => [
+            'Neutral (Sin dirección)' => ['name' => 'Torbellino (Whirlwind)', 'damage' => '3x 3% + 5%', 'desc' => 'Genera un violento vórtice ciclónico que avanza por el escenario, atrapando a los enemigos en sus corrientes y lanzándolos por los aires.'],
+            'Lateral (⬅️/➡️)' => ['name' => 'Pájaro Osado (Brave Bird - Cargable)', 'damage' => '12% - 24%', 'desc' => 'Mantén X para cargar energía. Al soltar, se lanza en línea recta a velocidad supersónica completamente inmune a la gravedad (trayectoria horizontal pura).'],
+            'Arriba (⬆️)' => ['name' => 'Vuelo (Fly / Up-X)', 'damage' => '12%', 'desc' => 'Despliega sus alas y asciende velozmente hacia arriba generando corrientes cortantes y permitiendo planear hacia el escenario.'],
+            'Abajo (⬇️)' => ['name' => 'Detección (Detect - Counter)', 'damage' => '14% - 28% (Counter)', 'desc' => 'Postura defensiva de 0.5s. Si recibe un ataque en esa ventana, bloquea todo daño y responde con un devastador contraataque cuerpo a cuerpo. Si falla, sufre end lag.']
+        ]
+    ],
     700 => [
         'name' => 'Sylveon',
         'dex' => 700,
@@ -182,10 +224,17 @@ $stages = [
     ],
     'POWER_PLANT' => [
         'id' => 'POWER_PLANT',
-        'name' => 'Central de Energía de Kanto',
-        'badge' => 'Bobinas de Faraday & Chispas',
-        'desc' => 'Instalación industrial con bobinas de Faraday que disparan chispas de alto voltaje y electrifican plataformas de forma temporal.',
+        'name' => 'Central Eléctrica de Kanto',
+        'badge' => 'Sobretensión en Plataforma Principal & Bobinas',
+        'desc' => 'Instalación industrial de alto voltaje con bobinas de Faraday que electrifican tanto las plataformas aéreas como la plataforma principal.',
         'icon' => '⚡'
+    ],
+    'LUMIOSE_CITY' => [
+        'id' => 'LUMIOSE_CITY',
+        'name' => 'Ciudad Luminalia',
+        'badge' => 'Torre Prisma & Plataforma Flotante',
+        'desc' => 'Elegante metrópolis de Kalos con la icónica Torre Prisma de fondo, reflectores en el cielo nocturno y una plataforma aérea flotante.',
+        'icon' => '🗼'
     ]
 ];
 
@@ -577,6 +626,8 @@ $pokemon_items = [
           <button class="btn-deck roster-btn" data-p1-dex="94" title="Peso Oficial: 40.5 kg (Pesado)">👻 Gengar (40.5kg)</button>
           <button class="btn-deck roster-btn" data-p1-dex="39" title="Peso Oficial: 5.5 kg (Floaty)">🎈 Jigglypuff (5.5kg)</button>
           <button class="btn-deck roster-btn" data-p1-dex="700" title="Peso Oficial: 23.5 kg (Medio)">🎀 Sylveon (23.5kg)</button>
+          <button class="btn-deck roster-btn" data-p1-dex="398" title="Peso Oficial: 24.9 kg (Medio)">🦅 Staraptor (24.9kg)</button>
+          <button class="btn-deck roster-btn" data-p1-dex="773" title="Peso Oficial: 100.5 kg (Pesado)">⚙️ Silvally (100.5kg)</button>
         </div>
 
         <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px;">CPU / Rival:</div>
@@ -588,6 +639,8 @@ $pokemon_items = [
           <button class="btn-deck roster-btn" data-dummy-dex="94" title="Peso Oficial: 40.5 kg (Pesado)">👻 Gengar (40.5kg)</button>
           <button class="btn-deck roster-btn" data-dummy-dex="39" title="Peso Oficial: 5.5 kg (Floaty)">🎈 Jigglypuff (5.5kg)</button>
           <button class="btn-deck roster-btn" data-dummy-dex="700" title="Peso Oficial: 23.5 kg (Medio)">🎀 Sylveon (23.5kg)</button>
+          <button class="btn-deck roster-btn" data-dummy-dex="398" title="Peso Oficial: 24.9 kg (Medio)">🦅 Staraptor (24.9kg)</button>
+          <button class="btn-deck roster-btn" data-dummy-dex="773" title="Peso Oficial: 100.5 kg (Pesado)">⚙️ Silvally (100.5kg)</button>
         </div>
 
         <div class="deck-buttons-row">
@@ -793,7 +846,7 @@ $pokemon_items = [
       </div>
 
       <div class="start-screen-footer">
-        <span>© PokéFighters 2026 · Super Smash Bros Pokémon Edition · v1.1.0 Update 1</span>
+        <span>© PokéFighters 2026 · Super Smash Bros Pokémon Edition · Versión 2.5</span>
       </div>
     </div>
   </div>
@@ -875,9 +928,11 @@ $pokemon_items = [
             <div style="display: flex; align-items: center; gap: 10px;">
               <span style="font-size: 12px; color: #cbd5e1;">🏟️ Escenario:</span>
               <select id="online-stage-select" style="background: #0f172a; border: 1px solid #38bdf8; color: #fff; padding: 6px 10px; border-radius: 6px; font-size: 12px; outline: none;">
+                <option value="RANDOM" selected>🎲 Aleatorio (Random)</option>
                 <option value="BATTLEFIELD">🏡 Pueblo Paleta (Dinámico)</option>
                 <option value="CINNABAR_ISLAND">🌋 Isla Canela (Volcán Activo)</option>
                 <option value="POWER_PLANT">⚡ Central Eléctrica (Bobinas Faraday)</option>
+                <option value="LUMIOSE_CITY">🗼 Ciudad Luminalia (Torre Prisma)</option>
                 <option value="FINAL_DESTINATION">🌌 Destino Final (Competitivo)</option>
                 <option value="LAVENDER_TOWER">👻 Torre Pueblo Lavanda</option>
               </select>
@@ -1011,6 +1066,16 @@ $pokemon_items = [
           <img src="assets/pokemon/6/Idle.png" alt="Charizard">
           <span class="char-card-name">Charizard</span>
           <span class="char-card-tag" style="color: #f97316;">Fuego/Volador · Pesado</span>
+        </div>
+        <div class="char-card" data-char-dex="773" data-name="Silvally">
+          <img src="assets/pokemon/773/Idle.png" alt="Silvally">
+          <span class="char-card-name">Silvally</span>
+          <span class="char-card-tag" style="color: #38bdf8;">Normal · Sintético</span>
+        </div>
+        <div class="char-card" data-char-dex="398" data-name="Staraptor">
+          <img src="assets/pokemon/398/Idle.png" alt="Staraptor">
+          <span class="char-card-name">Staraptor</span>
+          <span class="char-card-tag" style="color: #38bdf8;">Normal / Volador</span>
         </div>
         <div class="char-card" data-char-dex="700" data-name="Sylveon">
           <img src="assets/pokemon/700/Idle.png" alt="Sylveon">
@@ -1279,6 +1344,8 @@ $pokemon_items = [
                       <span class="stage-thumb-plat grate-plat grate-l"></span>
                       <span class="stage-thumb-plat grate-plat grate-r"></span>
                       <div class="stage-thumb-sparks"></div>
+                    <?php elseif ($sId === 'LUMIOSE_CITY'): ?>
+                      <span class="stage-thumb-plat float-mid"></span>
                     <?php endif; ?>
                   </div>
                   <div class="stage-icon-overlay"><?= $st['icon'] ?></div>
@@ -1332,7 +1399,7 @@ $pokemon_items = [
           <!-- SSBU Unified Roster Grid (6 Fighters) -->
           <div class="ssbu-roster-grid">
             <?php
-              $ssbu_order = [25, 6, 1, 312, 94, 39, 700];
+              $ssbu_order = [25, 6, 1, 312, 94, 39, 700, 398, 773];
               foreach ($ssbu_order as $dex):
                 $f = $fighters[$dex];
             ?>
@@ -1728,6 +1795,89 @@ $pokemon_items = [
       </div>
       <div class="changelog-body">
         <div class="changelog-badge-header">
+          <span class="cl-ver retro-font">VERSIÓN 2.5.5</span>
+          <span class="cl-badge" style="background: linear-gradient(135deg, #06b6d4, #a855f7);">UPDATE 2.5 · STARAPTOR, SILVALLY, LUMINALIA, BALANCE & CORRECCIÓN ONLINE</span>
+        </div>
+
+        <div class="changelog-section" style="border-left: 3px solid #f43f5e;">
+          <h3 class="cl-sec-title" style="color: #fb7185;">🦅 NUEVOS LUCHADORES: STARAPTOR & SILVALLY</h3>
+          <ul class="cl-list">
+            <li><strong>Staraptor (#398):</strong> Depredador ágil de Sinnoh con 5 saltos.
+              <ul>
+                <li><strong>Vuelo (Up X):</strong> Ascenso veloz con planeo. Una segunda pulsación de Vuelo en el aire desata la <em>Caída en Picado</em> (daño único y sin congelación).</li>
+                <li><strong>Detección (Down X):</strong> Stance de contraataque de 0.5s. Si conecta un golpe físico cuerpo a cuerpo, Staraptor responde sin lag. Los proyectiles y ataques lejanos son bloqueados y desviados sin infligir daño al rival distante.</li>
+                <li><strong>Torbellino (Neutral X):</strong> Vórtice que proyecta hacia arriba con knockback ajustado (-20%).</li>
+              </ul>
+            </li>
+            <li><strong>Silvally (#773):</strong> Pokémon Multigénico con Sistema Alfa.
+              <ul>
+                <li><strong>Multiataque (Side X):</strong> Requiere 1 segundo obligatorio de carga sostenida para desencadenar el combo cortante.</li>
+                <li><strong>Tajo Aéreo (Neutral X):</strong> Mayor alcance inicial (+28%) y seguimiento de retorno suavizado en un 50%.</li>
+                <li><strong>Viento Cortante (Up X):</strong> Elevación con tornado visual enriquecido, hitbox ampliada (r=48) y knockback balanceado.</li>
+              </ul>
+            </li>
+          </ul>
+        </div>
+
+        <div class="changelog-section" style="border-left: 3px solid #06b6d4;">
+          <h3 class="cl-sec-title" style="color: #22d3ee;">🗼 NUEVO ESCENARIO: CIUDAD LUMINALIA & REWORK CENTRAL ELÉCTRICA</h3>
+          <ul class="cl-list">
+            <li><strong>Ciudad Luminalia (Lumiose City):</strong> La gran metrópolis de Kalos llega como nuevo escenario oficial con fondo pixel art de la Torre Prisma, reflectores en abanico por el cielo nocturno, suelo adoquinado con farolas y una plataforma aérea flotante de cristal y bronce.</li>
+            <li><strong>Rework Central Eléctrica de Kanto:</strong>
+              <ul>
+                <li><strong>Sobretensión en la Plataforma Principal:</strong> El alto voltaje de las bobinas de Faraday ahora también azota la plataforma principal, infligiendo 3% de daño por contacto y drenaje acelerado de escudo a los luchadores que permanezcan en el suelo.</li>
+                <li><strong>Mejora Gráfica:</strong> Turbinas mecánicas giratorias en el generador, venteo de vapor de alta presión y arcos voltaicos gemelos.</li>
+              </ul>
+            </li>
+          </ul>
+        </div>
+
+        <div class="changelog-section" style="border-left: 3px solid #38bdf8;">
+          <h3 class="cl-sec-title" style="color: #38bdf8;">🌐 MEJORAS Y CORRECCIONES EN MODO MULTIJUGADOR ONLINE</h3>
+          <ul class="cl-list">
+            <li><strong>Revancha Online Robusta:</strong> Identificador de partida incremental (<code>match_id</code>) que descarta paquetes residuales. Se eliminan los bloqueos de muñeco congelado, reseteo limpio de vidas y se previene la finalización prematura.</li>
+            <li><strong>Corrección Desync Minun & Plusle:</strong> Plusle se replica como títere sincronizado en pantalla rival sin generar daño autónomo o duplicado injusto.</li>
+            <li><strong>Revancha Online Limpia:</strong> La revancha ahora reinicia los contadores de daño (%) y vidas a 0 de forma garantizada, limpiando cualquier residuo de la partida anterior.</li>
+            <li><strong>Cambio de Personaje en Revancha:</strong> Al solicitar y aceptar revancha, ambos jugadores regresan a la pantalla de selección de personajes (30s) para elegir libremente a su luchador.</li>
+            <li><strong>Pick Ciego (Selección Oculta):</strong> La elección del rival se mantiene oculta en silueta en el lobby para garantizar elecciones justas sin counter-picks.</li>
+            <li><strong>Visibilidad del Selector de Personajes:</strong> Corregido el problema de visualización que impedía abrir el modal de selección de personaje al jugar en pantalla completa.</li>
+            <li><strong>Sincronización del Efecto de Muerte:</strong> Corregida la visualización de la explosión Blast KO del rival para que aparezca siempre de manera fidedigna en pantalla.</li>
+            <li><strong>Optimización de Latencia y P2P:</strong> Frecuencia de señalización acelerada a 250ms para emparejamiento WebRTC instantáneo y suavizado de posición con respuesta sub-frame (32*dt).</li>
+          </ul>
+        </div>
+
+        <div class="changelog-section" style="border-left: 3px solid #facc15;">
+          <h3 class="cl-sec-title" style="color: #facc15;">⚡ BALANCE Y REWORK DE LUCHADORES</h3>
+          <ul class="cl-list">
+            <li><strong>Minun & Plusle:</strong>
+              <ul>
+                <li><strong>Rework a Especial Neutro (X suelto):</strong> Ahora ejecuta <em>Chispazo (Discharge)</em>, provocando daño masivo en área (AOE) a corta distancia simultáneamente alrededor de Minun y Plusle.</li>
+                <li><strong>Nerf de Daño General:</strong> Daño de todos sus ataques reducido en un 10%.</li>
+              </ul>
+            </li>
+            <li><strong>Bulbasaur:</strong>
+              <ul>
+                <li><strong>Defensa Reducida:</strong> Multiplicador de knockback recibido aumentado a 1.25x (+25% más fácil de expulsar del campo).</li>
+                <li><strong>Bomba Germen (Down X):</strong> Knockback (base y escalado) reducido en un 20% adicional.</li>
+                <li><strong>Ataques Básicos [Z]:</strong> Velocidad de animación de los 8 ataques básicos (suelo y aire) reducida en un 15% para castigos más justos.</li>
+                <li><strong>Hojas Navaja (Side X):</strong> Cooldown aumentado en +0.3s (0.85s), radio de proyectil reducido un 20% y velocidad reducida un 10%.</li>
+              </ul>
+            </li>
+            <li><strong>Jigglypuff:</strong>
+              <ul>
+                <li><strong>Defensa al Knockback Aumentada (+20%):</strong> Factor de absorción de lanzamiento mejorado (0.80x knockback sufrido) para mayor supervivencia.</li>
+              </ul>
+            </li>
+            <li><strong>Sylveon:</strong>
+              <ul>
+                <li><strong>Ojitos Tiernos (Down X):</strong> Reducción de velocidad del oponente aumentada un 10% adicional (40% de lentitud durante 7s).</li>
+                <li><strong>Nuevo Efecto Debuff:</strong> La velocidad de las animaciones de los ataques básicos [Z] del oponente también se reduce en un 10% mientras dure el efecto.</li>
+              </ul>
+            </li>
+          </ul>
+        </div>
+
+        <div class="changelog-badge-header" style="margin-top: 24px;">
           <span class="cl-ver retro-font">VERSIÓN 2.0.0</span>
           <span class="cl-badge" style="background: linear-gradient(135deg, #ef4444, #f59e0b);">UPDATE 2 · AGARRES, ESCENARIOS, LAB, MULTIJUGADOR & MANDOS</span>
         </div>
@@ -2328,6 +2478,8 @@ $pokemon_items = [
   <script src="js/fighters/jigglypuff.js?v=<?= $v ?>"></script>
   <script src="js/fighters/charizard.js?v=<?= $v ?>"></script>
   <script src="js/fighters/sylveon.js?v=<?= $v ?>"></script>
+  <script src="js/fighters/staraptor.js?v=<?= $v ?>"></script>
+  <script src="js/fighters/silvally.js?v=<?= $v ?>"></script>
   <script src="js/ui/hud.js?v=<?= $v ?>"></script>
   <script src="js/engine/online.js?v=<?= $v ?>"></script>
   <script>

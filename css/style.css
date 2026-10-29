@@ -1332,6 +1332,27 @@ body {
 }
 .stage-thumb-power-plant .grate-l { left: 14px; }
 .stage-thumb-power-plant .grate-r { right: 14px; }
+
+.stage-thumb-lumiose-city .stage-thumb-bg {
+  background: url('../assets/escenarios/ciudad luminalia.png') center/cover no-repeat;
+}
+.stage-thumb-lumiose-city .stage-thumb-plat.main-floor {
+  background: #334155;
+  border-top: 2px solid #38bdf8;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
+}
+.stage-thumb-lumiose-city .stage-thumb-plat.float-mid {
+  position: absolute;
+  left: 36px;
+  top: 22px;
+  width: 32px;
+  height: 4px;
+  background: #f8fafc;
+  border-top: 2px solid #f59e0b;
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.6);
+  border-radius: 2px;
+}
+
 .stage-thumb-sparks {
   position: absolute;
   inset: 0;
@@ -4198,6 +4219,137 @@ body {
   cursor: pointer;
   box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
   transition: all 0.2s ease;
+}
+
+/* =========================================================================
+ * INDEPENDENT X MOVES COOLDOWN HUD TRAY
+ * ========================================================================= */
+.fighter-specials-hud {
+  display: grid;
+  grid-template-columns: repeat(2, 28px);
+  grid-template-rows: repeat(2, 28px);
+  gap: 4px;
+  padding: 4px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.45);
+  align-self: center;
+  margin-left: 6px;
+  pointer-events: auto;
+  user-select: none;
+}
+
+.special-cd-slot {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  transition: all 0.15s ease;
+  cursor: default;
+}
+
+/* Ready State */
+.special-cd-slot.is-ready {
+  background: rgba(30, 41, 59, 0.75);
+  border: 1px solid rgba(56, 189, 248, 0.55);
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.22);
+}
+
+.dummy-card .special-cd-slot.is-ready {
+  border: 1px solid rgba(244, 63, 94, 0.55);
+  box-shadow: 0 0 8px rgba(244, 63, 94, 0.22);
+}
+
+.special-cd-slot.is-ready:hover {
+  transform: scale(1.08);
+  border-color: #38bdf8;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.55);
+}
+
+.dummy-card .special-cd-slot.is-ready:hover {
+  border-color: #f43f5e;
+  box-shadow: 0 0 12px rgba(244, 63, 94, 0.55);
+}
+
+/* Cooldown State */
+.special-cd-slot.is-cooldown {
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  box-shadow: inset 0 0 6px rgba(239, 68, 68, 0.3);
+}
+
+/* Semi-transparent dark overlay for cooldown fill */
+.special-cd-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(to top, rgba(239, 68, 68, 0.45), rgba(245, 158, 11, 0.25));
+  pointer-events: none;
+  transition: height 0.08s linear;
+  z-index: 1;
+}
+
+/* Direction Icon & Key */
+.special-cd-icon {
+  font-size: 11px;
+  font-weight: 800;
+  color: #f8fafc;
+  line-height: 1;
+  z-index: 2;
+  transition: opacity 0.15s ease;
+}
+
+.special-cd-key {
+  font-size: 8px;
+  font-weight: 900;
+  color: #94a3b8;
+  line-height: 1;
+  margin-top: 1px;
+  z-index: 2;
+  letter-spacing: 0.5px;
+  transition: opacity 0.15s ease;
+}
+
+/* Countdown Time Display */
+.special-cd-time {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 900;
+  color: #fbbf24;
+  text-shadow: 0 0 4px #000, 0 1px 2px #000;
+  z-index: 3;
+  line-height: 28px;
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .fighter-specials-hud {
+    grid-template-columns: repeat(2, 22px);
+    grid-template-rows: repeat(2, 22px);
+    gap: 3px;
+    padding: 3px;
+    margin-left: 4px;
+  }
+  .special-cd-slot {
+    width: 22px;
+    height: 22px;
+    border-radius: 5px;
+  }
+  .special-cd-icon { font-size: 9px; }
+  .special-cd-key { font-size: 7px; }
+  .special-cd-time { font-size: 8.5px; line-height: 22px; }
 }
 
 .btn-drawer-confirm:hover {

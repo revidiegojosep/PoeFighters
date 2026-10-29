@@ -12,6 +12,12 @@ class ParticleManager {
     this.screenFlashColor = '#ffffff';
   }
 
+  clear() {
+    this.particles = [];
+    this.lightningBolts = [];
+    this.screenFlashTimer = 0;
+  }
+
   triggerScreenFlash(color = '#ffffff', duration = 0.28) {
     this.screenFlashColor = color;
     this.screenFlashDuration = duration;
@@ -103,6 +109,19 @@ class ParticleManager {
         ctx.fill();
         ctx.strokeStyle = '#27ae60';
         ctx.lineWidth = 1;
+        ctx.stroke();
+      } else if (p.type === 'feather') {
+        ctx.fillStyle = p.color || '#e2e8f0';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, p.size * 2.2, p.size * 0.7, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = p.strokeColor || '#94a3b8';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.strokeStyle = p.shaftColor || '#cbd5e1';
+        ctx.beginPath();
+        ctx.moveTo(-p.size * 2.2, 0);
+        ctx.lineTo(p.size * 2.2, 0);
         ctx.stroke();
       } else if (p.type === 'ring') {
         ctx.strokeStyle = p.color;
@@ -833,6 +852,29 @@ class ParticleManager {
       const dist = Math.random() * radius * 0.8;
       this.spawnSmoke(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist, '#f97316', 10);
       this.spawnHitSparks(x + Math.cos(angle) * dist, y + Math.sin(angle) * dist, 4, 'fire');
+    }
+  }
+
+  spawnFeathers(x, y, count = 4, customColor = null) {
+    const featherColors = customColor ? [customColor] : ['#f8fafc', '#e2e8f0', '#cbd5e1', '#475569', '#ef4444'];
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 1.5 + Math.random() * 3.5;
+      this.particles.push({
+        type: 'feather',
+        x: x + (Math.random() - 0.5) * 12,
+        y: y + (Math.random() - 0.5) * 12,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 1.2,
+        rot: Math.random() * Math.PI * 2,
+        rotSpeed: (Math.random() - 0.5) * 0.25,
+        size: 3.5 + Math.random() * 3,
+        color: featherColors[Math.floor(Math.random() * featherColors.length)],
+        life: 0.45 + Math.random() * 0.35,
+        maxLife: 0.8,
+        gravity: 0.08,
+        friction: 0.96
+      });
     }
   }
 

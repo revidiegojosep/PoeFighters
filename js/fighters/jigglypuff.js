@@ -33,6 +33,9 @@ class Jigglypuff extends window.Fighter {
       ...config
     });
 
+    // Buff de Defensa al Knockback aumentado un 20% (sufre 20% menos knockback)
+    this.knockbackTakenMultiplier = 0.80;
+
     // Authentic Smash Bros Floaty Physics
     this.isFloaty = true;
     this.gravityMult = 0.44; // Gravedad reducida (+ flotabilidad)
@@ -345,22 +348,26 @@ class Jigglypuff extends window.Fighter {
         return {
           name: 'Canto (Up X - Duerme al Rival)',
           anim: 'Shoot',
-          animSpeed: 1.0,
+          animSpeed: 0.83, // Nerf: Animacion aumentada un 20% en duracion (velocidad 0.83)
           hitboxStart: 999,
           hitboxEnd: 999,
-          cooldown: 5.0, // Nerf Canto: CD aumentada (de 2.2s a 5.0s)
-          endLag: 0.4,   // Lag de 0.4 segundos
+          cooldown: 5.0, // Cooldown de 5.0 segundos
+          endLag: 0.70,   // Nerf: Lag aumentado tras utilizar canto (0.70s)
           onStart: (j) => {
-            // Lag de 0.4 segundos al hacer el movimiento: Jigglypuff queda fija cantando
-            j.actionLockTimer = 0.4;
+            // Lag aumentado al hacer el movimiento: Jigglypuff queda fija cantando
+            j.actionLockTimer = 0.50;
+            if (j.specialCooldowns) {
+              j.specialCooldowns.up = 5.0;
+              j.specialMaxCooldowns.up = 5.0;
+            }
             j.specialCooldown = Math.max(j.specialCooldown, 5.0);
-            j.singStartupTimer = 0.4; // Lag de inicio de 0.4s antes del sueño
+            j.singStartupTimer = 0.48; // Startup aumentado un 20% (antes 0.40s)
             j.singAuraTimer = 1.4;
-            j.singAuraRadius = 25;
+            j.singAuraRadius = 15; // Hitbox reducida 40% (radio inicial 15 en vez de 25)
             window.soundEngine && window.soundEngine.playSfx('sing');
 
             if (window.particleManager) {
-              window.particleManager.spawnFloatingText(j.x, j.y - j.height - 20, '🎵 ¡CANTO! (0.4s Lag)', '#38bdf8', 18);
+              window.particleManager.spawnFloatingText(j.x, j.y - j.height - 20, '🎵 ¡CANTO! (Lag++)', '#38bdf8', 18);
             }
           }
         };
@@ -384,9 +391,14 @@ class Jigglypuff extends window.Fighter {
           type: 'electric',
           hitlag: 16, // Freeze frame impact
           slashColor: '#ffffff',
+          cooldown: 2.2, // Cooldown independiente para Rest
           onStart: (j) => {
             j.restSleepTimer = 2.2;
             j.actionLockTimer = 2.2;
+            if (j.specialCooldowns) {
+              j.specialCooldowns.down = 2.2;
+              j.specialMaxCooldowns.down = 2.2;
+            }
             window.soundEngine && window.soundEngine.playSfx('rest');
 
             if (window.particleManager) {
@@ -431,7 +443,7 @@ class Jigglypuff extends window.Fighter {
         this.singStartupTimer = Math.max(0, this.singStartupTimer - dt);
       }
       this.singAuraTimer = Math.max(0, this.singAuraTimer - dt);
-      this.singAuraRadius = Math.min(105, this.singAuraRadius + dt * 70);
+      this.singAuraRadius = Math.min(63, this.singAuraRadius + dt * 42); // Nerf: Hitbox canto reducida un 40% (max 63 en vez de 105)
 
       // Check if opponent is caught in singing range (only active after 0.4s lag!)
       if (this.singStartupTimer <= 0 && opponent && opponent.state !== 'RESPAWN' && opponent.invulnTimer <= 0) {

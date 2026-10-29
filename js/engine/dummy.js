@@ -323,6 +323,66 @@ class TrainingDummyController {
           maxJumps: 3
         };
 
+      case 773: // Silvally: Heavyweight RKS Chimera, Air Slash, Multi-Attack, Snarl, Razor Wind
+        return {
+          dex: 773,
+          name: 'Silvally',
+          archetype: 'heavy_bruiser',
+          preferredDist: 56,
+          minSafeDist: 36,
+          maxPokeDist: 90,
+          hasProjectile: true,
+          projectileType: 'neutral_special', // Tajo Aéreo (Neutral X)
+          rushMove: 'side_special',          // Multiataque (Side X)
+          aoeMove: 'down_special',           // Alarido (Down X)
+          recoveryMove: 'up_special',        // Viento Cortante (Up X)
+          antiAir: 'up_basic',               // Cresta Alfa Uair / Up Tilt
+          spike: 'down_basic',               // Pisotón Meteoro Dair
+          jumpAggression: 0.38,
+          floaty: false,
+          maxJumps: 2
+        };
+
+      case 398: // Staraptor: Fast aerial raptor, 5 jumps, Brave Bird, Whirlwind, Detect
+        return {
+          dex: 398,
+          name: 'Staraptor',
+          archetype: 'aerial_rusher',
+          preferredDist: 52,
+          minSafeDist: 34,
+          maxPokeDist: 85,
+          hasProjectile: true,
+          projectileType: 'neutral_special', // Torbellino (Neutral X)
+          rushMove: 'side_special',          // Pájaro Osado (Side X - Brave Bird)
+          counterMove: 'down_special',       // Detección (Down X - Detect)
+          recoveryMove: 'up_special',        // Vuelo (Up X - Fly)
+          antiAir: 'up_basic',               // Cresta Cortante Uair
+          spike: 'down_basic',               // Picado Meteoro Dair
+          jumpAggression: 0.55,
+          floaty: true,
+          maxJumps: 5
+        };
+
+      case 700: // Sylveon: Fairy Ribbon Zoner, Hiper Rayo, Beso Drenaje, Ojitos Tiernos
+        return {
+          dex: 700,
+          name: 'Sylveon',
+          archetype: 'fairy_zoner',
+          preferredDist: 64,     // Ribbon spacing sweetspot (50 - 78px)
+          minSafeDist: 38,
+          maxPokeDist: 85,
+          hasProjectile: true,
+          projectileType: 'side_special', // Beso Drenaje (Side X - heals 30%!)
+          beamMove: 'neutral_special',    // Hiper Rayo (Neutral X - cargable)
+          aoeMove: 'down_special',        // Ojitos Tiernos (Down X - AOE Slow 7s)
+          recoveryMove: 'up_special',     // Fuerza Lunar (Moonblast / Up X)
+          antiAir: 'up_basic',            // Lazo Lunar Uair / Arco Ascendente
+          spike: 'down_basic',            // Taladro Feérico Dair
+          shieldBreaker: null,
+          jumpAggression: 0.38,
+          floaty: false
+        };
+
       default:
         return {
           dex: 0,
@@ -682,8 +742,8 @@ class TrainingDummyController {
     if (!d.canAct() || d.state === 'ROLL' || d.state === 'AIR_DODGE') return false;
 
     // Solo activar si el ataque/proyectil rival está en rango real de impacto
-    const isAttackThreat = p.isAttacking && p.dist < (d.isGrounded ? (this.cpuLevel >= 7 ? 85 : 70) : 62);
-    const isProjThreat = p.hasIncomingProjectile && p.nearestProjectileDist < (this.cpuLevel >= 7 ? 130 : 90);
+    const isAttackThreat = p.isAttacking && p.dist < (d.isGrounded ? (this.cpuLevel >= 7 ? 52 : 42) : 46);
+    const isProjThreat = p.hasIncomingProjectile && p.nearestProjectileDist < (this.cpuLevel >= 7 ? 95 : 70);
 
     if (!isAttackThreat && !isProjThreat) {
       this.pendingDefense = null;
@@ -728,8 +788,10 @@ class TrainingDummyController {
         } else {
           return false;
         }
-      } else if (d.isGrounded && this.cpuLevel >= 5 && (d.rollCooldown || 0) <= 0 && Math.random() < 0.45) {
-        chosenAction = Math.random() < 0.35 ? 'SPOT_DODGE' : 'ROLL';
+      } else if (d.isGrounded && this.cpuLevel >= 5 && (d.rollCooldown || 0) <= 0) {
+        const nearLedge = myFighter.x < 280 || myFighter.x > 740;
+        const lowShield = d.shield < 38;
+        chosenAction = (nearLedge || lowShield) && Math.random() < 0.55 ? 'ROLL' : (Math.random() < 0.12 ? 'SPOT_DODGE' : 'SHIELD');
       }
 
       this.pendingDefense = {
@@ -744,6 +806,7 @@ class TrainingDummyController {
 
   _executeDefense(action, p) {
     const d = this.dummy;
+    const myFighter = (d.minunDead && d.partner) ? d.partner : d;
     if (action === 'AIR_JUMP_ESCAPE') {
       d.input.jumpPressed = true;
       if (p.distX > 0) d.input.left = true;
@@ -762,7 +825,7 @@ class TrainingDummyController {
       else if (p.distY > 15) d.input.up = true;
     } else if (action === 'ROLL') {
       d.input.shield = true;
-      const rollCross = (this.cpuLevel >= 7) ? Math.random() < 0.70 : Math.random() < 0.45;
+      const rollCross = myFighter.x < 350 ? false : myFighter.x > 674 ? true : ((this.cpuLevel >= 7) ? Math.random() < 0.70 : Math.random() < 0.45);
       if (rollCross) {
         if (p.distX < 0) d.input.left = true;
         else d.input.right = true;
@@ -994,12 +1057,39 @@ class TrainingDummyController {
 
     /* --- LONG RANGE (dist > 180px) --- */
     if (dist > 180) {
+      // Sylveon: Francotirador con Hiper Rayo cargado o Beso Drenaje
+      if (profile.dex === 700 && this.projectileCooldown <= 0 && Math.random() < 0.65) {
+        if (Math.random() < 0.50) {
+          this.currentIntent = 'CHARGED_BEAM';
+          this.intentTimer = 0.52 + Math.random() * 0.20;
+          this.projectileCooldown = 1.6 + Math.random() * 0.8;
+          this.consecutiveAttacks = 1;
+          this._recordMove('hyper_beam');
+          return;
+        } else {
+          this.currentIntent = 'POKE';
+          this.intentMove = { id: 'draining_kiss', type: 'special_side' };
+          this.intentTimer = 0.28;
+          this.projectileCooldown = 1.2 + Math.random() * 0.6;
+          this.consecutiveAttacks = 1;
+          this._recordMove('draining_kiss');
+          return;
+        }
+      }
+
+      // Charizard: No usa Lanzallamas a > 180px porque no alcanza; avanza hacia el rival
+      if (profile.dex === 6) {
+        this.currentIntent = 'APPROACH';
+        this.intentTimer = 0.32 + Math.random() * 0.16;
+        return;
+      }
+
       // Zoner projectile opportunity
       if (profile.hasProjectile && this.projectileCooldown <= 0 && Math.random() < 0.55) {
         this.currentIntent = 'POKE';
         this.intentMove = { id: 'projectile', type: 'projectile' };
         this.intentTimer = 0.28;
-        this.projectileCooldown = 4.0 + Math.random() * 1.5;
+        this.projectileCooldown = 1.4 + Math.random() * 0.8;
         this.consecutiveAttacks = 1;
         this._recordMove('projectile');
         return;
@@ -1015,11 +1105,35 @@ class TrainingDummyController {
     if (absDx > profile.maxPokeDist) {
       const roll = Math.random();
 
-      // Surprise burst move (Pikachu Skull Bash, Minun Magnet Dash, Gengar Teleport)
-      if (profile.burstMove && Math.random() < 0.22 && this.projectileCooldown <= 0) {
+      // Sylveon: Presión con Beso Drenaje en rango medio
+      if (profile.dex === 700 && this.projectileCooldown <= 0 && Math.random() < 0.45) {
+        this.currentIntent = 'POKE';
+        this.intentMove = { id: 'draining_kiss', type: 'special_side' };
+        this.intentTimer = 0.26;
+        this.projectileCooldown = 1.2 + Math.random() * 0.5;
+        this.consecutiveAttacks = 1;
+        this._recordMove('draining_kiss');
+        return;
+      }
+
+      // Charizard: Lanzallamas para controlar espacio de 45px a 110px
+      if (profile.dex === 6 && absDx <= 110 && this.projectileCooldown <= 0 && Math.random() < 0.45) {
+        this.currentIntent = 'FLAMETHROWER';
+        this.intentTimer = 0.45 + Math.random() * 0.25;
+        this.projectileCooldown = 2.0;
+        this.consecutiveAttacks = 1;
+        this._recordMove('flamethrower');
+        return;
+      }
+
+      // Surprise burst move (Envite Ígneo de Charizard solo a alto % / castigo; no spamear)
+      const canBurst = profile.dex === 6
+        ? (p.percent > 60 || p.hitstun > 8 || Math.random() < 0.08)
+        : Math.random() < 0.22;
+      if (profile.burstMove && canBurst && this.projectileCooldown <= 0) {
         this.currentIntent = 'BURST';
         this.intentTimer = 0.35;
-        this.projectileCooldown = 3.2;
+        this.projectileCooldown = (profile.dex === 6 ? 4.5 : 2.8);
         this.consecutiveAttacks = 1;
         this._recordMove('burst');
         return;
@@ -1111,9 +1225,66 @@ class TrainingDummyController {
 
     // 1. Jigglypuff Rest (Down X): VERY HIGH RISK. ONLY on asleep, stunned, or point-blank heavy hitstun!
     if (profile.dex === 39) {
-      const isTargetHelpless = (p.hitstun > 18 || p.state === 'HURT' || p.state === 'SHIELD_BREAK');
-      if (isTargetHelpless && p.dist < 26) {
+      const opp = (window.game ? (d.isPlayer ? window.game.dummy : window.game.player) : null);
+      const isAsleep = !!(opp && opp.statuses && opp.statuses.sleep && opp.statuses.sleep.active);
+      const isTargetHelpless = isAsleep || p.hitstun > 14 || p.state === 'SHIELD_BREAK';
+      if (isTargetHelpless && p.dist < 34) {
         return { id: 'jiggly_rest', type: 'special_down' };
+      }
+      if (!isAir && Math.abs(p.distX) < 55 && Math.abs(p.distY) < 22 && !isAsleep && Math.random() < 0.40) {
+        candidates.push({ id: 'jiggly_sing', type: 'special_up', score: 140 });
+      }
+      if (Math.abs(p.distX) <= 68 && Math.random() < 0.42) {
+        candidates.push({ id: 'jiggly_pound', type: 'special_side', score: 125 });
+      }
+      if (false) {
+        return { id: 'jiggly_rest', type: 'special_down' };
+      }
+    }
+
+    // Silvally Specials: Alarido, Tajo Aéreo & Multiataque
+    if (profile.dex === 773) {
+      if (!isAir && Math.abs(p.distX) <= 80 && Math.random() < 0.45) {
+        candidates.push({ id: 'snarl', type: 'special_down', score: 145 });
+      }
+      if (Math.abs(p.distX) >= 48 && Math.abs(p.distX) <= 130 && this.projectileCooldown <= 0 && Math.random() < 0.50) {
+        candidates.push({ id: 'air_slash', type: 'special_neutral', score: 135 });
+      }
+      if (Math.abs(p.distX) <= 75 && Math.random() < 0.40) {
+        candidates.push({ id: 'multi_attack', type: 'special_side', score: 140 });
+      }
+    }
+
+    // Staraptor Specials: Detección (Counter when opponent attacks) & Torbellino / Pájaro Osado
+    if (profile.dex === 398) {
+      if (p.isAttacking && Math.abs(p.distX) < 65 && Math.random() < 0.60) {
+        candidates.push({ id: 'detect', type: 'special_down', score: 160 });
+      }
+      if (Math.abs(p.distX) >= 60 && Math.abs(p.distX) <= 120 && Math.random() < 0.45) {
+        candidates.push({ id: 'whirlwind', type: 'special_neutral', score: 130 });
+      }
+      if (Math.abs(p.distX) >= 80 && Math.abs(p.distX) <= 180 && Math.random() < 0.40) {
+        candidates.push({ id: 'brave_bird', type: 'special_side', score: 140 });
+      }
+    }
+
+    // Sylveon Specials: Ojitos Tiernos AOE slow & Beso Drenaje poke
+    if (profile.dex === 700) {
+      if (!isAir && Math.abs(p.distX) < 70 && (d.babyDollCooldown || 0) <= 0 && Math.random() < 0.45) {
+        candidates.push({ id: 'baby_doll_eyes', type: 'special_down', score: 135 });
+      }
+      if (Math.abs(p.distX) >= 42 && Math.abs(p.distX) <= 85 && this.projectileCooldown <= 0) {
+        candidates.push({ id: 'draining_kiss', type: 'special_side', score: 125 });
+      }
+    }
+
+    // Charizard Specials: Lanzallamas & Golpe Roca (Rock Smash)
+    if (profile.dex === 6) {
+      if (!isAir && Math.abs(p.distX) <= 88 && this.projectileCooldown <= 0 && Math.random() < 0.45) {
+        candidates.push({ id: 'flamethrower', type: 'special_neutral', score: 125 });
+      }
+      if (!isAir && Math.abs(p.distX) <= 52 && (p.isAttacking || p.isShielding)) {
+        candidates.push({ id: 'rock_smash', type: 'special_down', score: 130 });
       }
     }
 
@@ -1318,6 +1489,36 @@ class TrainingDummyController {
         break;
       }
 
+      case 'CHARGED_BEAM': {
+        this.intentLockedFacing = dx < 0 ? -1 : 1;
+        d.facing = this.intentLockedFacing;
+        if (!this.pokeTriggered) {
+          this.pokeTriggered = true;
+          d.input.specialPressed = true;
+        }
+        if (this.intentTimer > 0.04) {
+          d.input.special = true;
+        } else {
+          d.input.special = false;
+        }
+        break;
+      }
+
+      case 'FLAMETHROWER': {
+        this.intentLockedFacing = dx < 0 ? -1 : 1;
+        d.facing = this.intentLockedFacing;
+        if (!this.pokeTriggered) {
+          this.pokeTriggered = true;
+          d.input.specialPressed = true;
+        }
+        if (this.intentTimer > 0.04) {
+          d.input.special = true;
+        } else {
+          d.input.special = false;
+        }
+        break;
+      }
+
       case 'SMASH': {
         if (d.isGrounded && d.startSmashCharge) {
           const smashDir = Math.abs(dy) > 28 ? (dy < 0 ? 'up' : 'down') : 'side';
@@ -1354,7 +1555,7 @@ class TrainingDummyController {
 
             case 'projectile':
               d.input.specialPressed = true;
-              if (profile.dex === 1) { // Bulbasaur Razor Leaf is Side X
+              if (profile.dex === 1 || profile.dex === 700) { // Bulbasaur Razor Leaf & Sylveon Draining Kiss are Side X
                 if (this.intentLockedFacing === -1) d.input.left = true;
                 else d.input.right = true;
               }

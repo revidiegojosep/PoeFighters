@@ -10,6 +10,9 @@
  *
  * Ataques Básicos (Z):
  *  - Uso acrobático de sus lazos y cintas mágicas para jabs rápidos, latigazos y remate meteoro aéreo.
+ *
+ * Ataques Smash (Z Cargable):
+ *  - Latigazo Meteoro Feérico (Forward Smash), Estallido Cinta Estelar (Up Smash) y Doble Azote de Lazo (Down Smash).
  */
 class Sylveon extends window.Fighter {
   constructor(config = {}) {
@@ -32,8 +35,11 @@ class Sylveon extends window.Fighter {
     // Estado de ataques especiales
     this.hyperBeamActive = false;
     this.hyperBeamTimer = 0;
-    this.hyperBeamMaxTime = 0.26;
-    this.hyperBeamLength = 320;
+    this.hyperBeamTotalDuration = 0.55;
+    this.hyperBeamTravelDuration = 0.40;
+    this.hyperBeamElapsed = 0;
+    this.hyperBeamTargetLength = 210;
+    this.hyperBeamLength = 0;
     this.hyperBeamThickness = 14;
     this.hyperBeamDamage = 12;
     this.hyperBeamFacing = 1;
@@ -42,9 +48,10 @@ class Sylveon extends window.Fighter {
     this.hyperBeamChargeRatio = 0;
     this.hyperBeamHasHit = false;
 
-    // Ojitos Tiernos AOE pulse animation
+    // Ojitos Tiernos AOE pulse animation y cooldown específico de 4s
     this.babyDollPulseTimer = 0;
     this.babyDollPulseRadius = 0;
+    this.babyDollCooldown = 0;
   }
 
   getBasicAttackDef(dir, isAir = false) {
@@ -194,7 +201,7 @@ class Sylveon extends window.Fighter {
         };
 
       case 'side':
-        // Side Tilt / Smash: Fuerte látigo mágico frontal
+        // Side Tilt: Fuerte látigo mágico frontal
         return {
           name: 'Latigazo Mágico (Side Tilt)',
           anim: 'Attack',
@@ -242,11 +249,93 @@ class Sylveon extends window.Fighter {
     }
   }
 
+  getSmashAttackDef(dir) {
+    switch (dir) {
+      case 'up':
+        return {
+          name: '¡Estallido Cinta Estelar! (Up Smash)',
+          anim: 'Attack',
+          animSpeed: 1.45,
+          hitboxStart: 2,
+          hitboxEnd: 10,
+          offsetX: 10,
+          offsetY: 48,
+          radius: 42,
+          damage: 18.5,
+          baseKnockback: 37,
+          knockbackScaling: 1.62,
+          angle: 88,
+          type: 'fairy',
+          hitlag: 9,
+          slashColor: '#f472b6',
+          onStart: (s) => {
+            window.soundEngine && window.soundEngine.playSfx('select', 0.15);
+            if (window.particleManager) {
+              window.particleManager.spawnRadialBurst(s.x + s.facing * 8, s.y - 36, '#f472b6', 'fairy', 38);
+              window.particleManager.spawnHitSparks(s.x + s.facing * 8, s.y - 42, 8, 'fairy');
+            }
+          }
+        };
+
+      case 'down':
+        return {
+          name: '¡Doble Azote de Lazo! (Down Smash)',
+          anim: 'Attack',
+          animSpeed: 1.4,
+          hitboxStart: 2,
+          hitboxEnd: 11,
+          offsetX: 0,
+          offsetY: 14,
+          radius: 46, // Área 360° alrededor de Sylveon
+          damage: 16,
+          baseKnockback: 32,
+          knockbackScaling: 1.45,
+          angle: 48,
+          type: 'fairy',
+          hitlag: 8,
+          slashColor: '#38bdf8',
+          onStart: (s) => {
+            window.soundEngine && window.soundEngine.playSfx('whip', 0.12);
+            if (window.particleManager) {
+              window.particleManager.spawnRadialBurst(s.x, s.y - 14, '#38bdf8', 'fairy', 44);
+            }
+          }
+        };
+
+      case 'side':
+      default:
+        return {
+          name: '¡Latigazo Meteoro Feérico! (Side Smash)',
+          anim: 'Attack',
+          animSpeed: 1.4,
+          hitboxStart: 3,
+          hitboxEnd: 11,
+          offsetX: 34,
+          offsetY: 20,
+          radius: 40,
+          damage: 19.5,
+          baseKnockback: 38,
+          knockbackScaling: 1.68,
+          angle: 40,
+          type: 'fairy',
+          hitlag: 10,
+          slashColor: '#ec4899',
+          onStart: (s) => {
+            window.soundEngine && window.soundEngine.playSfx('smash');
+            if (window.particleManager) {
+              window.particleManager.spawnHitSparks(s.x + s.facing * 32, s.y - 20, 10, 'fairy');
+              window.particleManager.spawnRadialBurst(s.x + s.facing * 28, s.y - 20, '#ec4899', 'normal', 34);
+            }
+          }
+        };
+    }
+  }
+
   getSpecialMoveDef(dir) {
     switch (dir) {
       case 'neutral':
         // Neutral Special: Hiper Rayo (Cargable)
-        // "Lanza un rayo en linea recta. Este rayo se puede mantener para hacer mas daño cubrir mas distancia."
+        // "Lanza un rayo en línea recta. Este rayo se puede mantener para hacer más daño y cubrir más distancia."
         return {
           name: 'Hiper Rayo (Neutral X - Mantener para Cargar)',
           anim: 'Shoot',
@@ -303,18 +392,22 @@ class Sylveon extends window.Fighter {
           name: 'Beso Drenaje (Side X)',
           anim: 'Shoot',
           animSpeed: 2.4,
-          cooldown: 0.85,
-          endLag: 0.18,
+          cooldown: 1.25, // Nerf: CD aumentada un 0.4s (antes 0.85s -> ahora 1.25s)
+          endLag: 0.20,
           hitboxStart: 999,
           hitboxEnd: 999,
           onStart: (s) => {
+            if (s.specialCooldowns) {
+              s.specialCooldowns.side = 1.25;
+              s.specialMaxCooldowns.side = 1.25;
+            }
             this._fireDrainingKiss(s);
           }
         };
 
       case 'up':
         // Up Special: Fuerza Lunar (Moonblast)
-        // "Se teletransporta arriba; y lanza rayos de luz lunar al suelo, en un spread de 3 proyectiles."
+        // "Se teletransporta arriba y lanza rayos de luz lunar al suelo en un spread de 3 proyectiles."
         return {
           name: 'Fuerza Lunar (Moonblast / Up X)',
           anim: 'Shoot',
@@ -324,6 +417,10 @@ class Sylveon extends window.Fighter {
           hitboxStart: 999,
           hitboxEnd: 999,
           onStart: (s) => {
+            if (s.specialCooldowns) {
+              s.specialCooldowns.up = 1.1;
+              s.specialMaxCooldowns.up = 1.1;
+            }
             this._executeMoonblastRecovery(s);
           }
         };
@@ -335,11 +432,15 @@ class Sylveon extends window.Fighter {
           name: 'Ojitos Tiernos (Down X - AOE Slow)',
           anim: 'Shoot',
           animSpeed: 2.0,
-          cooldown: 4.0, // Cooldown de 4s para balance competitivo
+          cooldown: 4.0, // Cooldown independiente para Ojitos Tiernos
           endLag: 0.24,
           hitboxStart: 999,
           hitboxEnd: 999,
           onStart: (s) => {
+            if (s.specialCooldowns) {
+              s.specialCooldowns.down = 4.0;
+              s.specialMaxCooldowns.down = 4.0;
+            }
             this._executeBabyDollEyes(s);
           }
         };
@@ -357,17 +458,25 @@ class Sylveon extends window.Fighter {
    * Neutral X: Hiper Rayo lineal de carga variable
    */
   _fireHyperBeam(s, chargeRatio = 0) {
-    const minLen = 290;
-    const maxLen = 680;
-    const length = minLen + chargeRatio * (maxLen - minLen);
-    const thickness = 12 + chargeRatio * 16;
+    // Al solo pulsar, la distancia es un 50% menor a la actual (210px en vez de 420px)
+    const minLen = 210;
+    const maxLen = 780;
+    const targetLength = minLen + chargeRatio * (maxLen - minLen);
+    const thickness = 14 + chargeRatio * 16;
     const damage = Math.round(12 + chargeRatio * 14); // 12% a 26%
-    const baseKnockback = 12 + chargeRatio * 10;
-    const knockbackScaling = 0.85 + chargeRatio * 0.40;
+
+    // Al pulsar, en lugar de directamente aparecer, el proyectil debe viajar al menos 0.4 segundos
+    const travelDuration = 0.40 + chargeRatio * 0.20;
+    const lingerDuration = 0.15;
+    const totalDuration = travelDuration + lingerDuration;
 
     s.hyperBeamActive = true;
-    s.hyperBeamTimer = s.hyperBeamMaxTime;
-    s.hyperBeamLength = length;
+    s.hyperBeamTimer = totalDuration;
+    s.hyperBeamTotalDuration = totalDuration;
+    s.hyperBeamTravelDuration = travelDuration;
+    s.hyperBeamElapsed = 0;
+    s.hyperBeamTargetLength = targetLength;
+    s.hyperBeamLength = 0; // Empieza en 0 y viaja hacia adelante
     s.hyperBeamThickness = thickness;
     s.hyperBeamDamage = damage;
     s.hyperBeamFacing = s.facing;
@@ -384,7 +493,11 @@ class Sylveon extends window.Fighter {
       window.soundEngine.playSfx('hyper_beam');
     }
     if (chargeRatio > 0.6 && window.game) {
-      window.game.shakeScreen(6 + chargeRatio * 8, 0.22);
+      if (typeof window.game.triggerScreenShake === 'function') {
+        window.game.triggerScreenShake(6 + chargeRatio * 8, 0.22);
+      } else if (typeof window.game.shakeScreen === 'function') {
+        window.game.shakeScreen(6 + chargeRatio * 8, 0.22);
+      }
     }
 
     if (window.particleManager) {
@@ -422,10 +535,12 @@ class Sylveon extends window.Fighter {
       vy: 0,
       radius: 16,
       damage: damage,
-      baseKnockback: 13,
-      knockbackScaling: 0.85,
+      baseKnockback: 9, // Reducido en un 30% (antes 13)
+      knockbackScaling: 0.60, // Reducido en un 30% (antes 0.85)
       angle: 38,
       type: 'fairy',
+      isSpecial: true,
+      isProjectile: true,
       life: 1.15,
       hitlag: 6,
       pulsePhase: 0,
@@ -433,7 +548,8 @@ class Sylveon extends window.Fighter {
         ctx.save();
         this.pulsePhase += 0.25;
         const scale = 1.0 + Math.sin(this.pulsePhase) * 0.15;
-        ctx.translate(this.x, this.y);
+        // Centrar visualmente el corazón en la posición (this.x, this.y)
+        ctx.translate(this.x, this.y - 15);
         ctx.scale(scale, scale);
 
         // Glowing outer heart aura
@@ -499,10 +615,25 @@ class Sylveon extends window.Fighter {
       window.particleManager.spawnSmoke(s.x, s.y, '#ffffff', 8);
     }
 
-    // 2. Teletransporte hacia arriba
-    s.y -= 135;
-    s.vy = -3.2;
+    // 2. Control direccional horizontal durante la recuperación
+    const dirX = s.input ? (s.input.left ? -1 : s.input.right ? 1 : 0) : 0;
+    if (dirX !== 0) {
+      s.facing = dirX;
+      s.x += dirX * 70;
+      s.vx = dirX * 3.6;
+    } else {
+      s.vx = s.facing * 1.2;
+    }
+
+    // Teletransporte hacia arriba con límite seguro de techo para no auto-eliminarse
+    const minSafeY = (window.game && window.game.stage && window.game.stage.blastZones)
+      ? window.game.stage.blastZones.top + 60
+      : -100;
+    s.y = Math.max(minSafeY, s.y - 145);
+    s.vy = -3.6;
     s.isGrounded = false;
+    s.upSpecialUsed = true;
+    s.invulnTimer = 0.22;
 
     // Destello en la nueva posición
     if (window.particleManager) {
@@ -510,7 +641,6 @@ class Sylveon extends window.Fighter {
     }
 
     // 3. Spread de 3 proyectiles de luz lunar hacia el suelo
-    // Spread: izquierda, centro, derecha
     const spreadConfigs = [
       { vx: -4.8, vy: 8.5 },
       { vx: 0.6 * s.facing, vy: 9.6 },
@@ -529,6 +659,8 @@ class Sylveon extends window.Fighter {
         knockbackScaling: 0.8,
         angle: 285, // Fuerza hacia el suelo
         type: 'fairy',
+        isSpecial: true,
+        isProjectile: true,
         life: 1.2,
         hitlag: 5,
         hitStage: true,
@@ -565,6 +697,9 @@ class Sylveon extends window.Fighter {
           }
         },
         onHit: function(opponent) {
+          if (window.soundEngine) {
+            window.soundEngine.playSfx('hit_light');
+          }
           if (window.particleManager) {
             window.particleManager.spawnHitSparks(opponent.x, opponent.y - 20, 6, 'fairy');
           }
@@ -577,9 +712,23 @@ class Sylveon extends window.Fighter {
 
   /**
    * Down X: Ojitos Tiernos (Baby-Doll Eyes)
-   * Reduce la velocidad del oponente durante 7 segundos en un 30%. Ataque en AOE desde cerca.
+   * Reduce la velocidad del oponente en un 40% y sus ataques Z en un 10% durante 7 segundos. Ataque en AOE desde cerca.
    */
   _executeBabyDollEyes(s) {
+    if (s.babyDollCooldown > 0) {
+      if (window.particleManager) {
+        window.particleManager.spawnFloatingText(
+          s.x,
+          s.y - s.height - 14,
+          `¡En CD! (${Math.ceil(s.babyDollCooldown)}s)`,
+          '#f87171',
+          13
+        );
+      }
+      return;
+    }
+    s.babyDollCooldown = 4.0; // Cooldown exclusivo para Ojitos Tiernos
+
     const aoeRadius = 115;
     s.babyDollPulseTimer = 0.40;
     s.babyDollPulseRadius = 10;
@@ -600,21 +749,32 @@ class Sylveon extends window.Fighter {
     }
 
     // Verificar si el rival está dentro del radio AOE
-    const opponent = s.getOpponent ? s.getOpponent() : (window.game ? (s.isPlayer ? window.game.dummy : window.game.player) : null);
+    const opponent = s.getOpponent ? s.getOpponent() : (window.game ? (s === window.game.player ? window.game.dummy : window.game.player) : null);
     if (opponent && opponent.state !== 'RESPAWN' && opponent.invulnTimer <= 0) {
-      const dist = Math.hypot(opponent.x - s.x, opponent.y - s.y);
+      const oppY = opponent.y - opponent.height * 0.5;
+      const dist = Math.hypot(opponent.x - s.x, oppY - (s.y - 20));
       if (dist <= aoeRadius) {
-        // Inflige daño leve (5%) y aplica reducción de velocidad de 30% por 7 segundos
+        // Inflige daño leve (5%) y aplica reducción de velocidad de 30% por 7 segundos si no está bloqueando
         const hitbox = {
           damage: 5,
           baseKnockback: 6,
           knockbackScaling: 0.3,
           angle: 45,
           type: 'fairy',
-          hitlag: 4
+          hitlag: 4,
+          isSpecial: true
         };
-        opponent.takeHit(hitbox, s);
-        opponent.applyStatus('slow', 7.0);
+        const finalHitbox = s.getModifiedHitbox ? s.getModifiedHitbox(hitbox, true) : hitbox;
+        opponent.takeHit(finalHitbox, s);
+
+        if (opponent.state !== 'SHIELD' && opponent.parryFlashTimer <= 0) {
+          if (typeof opponent.applyStatus === 'function') {
+            opponent.applyStatus('slow', 7.0);
+          } else if (opponent.statuses && opponent.statuses.slow) {
+            opponent.statuses.slow.active = true;
+            opponent.statuses.slow.timer = 7.0;
+          }
+        }
 
         if (window.particleManager) {
           window.particleManager.spawnHitSparks(opponent.x, opponent.y - opponent.height * 0.5, 8, 'fairy');
@@ -625,59 +785,106 @@ class Sylveon extends window.Fighter {
 
   getOpponent() {
     if (!window.game) return null;
-    return this.isPlayer ? window.game.dummy : window.game.player;
+    return this === window.game.player ? window.game.dummy : window.game.player;
   }
 
-  update(dt, stage, opponent) {
-    super.update(dt, stage, opponent);
+  onBlastZoneKO(stage) {
+    this.hyperBeamActive = false;
+    this.hyperBeamTimer = 0;
+    this.babyDollPulseTimer = 0;
+    this.babyDollCooldown = 0;
+    super.onBlastZoneKO(stage);
+  }
+
+  update(dt, opponent, stage) {
+    super.update(dt, opponent, stage);
+
+    if (this.babyDollCooldown > 0) {
+      this.babyDollCooldown = Math.max(0, this.babyDollCooldown - dt);
+    }
+
+    // Cancelar rayo si Sylveon es golpeado o eliminado
+    if (this.state === 'HURT' || this.state === 'RESPAWN' || this.state === 'FAINT') {
+      this.hyperBeamActive = false;
+      this.hyperBeamTimer = 0;
+    }
 
     // Actualización del Hiper Rayo activo
     if (this.hyperBeamActive) {
       this.hyperBeamTimer -= dt;
+      this.hyperBeamElapsed += dt;
+
+      // El proyectil viaja hacia adelante durante al menos 0.4s en lugar de aparecer de golpe
+      const travelProgress = Math.min(1.0, this.hyperBeamElapsed / (this.hyperBeamTravelDuration || 0.40));
+      this.hyperBeamLength = this.hyperBeamTargetLength * travelProgress;
+
       this.hyperBeamStartX = this.x + this.hyperBeamFacing * 20;
       this.hyperBeamStartY = this.y - 20;
 
-      // Colisión del Hiper Rayo con el rival en tiempo real
-      if (!this.hyperBeamHasHit && opponent && opponent.state !== 'RESPAWN' && opponent.invulnTimer <= 0) {
+      const headX = this.hyperBeamStartX + this.hyperBeamFacing * this.hyperBeamLength;
+      const headY = this.hyperBeamStartY;
+
+      // Chispas y estallidos en la punta del proyectil mientras viaja
+      if (window.particleManager && Math.random() < 0.70) {
+        window.particleManager.spawnHitSparks(headX, headY, 2, 'fairy');
+      }
+
+      // Colisión del Hiper Rayo con el rival en tiempo real (solo hasta donde ha viajado el rayo)
+      const opp = opponent || this.getOpponent();
+      if (!this.hyperBeamHasHit && opp && opp.state !== 'RESPAWN' && opp.invulnTimer <= 0) {
         const startX = this.hyperBeamStartX;
-        const endX = startX + this.hyperBeamFacing * this.hyperBeamLength;
+        const endX = headX;
         const minX = Math.min(startX, endX);
         const maxX = Math.max(startX, endX);
         const beamY = this.hyperBeamStartY;
         const halfThick = this.hyperBeamThickness * 0.8;
 
-        const oppCenterY = opponent.y - opponent.height * 0.5;
-        if (
-          opponent.x >= minX - 16 &&
-          opponent.x <= maxX + 16 &&
-          Math.abs(oppCenterY - beamY) <= halfThick + opponent.hurtboxRadius
-        ) {
-          this.hyperBeamHasHit = true;
-          const beamHitbox = {
-            damage: this.hyperBeamDamage,
-            baseKnockback: 12 + this.hyperBeamChargeRatio * 10,
-            knockbackScaling: 0.85 + this.hyperBeamChargeRatio * 0.40,
-            angle: 35,
-            type: 'fairy',
-            hitlag: 8 + Math.round(this.hyperBeamChargeRatio * 8)
-          };
-          const finalHitbox = this.getModifiedHitbox(beamHitbox, false);
-          opponent.takeHit(finalHitbox, this);
+        const hurtboxes = opp.getHurtboxes
+          ? opp.getHurtboxes()
+          : [{ x: opp.x, y: opp.y - opp.height * 0.5, radius: opp.hurtboxRadius || 24, target: null }];
 
-          if (window.particleManager) {
-            window.particleManager.spawnHitSparks(
-              opponent.x,
-              beamY,
-              this.hyperBeamDamage,
-              'fairy'
-            );
-            window.particleManager.spawnRadialBurst(
-              opponent.x,
-              beamY,
-              '#f472b6',
-              'normal',
-              24
-            );
+        for (const hb of hurtboxes) {
+          const hRadius = hb.radius || 18;
+          if (
+            hb.x >= minX - hRadius &&
+            hb.x <= maxX + hRadius &&
+            Math.abs(hb.y - beamY) <= halfThick + hRadius
+          ) {
+            this.hyperBeamHasHit = true;
+            const beamHitbox = {
+              damage: this.hyperBeamDamage,
+              baseKnockback: 12 + this.hyperBeamChargeRatio * 10,
+              knockbackScaling: 0.85 + this.hyperBeamChargeRatio * 0.40,
+              angle: 35,
+              type: 'fairy',
+              hitlag: 8 + Math.round(this.hyperBeamChargeRatio * 8),
+              isSpecial: true,
+              isProjectile: true
+            };
+            const finalHitbox = this.getModifiedHitbox ? this.getModifiedHitbox(beamHitbox, true) : beamHitbox;
+            opp.takeHit(finalHitbox, this, hb.target);
+            this.hitstop = 4;
+
+            if (window.soundEngine) {
+              window.soundEngine.playSfx('hit_heavy');
+            }
+
+            if (window.particleManager) {
+              window.particleManager.spawnHitSparks(
+                opp.x,
+                beamY,
+                this.hyperBeamDamage,
+                'fairy'
+              );
+              window.particleManager.spawnRadialBurst(
+                opp.x,
+                beamY,
+                '#f472b6',
+                'normal',
+                24
+              );
+            }
+            break;
           }
         }
       }
@@ -766,6 +973,19 @@ class Sylveon extends window.Fighter {
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
       ctx.arc(startX, startY, thick * 0.9, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Cabecera brillante del proyectil viajero
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = '#ffffff';
+      ctx.shadowBlur = 18;
+      ctx.beginPath();
+      ctx.arc(endX, startY, thick * 0.70, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = 'rgba(244, 114, 182, 0.7)';
+      ctx.beginPath();
+      ctx.arc(endX, startY, thick * 1.15, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.restore();

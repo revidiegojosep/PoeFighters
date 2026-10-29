@@ -66,7 +66,13 @@ class OnlineAntiCheat {
       const dt = this.lastPacketTime > 0 ? Math.min(1.0, Math.max(0.016, (now - this.lastPacketTime) / 1000)) : 0.05;
       this.lastPacketTime = now;
 
-      if (this.lastX !== 0 && this.lastY !== 0) {
+      const isRespawnWarp = (
+        sanitized.x < -500 || sanitized.y < -500 ||
+        this.lastX < -500 || this.lastY < -500 ||
+        sanitized.state === 'RESPAWN' || sanitized.state === 'KO'
+      );
+
+      if (!isRespawnWarp && this.lastX !== 0 && this.lastY !== 0) {
         const dx = sanitized.x - this.lastX;
         const dy = sanitized.y - this.lastY;
         const dist = Math.hypot(dx, dy);
@@ -100,6 +106,11 @@ class OnlineAntiCheat {
     }
 
     // 5. Verificación de Ítems canónicos
+    // 4.5. Verificación de Invulnerabilidad (0 a 10 segundos)
+    if (sanitized.invuln !== undefined) {
+      sanitized.invuln = Math.max(0, Math.min(10, parseFloat(sanitized.invuln) || 0));
+    }
+
     if (sanitized.heldItem) {
       const validItems = ['restos', 'banda_focus', 'cinta_elegida', 'gafas_especiales', 'baya_zidra', 'perla_grande'];
       if (!validItems.includes(sanitized.heldItem)) {
@@ -153,6 +164,7 @@ class OnlineManager {
     // Sincronización HTTP (No superpuesta)
     this.pollInterval = null;
     this.syncInterval = null;
+    this.localHitLockoutTimer = 0;
     this.isHttpInFlight = false;
     this.lastHttpSendTime = 0;
     this.packetSeq = 0;
@@ -210,6 +222,30 @@ class OnlineManager {
       } catch (e) {
         console.warn('[OnlineManager] Error en setReady:', e);
       }
+    }
+  }
+
+  async requestRematch() {
+    if (!this.roomCode || !this.token) return;
+    try {
+      const res = await fetch(`${this.apiBase}?action=rematch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: this.roomCode,
+          token: this.token
+        })
+      });
+      const data = await res.json();
+      if (data.success && data.room) {
+        this.room = data.room;
+        if (data.room.status === 'char_select') {
+          this._handleRoomStatusTransition('char_select');
+        }
+      }
+      return data;
+    } catch (e) {
+      console.warn('[Online] Error solicitando revancha:', e);
     }
   }
 
@@ -412,7 +448,8 @@ class OnlineManager {
   _startPolling() {
     this._stopPolling();
     this._pollRoom();
-    this.pollInterval = setInterval(() => this._pollRoom(), 800);
+    const interval = (this.isRtcConnected && this.status === 'playing') ? 1000 : 250;
+    this.pollInterval = setInterval(() => this._pollRoom(), interval);
   }
 
   _stopPolling() {
@@ -450,10 +487,10 @@ class OnlineManager {
         }
 
         // WebRTC Signaling Poll: continuar procesando señalización hasta que P2P esté verificado bidireccionalmente
-        const isRtcFullyBidirectional = this.isRtcConnected && 
-                                        this.dataChannel && 
-                                        this.dataChannel.readyState === 'open' && 
-                                        this.lastRtcPacketReceivedTime > 0;
+        const isRtcFullyBidirectional = this.isRtcConnected &&
+          this.dataChannel &&
+          this.dataChannel.readyState === 'open' &&
+          this.lastRtcPacketReceivedTime > 0;
         if (!isRtcFullyBidirectional && this.status !== 'waiting' && this.room?.signaling) {
           this._handleSignaling(this.room.signaling);
         }
@@ -468,6 +505,41 @@ class OnlineManager {
     if (this.room) this.room.status = newStatus;
 
     if (newStatus === 'char_select') {
+      if (this.syncInterval) {
+        clearInterval(this.syncInterval);
+        this.syncInterval = null;
+      }
+      this.lastSentLocalState = null;
+      this.currentActionPayload = null;
+      this.currentActionFramesLeft = 0;
+      this.pendingHitEvent = null;
+      this.pendingHitFramesLeft = 0;
+      this.lastReceivedHitId = null;
+      this.lastAppliedPacketSeq = 0;
+      this.packetSeq = 0;
+      this.matchId = this.room?.match_id || ((this.matchId || 1) + 1);
+      this.antiCheat.reset();
+      if (this.game) {
+        this.game.isMatchOver = false;
+        this.game.isDecisiveFinish = false;
+        this.game.matchStarted = false;
+        if (this.game.player) {
+          this.game.player.percent = 0;
+          this.game.player.stocks = 3;
+          this.game.player.invulnTimer = 0;
+          this.game.player.hitstun = 0;
+          this.game.player.hitstop = 0;
+          this.game.player.state = 'IDLE';
+        }
+        if (this.game.dummy) {
+          this.game.dummy.percent = 0;
+          this.game.dummy.stocks = 3;
+          this.game.dummy.invulnTimer = 0;
+          this.game.dummy.hitstun = 0;
+          this.game.dummy.hitstop = 0;
+          this.game.dummy.state = 'IDLE';
+        }
+      }
       this._startCharSelect();
     } else if (newStatus === 'item_draft') {
       if (this.charSelectInterval) {
@@ -557,12 +629,17 @@ class OnlineManager {
     }
 
     this.antiCheat.reset();
+    this.matchId = this.room?.match_id || this.matchId || 1;
+    this.battleStartTime = performance.now();
     this.lastRtcPacketTime = 0;
     this.lastRtcPacketReceivedTime = 0;
     this.packetSeq = 0;
     this.lastAppliedPacketSeq = 0;
     this.targetX = null;
     this.targetY = null;
+    this.lastReceivedHitId = null;
+    this.pendingHitEvent = null;
+    this.localHitLockoutTimer = 0;
 
     if (window.onOnlineBattleStart) {
       window.onOnlineBattleStart({
@@ -638,7 +715,7 @@ class OnlineManager {
 
       try {
         this.dataChannel.send(JSON.stringify({ type: 'rtc_ping', t: performance.now() }));
-      } catch (e) {}
+      } catch (e) { }
     };
 
     this.dataChannel.onclose = () => {
@@ -670,7 +747,7 @@ class OnlineManager {
           data
         })
       });
-    } catch (e) {}
+    } catch (e) { }
   }
 
   async _handleSignaling(signals) {
@@ -698,7 +775,7 @@ class OnlineManager {
               try {
                 await this.peerConnection.addIceCandidate(new RTCIceCandidate(c));
                 this.addedCandidates.add(sig);
-              } catch (err) {}
+              } catch (err) { }
             }
           }
         }
@@ -722,8 +799,15 @@ class OnlineManager {
   }
 
   recordRivalHit(hitInfo) {
+    if (!this.game) return;
+    const local = this.game.player;
+    const rival = this.game.dummy;
+    if (rival && (rival.state === 'RESPAWN' || rival.state === 'KO' || (rival.invulnTimer && rival.invulnTimer > 0))) return;
+    if (local && (local.state === 'RESPAWN' || local.state === 'KO' || (local.invulnTimer && local.invulnTimer > 0))) return;
     this.pendingHitEvent = hitInfo;
-    this.pendingHitFramesLeft = 6;
+    this.pendingHitFramesLeft = 18; // Garantizar entrega en múltiples paquetes
+    this.localHitLockoutTimer = 0.45; // Proteger la física de lanzamiento local contra rollback prematuro
+    this._sendLocalFighterState(); // Emitir inmediatamente sin esperar al siguiente tick
   }
 
   /**
@@ -734,27 +818,34 @@ class OnlineManager {
     const rival = this.game.dummy;
     if (!rival) return;
 
-    // Si el rival está en reaparición o KO, no interpolar
-    if (rival.state === 'RESPAWN' || rival.state === 'KO') return;
+    if (this.localHitLockoutTimer > 0) {
+      this.localHitLockoutTimer = Math.max(0, this.localHitLockoutTimer - dt);
+      // Durante el impacto de nuestro golpe, permitir que el rival vuele con la física local inmediata
+      return;
+    }
 
-    if (this.targetX !== null && this.targetX !== undefined) {
+    // Si el rival está en reaparición o KO, o fuera de pantalla, no interpolar
+    if (rival.state === 'RESPAWN' || rival.state === 'KO' || rival.x < -500 || rival.y < -500) return;
+
+    if (this.targetX !== null && this.targetX !== undefined && this.targetX > -500) {
       const dx = this.targetX - rival.x;
       if (Math.abs(dx) > 140) {
         rival.x = this.targetX;
       } else if (Math.abs(dx) > 0.3) {
-        // Interp exponencial suave a 60 FPS
-        rival.x += dx * 0.35;
+        const lerpFactor = Math.min(1.0, 32 * dt);
+        rival.x += dx * lerpFactor;
       } else {
         rival.x = this.targetX;
       }
     }
 
-    if (this.targetY !== null && this.targetY !== undefined && !rival.isGrounded) {
+    if (this.targetY !== null && this.targetY !== undefined && this.targetY > -500 && !rival.isGrounded) {
       const dy = this.targetY - rival.y;
       if (Math.abs(dy) > 120) {
         rival.y = this.targetY;
       } else if (Math.abs(dy) > 0.3) {
-        rival.y += dy * 0.35;
+        const lerpFactor = Math.min(1.0, 32 * dt);
+        rival.y += dy * lerpFactor;
       } else {
         rival.y = this.targetY;
       }
@@ -805,6 +896,7 @@ class OnlineManager {
 
     const payload = {
       seq: this.packetSeq,
+      matchId: this.matchId || this.room?.match_id || 1,
       t: performance.now(),
       role: this.role,
       slot: this.role === 'host' ? 1 : 2,
@@ -820,12 +912,22 @@ class OnlineManager {
       facing: localFighter.facing,
       percent: Math.round(localFighter.percent * 10) / 10,
       stocks: localFighter.stocks,
+      invuln: Math.round((localFighter.invulnTimer || 0) * 10) / 10,
       shield: Math.round(localFighter.shield !== undefined ? localFighter.shield : (localFighter.shieldHealth || 100)),
       hitstun: Math.round((localFighter.hitstun || 0) * 100) / 100,
       animName: curAnim,
       aimDir: aimDir,
       action: actionPayload,
       hitEvent: this.pendingHitEvent || null,
+      partner: localFighter.partner ? {
+        x: Math.round(localFighter.partner.x * 10) / 10,
+        y: Math.round(localFighter.partner.y * 10) / 10,
+        vx: Math.round(localFighter.partner.vx * 10) / 10,
+        vy: Math.round(localFighter.partner.vy * 10) / 10,
+        facing: localFighter.partner.facing,
+        state: localFighter.partner.state,
+        anim: localFighter.partner.anim ? (localFighter.partner.anim.curAnim || 'Idle') : 'Idle'
+      } : null,
       heldItem: localFighter.heldItem ? localFighter.heldItem.id : null,
       input: {
         left: !!localFighter.input?.left,
@@ -858,11 +960,11 @@ class OnlineManager {
 
     // 1. Envío prioritario vía WebRTC DataChannel (P2P directo a 60 FPS sin saturar HTTP)
     const now = performance.now();
-    const isWebRtcLive = this.isRtcConnected && 
-                         this.dataChannel && 
-                         this.dataChannel.readyState === 'open' &&
-                         this.lastRtcPacketReceivedTime > 0 &&
-                         (now - this.lastRtcPacketReceivedTime < 2500);
+    const isWebRtcLive = this.isRtcConnected &&
+      this.dataChannel &&
+      this.dataChannel.readyState === 'open' &&
+      this.lastRtcPacketReceivedTime > 0 &&
+      (now - this.lastRtcPacketReceivedTime < 2500);
 
     if (isWebRtcLive) {
       try {
@@ -881,7 +983,7 @@ class OnlineManager {
     } else if (this.dataChannel && this.dataChannel.readyState === 'open') {
       try {
         this.dataChannel.send(JSON.stringify(payload));
-      } catch (e) {}
+      } catch (e) { }
     }
 
     // 2. HTTP Fallback Sync: ~28-30 req/s (intervalo de 32ms)
@@ -927,18 +1029,25 @@ class OnlineManager {
         const rivalPkt = data.rival_state;
         const now = performance.now();
         // WebRTC está entregando paquetes activamente si y solo si recibimos un paquete P2P hace menos de 250ms
-        const isRtcActivelyDelivering = this.isRtcConnected && 
-                                        this.dataChannel && 
-                                        this.dataChannel.readyState === 'open' &&
-                                        this.lastRtcPacketReceivedTime > 0 && 
-                                        (now - this.lastRtcPacketReceivedTime < 250);
+        const isRtcActivelyDelivering = this.isRtcConnected &&
+          this.dataChannel &&
+          this.dataChannel.readyState === 'open' &&
+          this.lastRtcPacketReceivedTime > 0 &&
+          (now - this.lastRtcPacketReceivedTime < 250);
 
         // Si WebRTC no está entregando activamente (ej: navegadores distintos en localhost),
         // o si el paquete HTTP es más nuevo que el último recibido:
-        const isNewerSeq = !rivalPkt.seq || (!this.lastAppliedPacketSeq || rivalPkt.seq >= this.lastAppliedPacketSeq);
+        if (rivalPkt.matchId && this.matchId && rivalPkt.matchId !== this.matchId) {
+          return;
+        }
+        const isNewerSeq = !rivalPkt.seq || (!this.lastAppliedPacketSeq || rivalPkt.seq >= this.lastAppliedPacketSeq || (this.lastAppliedPacketSeq - rivalPkt.seq) >= 500);
         if (!isRtcActivelyDelivering || isNewerSeq) {
           if (rivalPkt.seq) {
-            this.lastAppliedPacketSeq = Math.max(this.lastAppliedPacketSeq || 0, rivalPkt.seq);
+            if (this.lastAppliedPacketSeq && (this.lastAppliedPacketSeq - rivalPkt.seq) >= 500) {
+              this.lastAppliedPacketSeq = rivalPkt.seq;
+            } else {
+              this.lastAppliedPacketSeq = Math.max(this.lastAppliedPacketSeq || 0, rivalPkt.seq);
+            }
           }
           this._applyRivalState(rivalPkt);
           if (!isRtcActivelyDelivering && window.onOnlineNetStatus) {
@@ -962,7 +1071,7 @@ class OnlineManager {
       if (packet.type === 'rtc_ping') {
         try {
           this.dataChannel.send(JSON.stringify({ type: 'rtc_pong', t: packet.t }));
-        } catch (e) {}
+        } catch (e) { }
         return;
       }
       if (packet.type === 'rtc_pong') {
@@ -971,9 +1080,15 @@ class OnlineManager {
         return;
       }
 
-      if (packet.seq) {
-        if (this.lastAppliedPacketSeq && packet.seq < this.lastAppliedPacketSeq) {
-          return; // Paquete P2P desordenado o antiguo descartado
+      if (packet.matchId && this.matchId && packet.matchId !== this.matchId) {
+        return; // Paquete de partida previa descartado limpiamente
+      }
+
+      if (packet.seq !== undefined) {
+        if (this.lastAppliedPacketSeq) {
+          if (packet.seq < this.lastAppliedPacketSeq && (this.lastAppliedPacketSeq - packet.seq) < 500) {
+            return; // Paquete P2P desordenado o antiguo descartado
+          }
         }
         this.lastAppliedPacketSeq = packet.seq;
       }
@@ -981,7 +1096,7 @@ class OnlineManager {
 
       if (window.onOnlineNetStatus) window.onOnlineNetStatus('p2p', this.ping || 6);
       this._applyRivalState(packet);
-    } catch (e) {}
+    } catch (e) { }
   }
 
   /**
@@ -1006,6 +1121,24 @@ class OnlineManager {
     const safe = this.antiCheat.validateState(incomingPacket, rivalFighter);
     if (!safe) return;
 
+    if (safe.matchId && this.matchId && safe.matchId !== this.matchId) {
+      return;
+    }
+
+    // Si acabamos de golpear localmente al rival, ignoramos paquetes desfasados que cancelarían el lanzamiento
+    if (this.localHitLockoutTimer > 0) {
+      if (safe.state !== 'HURT' && safe.percent < rivalFighter.percent) {
+        return; // Paquete anterior al impacto descartado
+      } else {
+        this.localHitLockoutTimer = 0; // El rival ya reconoció el impacto
+      }
+    }
+
+    // Sincronizar Plusle si el rival es Minun & Plusle
+    if (safe.partner && rivalFighter.partner) {
+      rivalFighter.onlinePartnerState = safe.partner;
+    }
+
     // 0. Sincronización del reloj de escenario (elimina desincronización de plataformas móviles)
     if (safe.stageTime !== undefined && this.role === 'guest' && this.game.stage) {
       this.game.stage.time = safe.stageTime;
@@ -1022,7 +1155,7 @@ class OnlineManager {
     // 1. Sincronizar eventos de impacto / daño recibido autoritativo
     if (safe.hitEvent && safe.hitEvent.hitId && safe.hitEvent.hitId !== this.lastReceivedHitId) {
       this.lastReceivedHitId = safe.hitEvent.hitId;
-      if (localPlayer.state !== 'RESPAWN' && localPlayer.invulnTimer <= 0) {
+      if (localPlayer.state !== 'RESPAWN' && localPlayer.state !== 'KO' && (!localPlayer.invulnTimer || localPlayer.invulnTimer <= 0)) {
         const targetPercent = Math.min(999, Math.max(localPlayer.percent, safe.hitEvent.totalPercent || (localPlayer.percent + safe.hitEvent.damage)));
         localPlayer.percent = targetPercent;
         localPlayer.state = 'HURT';
@@ -1049,6 +1182,20 @@ class OnlineManager {
             18
           );
         }
+
+        // Responder inmediatamente con nuestro estado de lanzamiento y daño actualizado
+        this._sendLocalFighterState();
+      }
+    }
+
+    // Detectar KO / Muerte del rival recibida por red y reproducir la explosión si localmente no se había mostrado
+    if ((safe.state === 'RESPAWN' || safe.state === 'KO') && rivalFighter.state !== 'RESPAWN' && rivalFighter.state !== 'KO') {
+      rivalFighter.state = safe.state;
+      if (window.soundEngine) window.soundEngine.playSfx('blast_ko');
+      if (window.particleManager) {
+        const blastX = (rivalFighter.x > -500 && rivalFighter.x < 1500) ? rivalFighter.x : (rivalFighter.facing > 0 ? 1000 : 24);
+        const blastY = (rivalFighter.y > -500 && rivalFighter.y < 1000) ? rivalFighter.y : 300;
+        window.particleManager.spawnBlastKO(blastX, blastY, rivalFighter.color || '#f43f5e');
       }
     }
 
@@ -1057,6 +1204,13 @@ class OnlineManager {
     if (typeof safe.percent === 'number') {
       if (safe.state === 'RESPAWN' || safe.state === 'KO') {
         rivalFighter.percent = 0;
+        rivalFighter.hitstun = 0;
+        rivalFighter.hitstop = 0;
+        rivalFighter.vx = 0;
+        rivalFighter.vy = 0;
+        rivalFighter.currentAttack = null;
+        rivalFighter.attackFrame = 0;
+        this.pendingHitEvent = null;
       } else if (safe.percent < rivalFighter.percent && (rivalFighter.percent - safe.percent) <= 3) {
         // Curación pasiva legítima (Restos / Leftovers)
         rivalFighter.percent = safe.percent;
@@ -1066,13 +1220,19 @@ class OnlineManager {
     }
 
     if (typeof safe.stocks === 'number') {
-      rivalFighter.stocks = Math.min(rivalFighter.stocks, safe.stocks);
-      if (rivalFighter.stocks <= 0 && this.game && !this.game.isMatchOver && !this.game.isDecisiveFinish) {
+      rivalFighter.stocks = safe.stocks;
+      const matchElapsed = (performance.now() - (this.battleStartTime || 0)) / 1000;
+      if (rivalFighter.stocks <= 0 && matchElapsed > 2.0 && this.game && !this.game.isMatchOver && !this.game.isDecisiveFinish) {
         this.game.triggerDecisiveFinish('PLAYER_WIN');
       }
     }
 
     // 3. Replicación inmediata de acciones ofensivas y defensivas (Ataques, Especiales, Smash, Agarres, Esquives)
+    // 2.5. Sincronizar tiempo de invulnerabilidad
+    if (typeof safe.invuln === 'number') {
+      rivalFighter.invulnTimer = safe.invuln;
+    }
+
     if (safe.action && safe.action.id && safe.action.id !== this.lastAppliedRivalActionId) {
       this.lastAppliedRivalActionId = safe.action.id;
       const act = safe.action;
@@ -1108,7 +1268,9 @@ class OnlineManager {
     }
 
     // Si el rival no está en un ataque activo, sincronizar su animación de postura
-    if (rivalFighter.state !== 'ATTACK' && rivalFighter.state !== 'SPECIAL' && rivalFighter.state !== 'SMASH_CHARGE') {
+    const isPriorityState = (safe.state === 'RESPAWN' || safe.state === 'KO' || safe.state === 'HURT');
+    const isAttacking = (rivalFighter.state === 'ATTACK' || rivalFighter.state === 'SPECIAL' || rivalFighter.state === 'SMASH_CHARGE');
+    if (!isAttacking || isPriorityState) {
       if (safe.state !== undefined) {
         rivalFighter.state = safe.state;
       }
@@ -1138,7 +1300,7 @@ class OnlineManager {
     let lockedToPlat = false;
     if (safe.isGrounded && safe.platId && this.game.stage) {
       const targetPlat = (this.game.stage.semiSolidPlatforms || []).find(pl => pl.id === safe.platId) ||
-                         (this.game.stage.solidPlatforms || []).find(pl => pl.id === safe.platId);
+        (this.game.stage.solidPlatforms || []).find(pl => pl.id === safe.platId);
       if (targetPlat) {
         rivalFighter.y = targetPlat.y;
         rivalFighter.vy = 0;
@@ -1155,14 +1317,14 @@ class OnlineManager {
 
     if (typeof safe.x === 'number') {
       this.targetX = safe.x;
-      if (Math.abs(safe.x - rivalFighter.x) > 140 || safe.state === 'RESPAWN' || safe.state === 'KO') {
+      if (Math.abs(safe.x - rivalFighter.x) > 140 || safe.state === 'RESPAWN' || safe.state === 'KO' || safe.x < -500 || rivalFighter.x < -500) {
         rivalFighter.x = safe.x;
       }
     }
 
     if (!lockedToPlat && typeof safe.y === 'number') {
       this.targetY = safe.y;
-      if (Math.abs(safe.y - rivalFighter.y) > 120 || safe.state === 'RESPAWN' || safe.state === 'KO') {
+      if (Math.abs(safe.y - rivalFighter.y) > 120 || safe.state === 'RESPAWN' || safe.state === 'KO' || safe.y < -500 || rivalFighter.y < -500) {
         rivalFighter.y = safe.y;
       }
     }
@@ -1219,7 +1381,7 @@ class OnlineManager {
         } else {
           fetch(url, { method: 'POST', body: data, keepalive: true });
         }
-      } catch (e) {}
+      } catch (e) { }
     }
   }
 
@@ -1238,10 +1400,10 @@ class OnlineManager {
     this.charConfirmed = false;
 
     if (this.dataChannel) {
-      try { this.dataChannel.close(); } catch (e) {}
+      try { this.dataChannel.close(); } catch (e) { }
     }
     if (this.peerConnection) {
-      try { this.peerConnection.close(); } catch (e) {}
+      try { this.peerConnection.close(); } catch (e) { }
     }
 
     this.role = null;

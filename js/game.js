@@ -245,6 +245,10 @@ class PokeSmashGame {
     this.screenShakeTimer = Math.max(this.screenShakeTimer, duration);
   }
 
+  shakeScreen(intensity = 18, duration = 0.42) {
+    this.triggerScreenShake(intensity, duration);
+  }
+
   createFighter(dex, isPlayer, isDummy, stocks = 3, heldItem = 'none', slot = null) {
     const isSlot1 = (slot !== null) ? (slot === 1) : isPlayer;
     const config = {
@@ -265,6 +269,10 @@ class PokeSmashGame {
         return new window.Charizard(config);
       case 39:
         return new window.Jigglypuff(config);
+      case 398:
+        return new window.Staraptor(config);
+      case 773:
+        return new window.Silvally(config);
       case 700:
         return new window.Sylveon(config);
       case 94:
@@ -354,6 +362,7 @@ class PokeSmashGame {
     this.matchStocks = options.stocks !== undefined ? options.stocks : (this.matchStocks || 3);
     this.matchTimeLimit = options.timeLimit !== undefined ? options.timeLimit : (this.matchTimeLimit || 0);
     this.matchTimeRemaining = this.matchTimeLimit;
+    this.isOnlineMatch = (this.gameMode === 'ONLINE');
     this.itemsEnabled = options.itemsEnabled !== undefined ? options.itemsEnabled : (this.itemsEnabled !== false);
 
     // Reglas fijas oficiales de Multijugador en Línea
@@ -387,6 +396,15 @@ class PokeSmashGame {
     this.screenShakeDuration = 0;
     this.screenShakeTimer = 0;
 
+    if (window.particleManager) {
+      if (typeof window.particleManager.clear === 'function') {
+        window.particleManager.clear();
+      } else {
+        window.particleManager.particles = [];
+        window.particleManager.lightningBolts = [];
+        window.particleManager.screenFlashTimer = 0;
+      }
+    }
     // Set stage in engine
     this.stage.setStage(this.stageId);
     this.stage.time = 0;
@@ -1216,11 +1234,9 @@ class PokeSmashGame {
         if (victoryModal) victoryModal.classList.remove('open');
 
         if (this.isOnlineMatch && this.onlineManager) {
-          // En modo online, volver al lobby de la sala actual y resetear listos
-          const onlineModal = document.getElementById('online-match-modal');
-          if (onlineModal) onlineModal.classList.add('open');
-          this.onlineManager.setReady(false);
-          this.onlineManager.status = 'lobby';
+          // En modo online, solicitar revancha oficial con reseteo limpio desde 0
+          rematchBtn.innerText = '⏳ Solicitando revancha...';
+          this.onlineManager.requestRematch();
           return;
         }
 
@@ -1459,6 +1475,7 @@ class PokeSmashGame {
       'moves-modal',
       'changelog-modal',
       'online-modal',
+      'char-select-modal',
       'item-draft-modal',
       'abandoned-room-modal',
       'start-screen',
@@ -1851,6 +1868,9 @@ class PokeSmashGame {
   }
 
   onFighterKO(fighter) {
+    if (this.onlineManager) {
+      this.onlineManager.pendingHitEvent = null;
+    }
     if (window.particleManager) {
       window.particleManager.spawnFloatingText(this.stage.respawnX, this.stage.respawnY - 40, '¡KO!', '#ff4444', 32);
     }
@@ -2888,7 +2908,9 @@ class PokeSmashGame {
       94: { name: 'Gengar', desc: 'Fantasma · Peso: 40.5kg' },
       39: { name: 'Jigglypuff', desc: 'Normal/Hada · Peso: 5.5kg' },
       6: { name: 'Charizard', desc: 'Fuego/Volador · Peso: 90.5kg' },
-      700: { name: 'Sylveon', desc: 'Hada · Peso: 23.5kg' }
+      700: { name: 'Sylveon', desc: 'Hada · Peso: 23.5kg' },
+      398: { name: 'Staraptor', desc: 'Normal/Volador · Peso: 24.9kg' },
+      773: { name: 'Silvally', desc: 'Normal · Peso: 100.5kg' }
     };
 
     charCards.forEach(card => {
@@ -2934,8 +2956,15 @@ class PokeSmashGame {
 
     // Inicio de la cuenta atrás de 30s para elegir personaje
     window.onOnlineStartCharSelect = (sec, room) => {
+      const victoryModal = document.getElementById('victory-modal');
+      if (victoryModal) victoryModal.classList.remove('open');
+      const rematchBtn = document.getElementById('btn-victory-rematch');
+      if (rematchBtn) rematchBtn.innerText = '⚔️ REVANCHA';
       if (onlineModal) onlineModal.classList.remove('open');
-      if (charModal) charModal.classList.add('open');
+      if (charModal) {
+        this.ensureFullscreenModal(charModal);
+        charModal.classList.add('open');
+      }
       if (window.soundEngine) window.soundEngine.playSfx('countdown_beep');
 
       const cdTimer = document.getElementById('char-countdown-timer');
@@ -3089,7 +3118,9 @@ class PokeSmashGame {
       94: { name: 'Gengar', desc: 'Fantasma · Peso: 40.5kg' },
       39: { name: 'Jigglypuff', desc: 'Normal/Hada · Peso: 5.5kg' },
       6: { name: 'Charizard', desc: 'Fuego/Volador · Peso: 90.5kg' },
-      700: { name: 'Sylveon', desc: 'Hada · Peso: 23.5kg' }
+      700: { name: 'Sylveon', desc: 'Hada · Peso: 23.5kg' },
+      398: { name: 'Staraptor', desc: 'Normal/Volador · Peso: 24.9kg' },
+      773: { name: 'Silvally', desc: 'Normal · Peso: 100.5kg' }
     };
 
     // 1. Actualizar código de sala
@@ -3184,19 +3215,21 @@ class PokeSmashGame {
       const rivalDex = isHost ? (room.char_select.p2_dex || 1) : (room.char_select.p1_dex || 25);
       const rivalConfirmed = isHost ? !!room.char_select.p2_confirmed : !!room.char_select.p1_confirmed;
 
-      // Previsualización del rival
+      // Previsualización del rival (Pick Ciego: Oculto en modo online)
       const rivalImg = document.getElementById('rival-char-preview-img');
       const rivalName = document.getElementById('rival-char-preview-name');
       const rivalDesc = document.getElementById('rival-char-preview-desc');
       const rivalPill = document.getElementById('rival-char-status-pill');
 
-      const rMeta = dexMetadata[rivalDex] || { name: 'Pokémon', desc: '' };
-      if (rivalImg) rivalImg.src = `assets/pokemon/${rivalDex}/Idle.png`;
-      if (rivalName) rivalName.innerText = rMeta.name;
-      if (rivalDesc) rivalDesc.innerText = rMeta.desc;
+      if (rivalImg) {
+        rivalImg.src = 'assets/pokemon/25/Idle.png';
+        rivalImg.style.filter = 'brightness(0) contrast(200%) opacity(0.35)';
+      }
+      if (rivalName) rivalName.innerText = 'OPONENTE';
+      if (rivalDesc) rivalDesc.innerText = 'Selección oculta (Pick Ciego)';
       if (rivalPill) {
         rivalPill.className = `preview-status-pill ${rivalConfirmed ? 'confirmed' : 'selecting'}`;
-        rivalPill.innerText = rivalConfirmed ? '✓ Confirmado' : '⏳ Eligiendo...';
+        rivalPill.innerText = rivalConfirmed ? '✓ CONFIRMADO' : '⏳ ELIGIENDO...';
       }
 
       // Previsualización propia

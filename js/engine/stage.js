@@ -17,6 +17,17 @@ class Stage {
     this.graphicsQuality = 'ultra';
     this.time = 0;
 
+    // Lumiose City background image & searchlight beams
+    this.lumioseBgImage = new Image();
+    this.lumioseBgImage.src = 'assets/escenarios/ciudad luminalia.png';
+    this.lumioseBgLoaded = false;
+    this.lumioseBgImage.onload = () => { this.lumioseBgLoaded = true; };
+    this.lumioseLights = [
+      { angle: 0, speed: 0.75, color: '#f43f5e' },
+      { angle: Math.PI * 0.6, speed: -0.55, color: '#38bdf8' },
+      { angle: Math.PI * 1.3, speed: 0.65, color: '#fbbf24' }
+    ];
+
     // Drifting clouds & nebulas
     this.clouds = [
       { x: 40, y: 50, speed: 7, scale: 1.3, alpha: 0.08 },
@@ -193,6 +204,8 @@ class Stage {
       this.stageId = 'LAVENDER_TOWER';
     } else if (stageId === 'FINAL_DESTINATION') {
       this.stageId = 'FINAL_DESTINATION';
+    } else if (stageId === 'LUMIOSE_CITY') {
+      this.stageId = 'LUMIOSE_CITY';
     } else {
       this.stageId = 'BATTLEFIELD';
     }
@@ -499,6 +512,54 @@ class Stage {
 
       this.respawnX = this.width / 2;
       this.respawnY = 190;
+    } else if (this.stageId === 'LUMIOSE_CITY') {
+      // 🗼 CIUDAD LUMINALIA: Metrópolis de Kalos · Torre Prisma y Plataforma Flotante
+      const stageWidth = 660;
+      const stageX = (this.width - stageWidth) / 2; // 182
+      const stageY = 430;
+
+      this.solidPlatforms = [
+        {
+          id: 'main_ground',
+          x: stageX,
+          y: stageY,
+          width: stageWidth,
+          height: 185,
+          color: '#1e293b',
+          grassColor: '#64748b',
+          accentColor: '#38bdf8',
+          type: 'solid'
+        }
+      ];
+
+      // 1 Plataforma aérea semi-sólida flotante centrada
+      const platW = 180;
+      const platH = 14;
+      const platX = (this.width - platW) / 2; // 422
+      const platY = 290;
+
+      this.semiSolidPlatforms = [
+        {
+          id: 'plat_center',
+          x: platX,
+          y: platY,
+          width: platW,
+          height: platH,
+          color: '#334155',
+          accentColor: '#f43f5e',
+          type: 'semi'
+        }
+      ];
+
+      this.blastZones = {
+        left: -170,
+        right: this.width + 170,
+        top: -180,
+        bottom: this.height + 140
+      };
+
+      this.respawnX = this.width / 2;
+      this.respawnY = 200;
     } else {
       // CAMPO DE BATALLA (Battlefield): 1 main platform + 3 floating platforms
       const stageWidth = 680;
@@ -748,7 +809,9 @@ class Stage {
       }
 
       if (cTime >= 13.9) {
-        this.coilTurn = this.coilTurn === 'plat_left' ? 'plat_right' : 'plat_left';
+        if (this.coilTurn === 'plat_left') this.coilTurn = 'plat_right';
+        else if (this.coilTurn === 'plat_right') this.coilTurn = 'main_ground';
+        else this.coilTurn = 'plat_left';
       }
     }
 
@@ -858,7 +921,9 @@ class Stage {
       }
     } else if (this.stageId === 'POWER_PLANT') {
       if (!this.activeElectrifiedPlat) return;
-      const targetPlat = this.semiSolidPlatforms.find(p => p.id === this.activeElectrifiedPlat);
+      const targetPlat = (this.activeElectrifiedPlat === 'main_ground')
+        ? this.solidPlatforms.find(p => p.id === 'main_ground')
+        : this.semiSolidPlatforms.find(p => p.id === this.activeElectrifiedPlat);
       if (!targetPlat) return;
 
       for (const f of fighters) {
@@ -900,6 +965,11 @@ class Stage {
 
     if (this.stageId === 'POWER_PLANT') {
       this._drawPowerPlantBackground(ctx, quality);
+      return;
+    }
+
+    if (this.stageId === 'LUMIOSE_CITY') {
+      this._drawLumioseBackground(ctx, quality);
       return;
     }
 
@@ -1221,6 +1291,11 @@ class Stage {
 
     if (this.stageId === 'POWER_PLANT') {
       this._drawPowerPlantPlatforms(ctx, quality);
+      return;
+    }
+
+    if (this.stageId === 'LUMIOSE_CITY') {
+      this._drawLumiosePlatforms(ctx, quality);
       return;
     }
 
@@ -2126,6 +2201,10 @@ class Stage {
         return;
       } else if (this.stageId === 'POWER_PLANT') {
         this._drawPowerPlantForeground(ctx, quality);
+        ctx.restore();
+        return;
+      } else if (this.stageId === 'LUMIOSE_CITY') {
+        this._drawLumioseForeground(ctx, quality);
         ctx.restore();
         return;
       } else if (this.stageId === 'LAVENDER_TOWER') {
@@ -3152,7 +3231,7 @@ class Stage {
       }
     }
 
-    // Generator Turbine Core Silhouette in Center
+    // Generator Turbine Core Silhouette in Center (Rework Gráfico 2.5)
     ctx.fillStyle = '#090e17';
     ctx.beginPath();
     ctx.arc(this.width / 2, 340, 120, Math.PI, 0);
@@ -3161,12 +3240,33 @@ class Stage {
     ctx.closePath();
     ctx.fill();
 
-    // Glowing core reactor slot
-    const pulse = Math.sin(this.time * 5) * 0.2 + 0.8;
-    ctx.fillStyle = `rgba(56, 189, 248, ${0.45 * pulse})`;
+    // Aspas giratorias mecánicas de la turbina
+    ctx.save();
+    ctx.translate(this.width / 2, 340);
+    ctx.rotate(this.time * 2.4);
+    ctx.strokeStyle = '#1e293b';
+    ctx.lineWidth = 6;
+    for (let b = 0; b < 6; b++) {
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      const angle = (b * Math.PI) / 3;
+      ctx.lineTo(Math.cos(angle) * 75, Math.sin(angle) * 75);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // Venteo de vapor de alta presión
+    if (Math.sin(this.time * 3) > 0.4 && window.particleManager) {
+      window.particleManager.spawnSmoke(this.width / 2 - 110, 410, '#94a3b8', 2);
+      window.particleManager.spawnSmoke(this.width / 2 + 110, 410, '#94a3b8', 2);
+    }
+
+    // Glowing core reactor slot & plasma conduits
+    const pulse = Math.sin(this.time * 6) * 0.25 + 0.75;
+    ctx.fillStyle = `rgba(56, 189, 248, ${0.55 * pulse})`;
     ctx.shadowColor = '#38bdf8';
-    ctx.shadowBlur = 18;
-    ctx.fillRect(this.width / 2 - 40, 310, 80, 24);
+    ctx.shadowBlur = 24;
+    ctx.fillRect(this.width / 2 - 45, 308, 90, 28);
 
     ctx.restore();
   }
@@ -3194,7 +3294,7 @@ class Stage {
     ctx.rect(mainP.x, mainP.y, mainP.width, 10);
     ctx.clip();
     for (let x = mainP.x - 20; x < mainP.x + mainP.width + 20; x += 22) {
-      ctx.fillStyle = '#eab308';
+      ctx.fillStyle = (this.activeElectrifiedPlat === 'main_ground') ? '#38bdf8' : '#eab308';
       ctx.beginPath();
       ctx.moveTo(x, mainP.y + 10);
       ctx.lineTo(x + 10, mainP.y + 10);
@@ -3204,6 +3304,25 @@ class Stage {
       ctx.fill();
     }
     ctx.restore();
+
+    // Sobretensión en la Plataforma Principal (Relámpagos en el suelo)
+    if (this.activeElectrifiedPlat === 'main_ground') {
+      ctx.save();
+      ctx.strokeStyle = '#fde047';
+      ctx.lineWidth = 2.5;
+      ctx.shadowColor = '#38bdf8';
+      ctx.shadowBlur = 16;
+      ctx.beginPath();
+      let curX = mainP.x;
+      ctx.moveTo(curX, mainP.y);
+      while (curX < mainP.x + mainP.width) {
+        curX += 10 + Math.random() * 14;
+        const py = mainP.y - (Math.random() * 10);
+        ctx.lineTo(Math.min(mainP.x + mainP.width, curX), py);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
 
     // 2. Semi-Solid Metal Grate Platforms
     for (const plat of this.semiSolidPlatforms) {
@@ -3283,48 +3402,79 @@ class Stage {
   _drawPowerPlantForeground(ctx, quality) {
     ctx.save();
 
-    // 1. Procedural High-Voltage Lightning Bolts from Active Coil to Platform
+    // 1. Procedural High-Voltage Lightning Bolts from Active Coil to Platform / Ground
     if (this.activeElectrifiedPlat) {
-      const isLeft = this.activeElectrifiedPlat === 'plat_left';
-      const coilX = isLeft ? 185 : 840;
-      const coilY = 275;
-      const targetPlat = this.semiSolidPlatforms.find(p => p.id === this.activeElectrifiedPlat);
+      if (this.activeElectrifiedPlat === 'main_ground') {
+        // Ambas bobinas descargan arcos masivos hacia el suelo principal
+        const leftCoilX = 185, leftCoilY = 275;
+        const rightCoilX = 840, rightCoilY = 275;
+        const mainP = this.solidPlatforms[0];
+        if (mainP) {
+          ctx.save();
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 3;
+          ctx.shadowColor = '#38bdf8';
+          ctx.shadowBlur = 20;
 
-      if (targetPlat) {
-        ctx.save();
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2.5;
-        ctx.shadowColor = '#38bdf8';
-        ctx.shadowBlur = 16;
-
-        // Draw 2 branching electric bolts
-        for (let b = 0; b < 2; b++) {
-          const targetX = targetPlat.x + targetPlat.width * (0.25 + b * 0.5) + (Math.random() - 0.5) * 20;
-          const targetY = targetPlat.y;
-
+          // Rayo Bobina Izquierda -> Suelo
+          const targetX1 = mainP.x + mainP.width * 0.28 + (Math.random() - 0.5) * 24;
           ctx.beginPath();
-          ctx.moveTo(coilX, coilY);
-
-          let curX = coilX;
-          let curY = coilY;
-          const steps = 6;
-          for (let s = 1; s <= steps; s++) {
-            const nextX = coilX + (targetX - coilX) * (s / steps) + (Math.random() - 0.5) * 18;
-            const nextY = coilY + (targetY - coilY) * (s / steps) + (Math.random() - 0.5) * 14;
+          ctx.moveTo(leftCoilX, leftCoilY);
+          for (let s = 1; s <= 7; s++) {
+            const nextX = leftCoilX + (targetX1 - leftCoilX) * (s / 7) + (Math.random() - 0.5) * 22;
+            const nextY = leftCoilY + (mainP.y - leftCoilY) * (s / 7) + (Math.random() - 0.5) * 16;
             ctx.lineTo(nextX, nextY);
-            curX = nextX;
-            curY = nextY;
           }
           ctx.stroke();
+
+          // Rayo Bobina Derecha -> Suelo
+          const targetX2 = mainP.x + mainP.width * 0.72 + (Math.random() - 0.5) * 24;
+          ctx.beginPath();
+          ctx.moveTo(rightCoilX, rightCoilY);
+          for (let s = 1; s <= 7; s++) {
+            const nextX = rightCoilX + (targetX2 - rightCoilX) * (s / 7) + (Math.random() - 0.5) * 22;
+            const nextY = rightCoilY + (mainP.y - rightCoilY) * (s / 7) + (Math.random() - 0.5) * 16;
+            ctx.lineTo(nextX, nextY);
+          }
+          ctx.stroke();
+          ctx.restore();
         }
-        ctx.restore();
+      } else {
+        const isLeft = this.activeElectrifiedPlat === 'plat_left';
+        const coilX = isLeft ? 185 : 840;
+        const coilY = 275;
+        const targetPlat = this.semiSolidPlatforms.find(p => p.id === this.activeElectrifiedPlat);
+
+        if (targetPlat) {
+          ctx.save();
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2.5;
+          ctx.shadowColor = '#38bdf8';
+          ctx.shadowBlur = 16;
+
+          for (let b = 0; b < 2; b++) {
+            const targetX = targetPlat.x + targetPlat.width * (0.25 + b * 0.5) + (Math.random() - 0.5) * 20;
+            const targetY = targetPlat.y;
+
+            ctx.beginPath();
+            ctx.moveTo(coilX, coilY);
+
+            for (let s = 1; s <= 6; s++) {
+              const nextX = coilX + (targetX - coilX) * (s / 6) + (Math.random() - 0.5) * 18;
+              const nextY = coilY + (targetY - coilY) * (s / 6) + (Math.random() - 0.5) * 14;
+              ctx.lineTo(nextX, nextY);
+            }
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
       }
     }
 
     // 2. Overload Warning Banner
     if (this.coilWarning) {
       const flash = Math.sin(this.time * 14) > 0;
-      ctx.fillStyle = flash ? 'rgba(234, 179, 8, 0.40)' : 'rgba(56, 189, 248, 0.25)';
+      ctx.fillStyle = flash ? 'rgba(234, 179, 8, 0.45)' : 'rgba(56, 189, 248, 0.28)';
       ctx.fillRect(0, 30, this.width, 42);
 
       ctx.font = '900 16px monospace, sans-serif';
@@ -3332,7 +3482,12 @@ class Stage {
       ctx.textAlign = 'center';
       ctx.shadowColor = '#eab308';
       ctx.shadowBlur = 12;
-      ctx.fillText('⚡ ¡ADVERTENCIA: SOBRETENSIÓN EN BOBINAS DE FARADAY! ⚡', this.width / 2, 57);
+      const isFloor = (this.coilTurn === 'main_ground');
+      ctx.fillText(
+        isFloor ? '⚡ ¡ADVERTENCIA: SOBRETENSIÓN EN LA PLATAFORMA PRINCIPAL! ⚡' : '⚡ ¡ADVERTENCIA: SOBRETENSIÓN EN BOBINA DE FARADAY! ⚡',
+        this.width / 2,
+        57
+      );
     }
 
     ctx.restore();
@@ -3346,6 +3501,168 @@ class Stage {
     ctx.setLineDash([8, 8]);
     ctx.strokeRect(10, 10, this.width - 20, this.height - 20);
     ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  // =========================================================================
+  // 🗼 CIUDAD LUMINALIA: RENDERIZADO VISUAL, TORRE PRISMA & PLATAFORMA AÉREA
+  // =========================================================================
+  _drawLumioseBackground(ctx, quality) {
+    // 1. Imagen de Fondo de Ciudad Luminalia
+    if (this.lumioseBgLoaded && this.lumioseBgImage) {
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(this.lumioseBgImage, 0, 0, this.width, this.height);
+      ctx.restore();
+    } else {
+      // Degradado crepuscular nocturno de respaldo
+      const skyGrad = ctx.createLinearGradient(0, 0, 0, this.height);
+      skyGrad.addColorStop(0, '#0f172a');
+      skyGrad.addColorStop(0.5, '#1e1b4b');
+      skyGrad.addColorStop(1, '#020617');
+      ctx.fillStyle = skyGrad;
+      ctx.fillRect(0, 0, this.width, this.height);
+    }
+
+    ctx.save();
+
+    // 2. Nubes nocturnas flotantes a la deriva
+    for (let i = 0; i < this.clouds.length; i++) {
+      const c = this.clouds[i];
+      const cloudX = (c.x + this.time * 6 * (i + 1)) % (this.width + 300) - 150;
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+      ctx.beginPath();
+      ctx.arc(cloudX, c.y * 0.8 + 20, 45 * c.scale, 0, Math.PI * 2);
+      ctx.arc(cloudX + 35 * c.scale, c.y * 0.8 + 15, 55 * c.scale, 0, Math.PI * 2);
+      ctx.arc(cloudX + 75 * c.scale, c.y * 0.8 + 25, 40 * c.scale, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 3. Reflectores / Haces de Luz de la Torre Prisma (Searchlights)
+    const towerApexX = 512;
+    const towerApexY = 135;
+    if (this.lumioseLights) {
+      for (const light of this.lumioseLights) {
+        ctx.save();
+        ctx.translate(towerApexX, towerApexY);
+        const sweepAngle = Math.sin(this.time * light.speed) * 0.65 - Math.PI / 2;
+        ctx.rotate(sweepAngle);
+
+        const beamGrad = ctx.createRadialGradient(0, 0, 10, 0, 440, 440);
+        beamGrad.addColorStop(0, light.color);
+        beamGrad.addColorStop(0.25, light.color);
+        beamGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+        ctx.fillStyle = beamGrad;
+        ctx.globalAlpha = 0.28;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.arc(0, 0, 440, -0.16, 0.16);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    // 4. Resplandor dorado de las calles de París de Kalos
+    const cityGlow = ctx.createLinearGradient(0, this.height - 180, 0, this.height);
+    cityGlow.addColorStop(0, 'rgba(251, 191, 36, 0)');
+    cityGlow.addColorStop(0.6, 'rgba(251, 191, 36, 0.14)');
+    cityGlow.addColorStop(1, 'rgba(244, 63, 94, 0.20)');
+    ctx.fillStyle = cityGlow;
+    ctx.fillRect(0, this.height - 180, this.width, 180);
+
+    ctx.restore();
+  }
+
+  _drawLumiosePlatforms(ctx, quality) {
+    const mainP = this.solidPlatforms[0];
+    if (!mainP) return;
+
+    ctx.save();
+
+    // 1. Plataforma Principal: Gran Plaza Adoquinada de Luminalia
+    const plazaGrad = ctx.createLinearGradient(mainP.x, mainP.y, mainP.x, mainP.y + mainP.height);
+    plazaGrad.addColorStop(0, '#334155');
+    plazaGrad.addColorStop(0.25, '#1e293b');
+    plazaGrad.addColorStop(1, '#0f172a');
+    ctx.fillStyle = plazaGrad;
+
+    ctx.beginPath();
+    ctx.roundRect(mainP.x, mainP.y, mainP.width, mainP.height, [8, 8, 0, 0]);
+    ctx.fill();
+
+    // Barandilla de orfebrería dorada / Art Nouveau en el borde superior
+    ctx.strokeStyle = '#f59e0b';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(mainP.x, mainP.y);
+    ctx.lineTo(mainP.x + mainP.width, mainP.y);
+    ctx.stroke();
+
+    // Luces de farolas estilizadas en las esquinas de la plataforma
+    const drawLamp = (lx, ly) => {
+      ctx.save();
+      ctx.fillStyle = '#fef08a';
+      ctx.shadowColor = '#fbbf24';
+      ctx.shadowBlur = 14;
+      ctx.beginPath();
+      ctx.arc(lx, ly - 8, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#78350f';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(lx, ly);
+      ctx.lineTo(lx, ly - 8);
+      ctx.stroke();
+      ctx.restore();
+    };
+    drawLamp(mainP.x + 12, mainP.y);
+    drawLamp(mainP.x + mainP.width - 12, mainP.y);
+
+    // 2. Plataforma Aérea Flotante (Semi-Sólida)
+    const aerialP = this.semiSolidPlatforms[0];
+    if (aerialP) {
+      // Cristal y Bronce de Kalos
+      const aeroGrad = ctx.createLinearGradient(aerialP.x, aerialP.y, aerialP.x, aerialP.y + aerialP.height);
+      aeroGrad.addColorStop(0, '#f8fafc');
+      aeroGrad.addColorStop(0.5, '#cbd5e1');
+      aeroGrad.addColorStop(1, '#64748b');
+      ctx.fillStyle = aeroGrad;
+      ctx.fillRect(aerialP.x, aerialP.y, aerialP.width, aerialP.height);
+
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(aerialP.x, aerialP.y, aerialP.width, aerialP.height);
+
+      // Resplandor y propulsores antigravitatorios bajo la plataforma flotante
+      const pulse = Math.sin(this.time * 4) * 0.2 + 0.8;
+      ctx.save();
+      ctx.fillStyle = `rgba(56, 189, 248, ${0.6 * pulse})`;
+      ctx.shadowColor = '#38bdf8';
+      ctx.shadowBlur = 14;
+      ctx.fillRect(aerialP.x + 20, aerialP.y + aerialP.height, aerialP.width - 40, 4);
+      ctx.restore();
+    }
+
+    ctx.restore();
+  }
+
+  _drawLumioseForeground(ctx, quality) {
+    ctx.save();
+
+    // Partículas de luz / chispas nocturnas flotando hacia arriba (ambient dust & light motes)
+    const t = this.time;
+    for (let i = 0; i < 18; i++) {
+      const px = ((i * 59 + t * 14) % this.width);
+      const py = this.height - ((i * 37 + t * 24) % 320);
+      const alpha = (Math.sin(t * 3 + i) * 0.3 + 0.5) * 0.45;
+      ctx.fillStyle = `rgba(254, 240, 138, ${alpha})`;
+      ctx.beginPath();
+      ctx.arc(px, py, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
     ctx.restore();
   }
 }

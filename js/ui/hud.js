@@ -274,6 +274,10 @@ class GameHUD {
     // 5. Update Held Items (potions charges, cooldown, balloons, etc.)
     this._updateItemHUD(player, 'player');
     this._updateItemHUD(dummy, 'dummy');
+
+    // 6. Update Independent X Moves Cooldown HUD
+    this._updateSpecialsHUD(player, 'player');
+    this._updateSpecialsHUD(dummy, 'dummy');
   }
 
   setGameModeUI(gameMode) {
@@ -428,6 +432,10 @@ class GameHUD {
       // Dummy Item Badge
       this._updateItemHUD(dummy, 'dummy');
 
+    // 6. Update Independent X Moves Cooldown HUD
+    this._updateSpecialsHUD(player, 'player');
+    this._updateSpecialsHUD(dummy, 'dummy');
+
       // Dummy Weight Badge
       let dWeightTag = document.getElementById('dummy-weight-tag');
       const dKg = dummy.pokedexWeight || dummy.weight || 6.0;
@@ -526,6 +534,97 @@ class GameHUD {
 
     badge.className = `item-hud-badge ${extraClass}`.trim();
     badge.innerHTML = `<img src="${itemDef.icon}" alt="${itemDef.name}"><span>${statusText}</span>`;
+  }
+
+  _updateSpecialsHUD(fighter, prefix) {
+    if (!fighter) return;
+    const trayId = `${prefix}-specials-hud`;
+    let trayEl = document.getElementById(trayId);
+    const cardEl = prefix === 'player' ? this.playerCardEl : this.dummyCardEl;
+
+    if (!trayEl && cardEl) {
+      trayEl = document.createElement('div');
+      trayEl.id = trayId;
+      trayEl.className = 'fighter-specials-hud';
+      cardEl.appendChild(trayEl);
+    }
+    if (!trayEl) return;
+
+    const dirs = [
+      { key: 'neutral', icon: '⬡', label: 'N', nameFallback: 'Neutral X' },
+      { key: 'up',      icon: '↑', label: 'U', nameFallback: 'Up X' },
+      { key: 'side',    icon: '↔', label: 'S', nameFallback: 'Side X' },
+      { key: 'down',    icon: '↓', label: 'D', nameFallback: 'Down X' }
+    ];
+
+    dirs.forEach(d => {
+      const slotId = `${prefix}-special-slot-${d.key}`;
+      let slotEl = document.getElementById(slotId);
+      if (!slotEl) {
+        slotEl = document.createElement('div');
+        slotEl.id = slotId;
+        slotEl.className = 'special-cd-slot is-ready';
+        slotEl.setAttribute('data-dir', d.key);
+        slotEl.innerHTML = `
+          <div class="special-cd-overlay" style="height:0%"></div>
+          <span class="special-cd-icon">${d.icon}</span>
+          <span class="special-cd-key">X</span>
+          <span class="special-cd-time" style="display:none"></span>
+        `;
+        trayEl.appendChild(slotEl);
+      }
+
+      // Read move definition and current cooldown
+      let moveName = d.nameFallback;
+      let maxCd = 1.0;
+      if (typeof fighter.getSpecialMoveDef === 'function') {
+        const def = fighter.getSpecialMoveDef(d.key);
+        if (def && def.name) {
+          moveName = def.name.replace(/\(.*?\)/g, '').trim();
+          if (def.cooldown) maxCd = def.cooldown;
+        }
+      }
+      if (fighter.specialMaxCooldowns && fighter.specialMaxCooldowns[d.key]) {
+        maxCd = fighter.specialMaxCooldowns[d.key];
+      }
+
+      let cd = 0;
+      if (fighter.specialCooldowns) {
+        cd = fighter.specialCooldowns[d.key] || 0;
+      } else {
+        cd = fighter.specialCooldown || 0;
+      }
+
+      const overlayEl = slotEl.querySelector('.special-cd-overlay');
+      const timeEl = slotEl.querySelector('.special-cd-time');
+      const iconEl = slotEl.querySelector('.special-cd-icon');
+      const keyEl = slotEl.querySelector('.special-cd-key');
+
+      if (cd > 0.05) {
+        slotEl.classList.remove('is-ready');
+        slotEl.classList.add('is-cooldown');
+        const ratio = Math.min(1.0, cd / Math.max(0.1, maxCd));
+        if (overlayEl) overlayEl.style.height = `${Math.round(ratio * 100)}%`;
+        if (timeEl) {
+          timeEl.innerText = cd >= 10 ? `${Math.ceil(cd)}s` : `${cd.toFixed(1)}s`;
+          timeEl.style.display = 'block';
+        }
+        if (iconEl) iconEl.style.opacity = '0.15';
+        if (keyEl) keyEl.style.opacity = '0.15';
+        slotEl.title = `${moveName} (${d.nameFallback}) - Recarga: ${cd.toFixed(1)}s`;
+      } else {
+        slotEl.classList.add('is-ready');
+        slotEl.classList.remove('is-cooldown');
+        if (overlayEl) overlayEl.style.height = '0%';
+        if (timeEl) {
+          timeEl.innerText = '';
+          timeEl.style.display = 'none';
+        }
+        if (iconEl) iconEl.style.opacity = '1';
+        if (keyEl) keyEl.style.opacity = '0.85';
+        slotEl.title = `${moveName} (${d.nameFallback}) - ¡Listo!`;
+      }
+    });
   }
 
   _setAvatarImage(imgEl, dex, isBadge = false) {
